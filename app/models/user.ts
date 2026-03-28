@@ -8,8 +8,8 @@ import { compose } from '@adonisjs/core/helpers'
 import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
 import { DbAccessTokensProvider } from '@adonisjs/auth/access_tokens'
 import Product from './Product.js'
-import Review from './Review.js'
-import Wallet from './Wallet.js'
+import Review from './review.js'
+import Wallet from './wallet.js'
 
 const AuthFinder = withAuthFinder(hash, {
   uids: ['email'],

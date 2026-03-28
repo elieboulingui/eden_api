@@ -3,7 +3,7 @@ import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import Product from './Product.js'
-import User from './User.js'  // Assurez-vous que le fichier User.ts existe
+import User from './user.js'  // Assurez-vous que le fichier User.ts existe
 
 export default class Category extends BaseModel {
   static table = 'categories'
