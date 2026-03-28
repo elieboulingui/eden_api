@@ -1,9 +1,9 @@
-// app/models/category.ts
+// app/models/categories.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import Product from './Product.js'
-import User from './User.js'  // Majuscule
+import User from './User.js'  // Assurez-vous que le fichier User.ts existe
 
 export default class Category extends BaseModel {
   static table = 'categories'
@@ -38,9 +38,8 @@ export default class Category extends BaseModel {
   @column()
   declare sort_order: number
 
-  // Déclaration UNIQUE de user_id
   @column()
-  declare user_id: string  // String pour correspondre à User.id (UUID)
+  declare user_id: string
 
   @belongsTo(() => User, {
     foreignKey: 'user_id',

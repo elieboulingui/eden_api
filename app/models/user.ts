@@ -1,14 +1,15 @@
-// app/models/user.ts
+// app/models/User.ts
 import { DateTime } from 'luxon'
-import { BaseModel, column, hasMany, hasOne } from '@adonisjs/lucid/orm'
+import { BaseModel, column, hasMany, hasOne, beforeCreate } from '@adonisjs/lucid/orm'
 import type { HasMany, HasOne } from '@adonisjs/lucid/types/relations'
+import { v4 as uuidv4 } from 'uuid'
 import hash from '@adonisjs/core/services/hash'
 import { compose } from '@adonisjs/core/helpers'
 import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
 import { DbAccessTokensProvider } from '@adonisjs/auth/access_tokens'
-import Product from './Product.js'  // Good
-import Review from './review.js'
-import Wallet from './wallet.js'
+import Product from './Product.js'
+import Review from './Review.js'
+import Wallet from './Wallet.js'
 
 const AuthFinder = withAuthFinder(hash, {
   uids: ['email'],
@@ -27,7 +28,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column()
   declare email: string
 
-@column()
+  @column()
   declare uuid: string
 
   @column({ serializeAs: null })
@@ -51,27 +52,23 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updated_at: DateTime
 
-  // Relations existantes
   @hasMany(() => Product, {
     foreignKey: 'user_id',
   })
   declare products: HasMany<typeof Product>
 
-  // Nouvelle relation: Un marchand peut avoir plusieurs avis (reviews) sur ses produits
   @hasMany(() => Review, {
-    foreignKey: 'merchant_id', // Assurez-vous que cette colonne existe dans la table reviews
+    foreignKey: 'merchant_id',
     localKey: 'id',
   })
   declare reviews: HasMany<typeof Review>
 
-  // Nouvelle relation: Un marchand a un seul portefeuille (wallet)
   @hasOne(() => Wallet, {
     foreignKey: 'user_id',
     localKey: 'id',
   })
   declare wallet: HasOne<typeof Wallet>
 
-  // Access tokens
   static accessTokens = DbAccessTokensProvider.forModel(User, {
     expiresIn: '7 days',
     prefix: 'oat_',
@@ -80,7 +77,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
     tokenSecretLength: 40,
   })
 
-  // Getters
   get isSuperAdmin(): boolean {
     return this.role === 'superadmin'
   }
@@ -106,7 +102,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
     return `${first.slice(0, 2)}`.toUpperCase()
   }
 
-  // Méthodes utilitaires
   async ensureMerchant(): Promise<void> {
     if (!this.isMerchant) {
       throw new Error('Accès non autorisé. Seuls les marchands peuvent effectuer cette action.')
@@ -124,7 +119,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
         query.where('user_id', this.id)
       })
       .avg('rating as average')
-
     return Number.parseFloat(result[0].$extras.average) || 0
   }
 
@@ -134,7 +128,16 @@ export default class User extends compose(BaseModel, AuthFinder) {
         query.where('user_id', this.id)
       })
       .count('* as total')
-
     return Number.parseInt(result[0].$extras.total) || 0
+  }
+
+  @beforeCreate()
+  static async generateUuid(user: User) {
+    if (!user.id) {
+      user.id = uuidv4()
+    }
+    if (!user.uuid) {
+      user.uuid = uuidv4()
+    }
   }
 }
