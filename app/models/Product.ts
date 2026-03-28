@@ -23,8 +23,9 @@ export default class Product extends BaseModel {
   @column()
   declare old_price: number | null
 
+// Make sure category_id is properly decorated:
   @column()
-  public category_id: string
+  declare category_id: string | null // Make it nullable
 
   @column()
   declare stock: number

@@ -1,73 +1,91 @@
-// app/Models/Order.ts
 import { DateTime } from 'luxon'
-import { BaseModel, column, hasMany } from '@adonisjs/lucid/orm'
-import type { HasMany } from '@adonisjs/lucid/types/relations'
-
-import OrderItem from './OrderItem.ts'
+import { BaseModel, column, hasMany, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
+import type { HasMany, BelongsTo } from '@adonisjs/lucid/types/relations'
+import { v4 as uuidv4 } from 'uuid'
+import User from './user.js'
+import OrderItem from './OrderItem.js'
 
 export default class Order extends BaseModel {
+  static table = 'order'
+
   @column({ isPrimary: true })
-  public id: string
+  declare id: string
 
   @column()
-  public userId: string
+  declare user_id: string
 
   @column()
-  public orderNumber: string
+  declare order_number: string
 
   @column()
-  public status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
+  declare status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
 
   @column()
-  public total: number
+  declare total: number
 
   @column()
-  public subtotal: number  // AJOUTER
+  declare subtotal: number
 
   @column()
-  public shippingCost: number  // AJOUTER
+  declare shipping_cost: number
 
   @column()
-  public deliveryMethod: string  // AJOUTER
+  declare delivery_method: string
 
   @column()
-  public customerName: string
+  declare customer_name: string
 
   @column()
-  public customerEmail: string
+  declare customer_email: string
 
   @column()
-  public customerPhone: string | null
+  declare customer_phone: string | null
 
   @column()
-  public shippingAddress: string
+  declare shipping_address: string
 
   @column()
-  public billingAddress: string | null
+  declare billing_address: string | null
 
   @column()
-  public paymentMethod: string
+  declare payment_method: string
 
   @column()
-  public trackingNumber: string | null
+  declare tracking_number: string | null
 
   @column.dateTime()
-  public estimatedDelivery: DateTime | null
+  declare estimated_delivery: DateTime | null
 
   @column.dateTime()
-  public deliveredAt: DateTime | null
+  declare delivered_at: DateTime | null
 
   @column()
-  public notes: string | null
+  declare notes: string | null
 
   @column.dateTime({ autoCreate: true })
-  public createdAt: DateTime
+  declare created_at: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  public updatedAt: DateTime
+  declare updated_at: DateTime
+
+  // Relations
+  @belongsTo(() => User, {
+    foreignKey: 'user_id'
+  })
+  declare user: BelongsTo<typeof User>
 
   @hasMany(() => OrderItem, {
-    foreignKey: 'orderId'
+    foreignKey: 'order_id'
   })
-  public items: HasMany<typeof OrderItem>
+  declare items: HasMany<typeof OrderItem>
+
+  @beforeCreate()
+  static async generateUuid(order: Order) {
+    if (!order.id) {
+      order.id = uuidv4()
+    }
+    if (!order.order_number) {
+      order.order_number = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
+    }
+  }
 }

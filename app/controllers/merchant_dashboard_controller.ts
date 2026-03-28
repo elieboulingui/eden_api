@@ -1,113 +1,78 @@
-// app/controllers/merchant_dashboard_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
-import Product from '#models/product'
+import Product from '#models/Product'
 import Category from '#models/categories'
 import Coupon from '#models/coupon'
 import Order from '#models/Order'
-import OrderItem from '#models/OrderItem'
-import Review from '#models/review'
-import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
 
 export default class MerchantDashboardController {
-  /**
-   * Récupérer toutes les données du dashboard
-   * COMMENTÉ TEMPORAIREMENT POUR ÉVITER LES ERREURS
-   */
-  // async getDashboard({ params, response }: HttpContext) {
-  //   ... (code commenté)
-  // }
-
   // ============= PRODUITS =============
   
-  async getProducts({ params, request, response }: HttpContext) {
-    try {
-      const { userId } = params
-      // Chercher l'utilisateur par UUID
-      const user = await User.findBy('uuid', userId)
-      
-      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-        return response.ok({ success: true, data: { data: [], meta: { total: 0 } } })
-      }
-
-      const page = request.input('page', 1)
-      const limit = request.input('limit', 10)
-
-      const products = await Product.query()
-        .where('user_id', user.id)
-        .whereNull('deleted_at')
-        .preload('category')
-        .orderBy('created_at', 'desc')
-        .paginate(page, limit)
-
-      return response.ok({ success: true, data: products })
-    } catch (error) {
-      return response.internalServerError({ success: false, message: error.message })
+async getProducts({ params, request, response }: HttpContext) {
+  try {
+    const { userId } = params
+    const user = await User.findBy('uuid', userId)
+    
+    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+      return response.ok({ success: true, data: { data: [], meta: { total: 0 } } })
     }
-  }
 
- 
-// app/controllers/merchant_dashboard_controller.ts
-// app/controllers/merchant_dashboard_controller.
-// app/controllers/merchant_dashboard_controller.ts
+    const page = request.input('page', 1)
+    const limit = request.input('limit', 10)
+
+    const products = await Product.query()
+      .where('user_id', Number(user.id))
+      .whereNull('deleted_at')
+      .preload('category')  // Changez 'categoryRelation' en 'category'
+      .orderBy('created_at', 'desc')
+      .paginate(page, limit)
+
+    return response.ok({ success: true, data: products })
+  } catch (error) {
+    return response.internalServerError({ success: false, message: error.message })
+  }
+}
+
 async createProduct({ params, request, response }: HttpContext) {
   try {
     const { userId } = params
     const { name, description, price, stock, category_name, image_url } = request.only([
-      'name', 'description', 'price', 'stock', 'category_name', 'image_url'
+      'name',
+      'description',
+      'price',
+      'stock',
+      'category_name',
+      'image_url',
     ])
 
-    console.log('=== createProduct ===')
-    console.log('userId param:', userId)
+    // Trouver l'utilisateur par UUID (string)
+    const user = await User.findBy('uuid', userId)
 
-    const userIdNum = parseInt(userId)
-    const user = await User.find(userIdNum)
-    
     if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
       return response.forbidden({ success: false, message: 'Non autorisé' })
     }
 
     let categoryId = null
-    
+
     if (category_name && category_name.trim() !== '') {
-      console.log('Recherche catégorie:', category_name)
       const category = await Category.query()
         .where('name', category_name)
         .where('user_id', user.id)
         .first()
-      
+
       if (category) {
         categoryId = category.id
-        console.log('Catégorie trouvée - ID:', categoryId)
       } else {
-        console.log('Création nouvelle catégorie')
         const newCategory = await Category.create({
           name: category_name,
           slug: category_name.toLowerCase().replace(/\s+/g, '-'),
-          user_id: user.id,
-          is_active: true
+            user_id: user.id.toString(), 
+          is_active: true,
         })
         categoryId = newCategory.id
-        console.log('Nouvelle catégorie - ID:', categoryId)
       }
     }
-
-    // VÉRIFICATION : Si categoryId est un nombre (quel qu'il soit), on le met à null
-    // Car category_id attend un UUID
-    if (typeof categoryId === 'number' || !isNaN(parseInt(categoryId))) {
-      console.log(`⚠️ categoryId est un nombre (${categoryId}), on le met à null`)
-      categoryId = null
-    }
-
-    // Vérification du format UUID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (categoryId && !uuidRegex.test(categoryId)) {
-      console.log(`⚠️ categoryId (${categoryId}) n'est pas un UUID valide, on le met à null`)
-      categoryId = null
-    }
-
-    console.log('categoryId final:', categoryId)
 
     const product = await Product.create({
       name,
@@ -115,32 +80,34 @@ async createProduct({ params, request, response }: HttpContext) {
       price: parseFloat(price),
       stock: parseInt(stock),
       image_url: image_url || null,
-      user_id: user.id,
-      category_id: categoryId,  // Maintenant c'est soit null soit un UUID valide
+      user_id: parseInt(user.id, 10),
+      category_id: categoryId,
       is_new: false,
       is_on_sale: false,
       rating: 0,
-      reviews_count: 0
+      reviews_count: 0,
     })
 
-    return response.created({ 
-      success: true, 
-      data: product, 
-      message: 'Produit créé' 
+    return response.created({
+      success: true,
+      data: product,
+      message: 'Produit créé',
     })
   } catch (error) {
     console.error('Erreur createProduct:', error)
-    return response.internalServerError({ 
-      success: false, 
-      message: error.message 
+    return response.internalServerError({
+      success: false,
+      message: error.message,
     })
   }
 }
-
-  async deleteProduct({ params, response }: HttpContext) {
+  async updateProduct({ params, request, response }: HttpContext) {
     try {
       const { userId, productId } = params
-      // Chercher l'utilisateur par UUID
+      const { name, description, price, stock, category_name, image_url } = request.only([
+        'name', 'description', 'price', 'stock', 'category_name', 'image_url'
+      ])
+
       const user = await User.findBy('uuid', userId)
       
       if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
@@ -149,7 +116,69 @@ async createProduct({ params, request, response }: HttpContext) {
 
       const product = await Product.query()
         .where('id', productId)
-        .where('user_id', user.id)
+        .where('user_id', Number(user.id))
+        .first()
+
+      if (!product) {
+        return response.notFound({ success: false, message: 'Produit non trouvé' })
+      }
+
+      let categoryId = null
+      
+      if (category_name && category_name.trim() !== '') {
+        const category = await Category.query()
+          .where('name', category_name)
+          .where('user_id', user.id)
+          .first()
+        
+        if (category) {
+          categoryId = category.id
+        } else {
+          const newCategory = await Category.create({
+            name: category_name,
+            slug: category_name.toLowerCase().replace(/\s+/g, '-'),
+            user_id: user.id,
+            is_active: true
+          })
+          categoryId = newCategory.id
+        }
+      }
+
+      if (name) product.name = name
+      if (description !== undefined) product.description = description
+      if (price) product.price = parseFloat(price)
+      if (stock !== undefined) product.stock = parseInt(stock)
+      if (image_url !== undefined) product.image_url = image_url
+      if (categoryId) product.category_id = categoryId
+
+      await product.save()
+
+      return response.ok({ 
+        success: true, 
+        data: product, 
+        message: 'Produit mis à jour avec succès' 
+      })
+    } catch (error) {
+      console.error('Erreur updateProduct:', error)
+      return response.internalServerError({ 
+        success: false, 
+        message: error.message 
+      })
+    }
+  }
+
+  async deleteProduct({ params, response }: HttpContext) {
+    try {
+      const { userId, productId } = params
+      const user = await User.findBy('uuid', userId)
+      
+      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+        return response.forbidden({ success: false, message: 'Non autorisé' })
+      }
+
+      const product = await Product.query()
+        .where('id', productId)
+        .where('user_id', Number(user.id))
         .first()
 
       if (!product) {
@@ -168,90 +197,156 @@ async createProduct({ params, request, response }: HttpContext) {
   async getCategories({ params, response }: HttpContext) {
     try {
       const { userId } = params
-      console.log('=== getCategories appelé ===')
-      console.log('userId (UUID):', userId)
 
       if (!userId) {
-        return response.badRequest({
-          success: false,
-          message: 'ID utilisateur requis'
-        })
+        return response.badRequest({ success: false, message: 'ID utilisateur requis' })
       }
 
-      // Chercher l'utilisateur par UUID
       const user = await User.findBy('uuid', userId)
 
       if (!user) {
-        return response.notFound({
-          success: false,
-          message: 'Utilisateur non trouvé'
-        })
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
       }
 
       if (user.role !== 'marchant' && user.role !== 'merchant') {
-        return response.forbidden({
-          success: false,
-          message: 'Cet utilisateur n\'est pas un marchand'
-        })
+        return response.forbidden({ success: false, message: 'Cet utilisateur n\'est pas un marchand' })
       }
 
       const categories = await Category.query()
         .where('user_id', user.id)
         .orderBy('name', 'asc')
 
-      console.log('Catégories trouvées:', categories.length)
-
-      return response.ok({
-        success: true,
-        data: categories
-      })
-
+      return response.ok({ success: true, data: categories })
     } catch (error) {
       console.error('ERREUR getCategories:', error)
-      return response.internalServerError({
-        success: false,
-        message: error.message
-      })
+      return response.internalServerError({ success: false, message: error.message })
     }
   }
 
-  async createCategory({ params, request, response }: HttpContext) {
+async createCategory({ params, request, response }: HttpContext) {
+  try {
+    const { userId } = params
+    const { name, slug } = request.only(['name', 'slug'])
+
+    if (!name) {
+      return response.badRequest({ success: false, message: 'Le nom est requis' })
+    }
+
+    const user = await User.findBy('uuid', userId)
+    
+    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+      return response.forbidden({ success: false, message: 'Non autorisé' })
+    }
+
+    const slugToUse = slug || name.toLowerCase().replace(/\s+/g, '-')
+
+    const category = await Category.create({
+      name,
+      slug: slugToUse,
+      user_id: user.id, // user.id est une string, Category.user_id doit être string aussi
+    })
+
+    return response.created({
+      success: true,
+      data: { 
+        id: category.id, 
+        name: category.name, 
+        slug: category.slug, 
+        productCount: 0,
+      },
+      message: 'Catégorie créée',
+    })
+  } catch (error) {
+    console.error('ERREUR createCategory:', error)
+    return response.internalServerError({ 
+      success: false, 
+      message: error.message,
+    })
+  }
+}
+
+  async updateCategory({ params, request, response }: HttpContext) {
     try {
-      const { userId } = params
-      const { name, slug } = request.only(['name', 'slug'])
+      const { userId, categoryId } = params
+      const { name, slug, is_active } = request.only(['name', 'slug', 'is_active'])
 
-      if (!name) {
-        return response.badRequest({ success: false, message: 'Le nom est requis' })
-      }
-
-      // Chercher l'utilisateur par UUID
       const user = await User.findBy('uuid', userId)
       
       if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
         return response.forbidden({ success: false, message: 'Non autorisé' })
       }
 
-      const slugToUse = slug || name.toLowerCase().replace(/\s+/g, '-')
+      const category = await Category.query()
+        .where('id', categoryId)
+        .where('user_id', user.id)
+        .first()
 
-      const category = await Category.create({
-        name,
-        slug: slugToUse,
-        user_id: user.id
-      })
+      if (!category) {
+        return response.notFound({ success: false, message: 'Catégorie non trouvée' })
+      }
 
-      return response.created({
-        success: true,
-        data: { 
-          id: category.id, 
-          name: category.name, 
-          slug: category.slug, 
-          productCount: 0 
-        },
-        message: 'Catégorie créée'
+      if (name) category.name = name
+      if (slug) category.slug = slug
+      if (is_active !== undefined) category.is_active = is_active
+
+      await category.save()
+
+      return response.ok({ 
+        success: true, 
+        data: category, 
+        message: 'Catégorie mise à jour avec succès' 
       })
     } catch (error) {
-      console.error('ERREUR createCategory:', error)
-      return response.internalServerError({ success: false, message: error.message })
+      console.error('Erreur updateCategory:', error)
+      return response.internalServerError({ 
+        success: false, 
+        message: error.message 
+      })
+    }
+  }
+
+  async deleteCategory({ params, response }: HttpContext) {
+    try {
+      const { userId, categoryId } = params
+
+      const user = await User.findBy('uuid', userId)
+      
+      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+        return response.forbidden({ success: false, message: 'Non autorisé' })
+      }
+
+      const category = await Category.query()
+        .where('id', categoryId)
+        .where('user_id', user.id)
+        .first()
+
+      if (!category) {
+        return response.notFound({ success: false, message: 'Catégorie non trouvée' })
+      }
+
+      const productsCount = await Product.query()
+        .where('category_id', category.id)
+        .count('* as total')
+
+      if (parseInt(productsCount[0].$extras.total) > 0) {
+        return response.badRequest({ 
+          success: false, 
+          message: 'Impossible de supprimer cette catégorie car elle contient des produits' 
+        })
+      }
+
+      await category.delete()
+
+      return response.ok({ 
+        success: true, 
+        message: 'Catégorie supprimée avec succès' 
+      })
+    } catch (error) {
+      console.error('Erreur deleteCategory:', error)
+      return response.internalServerError({ 
+        success: false, 
+        message: error.message 
+      })
     }
   }
 
@@ -260,7 +355,6 @@ async createProduct({ params, request, response }: HttpContext) {
   async getCoupons({ params, response }: HttpContext) {
     try {
       const { userId } = params
-      // Chercher l'utilisateur par UUID
       const user = await User.findBy('uuid', userId)
       
       if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
@@ -284,7 +378,6 @@ async createProduct({ params, request, response }: HttpContext) {
         'code', 'discount', 'type', 'validUntil', 'usageLimit', 'productId'
       ])
 
-      // Chercher l'utilisateur par UUID
       const user = await User.findBy('uuid', userId)
       
       if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
@@ -295,11 +388,11 @@ async createProduct({ params, request, response }: HttpContext) {
         code: code.toUpperCase(),
         discount: parseFloat(discount),
         type,
-        valid_until: validUntil ? new Date(validUntil) : null,
+        valid_until: validUntil ? DateTime.fromJSDate(new Date(validUntil)) : null,
         usage_limit: parseInt(usageLimit) || 1,
         used_count: 0,
         user_id: user.id,
-        product_id: productId ? parseInt(productId) : null,
+        product_id: productId || null,
         status: 'active'
       })
 
@@ -309,12 +402,90 @@ async createProduct({ params, request, response }: HttpContext) {
     }
   }
 
+  async updateCoupon({ params, request, response }: HttpContext) {
+    try {
+      const { userId, couponId } = params
+      const { code, discount, type, validUntil, usageLimit, status } = request.only([
+        'code', 'discount', 'type', 'validUntil', 'usageLimit', 'status'
+      ])
+
+      const user = await User.findBy('uuid', userId)
+      
+      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+        return response.forbidden({ success: false, message: 'Non autorisé' })
+      }
+
+      const coupon = await Coupon.query()
+        .where('id', couponId)
+        .where('user_id', user.id)
+        .first()
+
+      if (!coupon) {
+        return response.notFound({ success: false, message: 'Code promo non trouvé' })
+      }
+
+      if (code) coupon.code = code.toUpperCase()
+      if (discount) coupon.discount = parseFloat(discount)
+      if (type) coupon.type = type
+      if (validUntil) coupon.valid_until = DateTime.fromJSDate(new Date(validUntil))
+      if (usageLimit) coupon.usage_limit = parseInt(usageLimit)
+      if (status) coupon.status = status
+
+      await coupon.save()
+
+      return response.ok({ 
+        success: true, 
+        data: coupon, 
+        message: 'Code promo mis à jour avec succès' 
+      })
+    } catch (error) {
+      console.error('Erreur updateCoupon:', error)
+      return response.internalServerError({ 
+        success: false, 
+        message: error.message 
+      })
+    }
+  }
+
+  async deleteCoupon({ params, response }: HttpContext) {
+    try {
+      const { userId, couponId } = params
+
+      const user = await User.findBy('uuid', userId)
+      
+      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+        return response.forbidden({ success: false, message: 'Non autorisé' })
+      }
+
+      const coupon = await Coupon.query()
+        .where('id', couponId)
+        .where('user_id', user.id)
+        .first()
+
+      if (!coupon) {
+        return response.notFound({ success: false, message: 'Code promo non trouvé' })
+      }
+
+      await coupon.delete()
+
+      return response.ok({ 
+        success: true, 
+        message: 'Code promo supprimé avec succès' 
+      })
+    } catch (error) {
+      console.error('Erreur deleteCoupon:', error)
+      return response.internalServerError({ 
+        success: false, 
+        message: error.message 
+      })
+    }
+  }
+
   // ============= STATISTIQUES =============
   
   async getStats({ params, response }: HttpContext) {
     try {
       const { userId } = params
-      // Chercher l'utilisateur par UUID
       const user = await User.findBy('uuid', userId)
       
       const totalProducts = await Product.query()
@@ -338,7 +509,6 @@ async createProduct({ params, request, response }: HttpContext) {
   async getRecentOrders({ params, response }: HttpContext) {
     try {
       const { userId } = params
-      // Chercher l'utilisateur par UUID
       const user = await User.findBy('uuid', userId)
       
       if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
@@ -360,7 +530,7 @@ async createProduct({ params, request, response }: HttpContext) {
         customerName: order.user?.full_name || 'Client',
         total: order.total,
         status: order.status,
-        createdAt: order.createdAt.toISO(),
+        createdAt: order.created_at.toISO(),
       }))
 
       return response.ok({ success: true, data: ordersData })

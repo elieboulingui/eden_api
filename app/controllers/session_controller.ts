@@ -7,7 +7,7 @@ export default class SessionController {
    * Connexion d'un utilisateur (API)
    * POST /api/session/login
    */
-  async store({ request, auth, response }: HttpContext) {
+  async store({ request,  response }: HttpContext) {
     try {
       const { email, password } = request.only(['email', 'password'])
 

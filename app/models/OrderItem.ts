@@ -1,54 +1,64 @@
-// app/Models/OrderItem.ts
+// app/models/order_item.ts
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
+import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import Order from './Order.ts'
-import Product from './Product.ts'
+import { v4 as uuidv4 } from 'uuid'
+import Order from './Order.js'
+import Product from './Product.js'
 
 export default class OrderItem extends BaseModel {
+  static table = 'Orderitem'
+
   @column({ isPrimary: true })
-  public id: number
+  declare id: string
 
   @column()
-  public orderId: string
+  declare order_id: string  // This must match the foreignKey in Order's hasMany relation
 
   @column()
-  public productId: number
+  declare product_id: number
 
   @column()
-  public productName: string
+  declare product_name: string
 
   @column()
-  public productDescription: string | null
+  declare product_description: string | null
 
   @column()
-  public price: number
+  declare price: number
 
   @column()
-  public quantity: number
+  declare quantity: number
 
   @column()
-  public category: string | null
+  declare category: string | null
 
   @column()
-  public image: string | null
+  declare image: string | null
 
   @column()
-  public subtotal: number
+  declare subtotal: number
 
   @column.dateTime({ autoCreate: true })
-  public createdAt: DateTime
+  declare created_at: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  public updatedAt: DateTime
+  declare updated_at: DateTime
 
   @belongsTo(() => Order, {
-    foreignKey: 'orderId'
+    foreignKey: 'order_id'
   })
-  public order: BelongsTo<typeof Order>
+  declare order: BelongsTo<typeof Order>
 
   @belongsTo(() => Product, {
-    foreignKey: 'productId'
+    foreignKey: 'product_id'
   })
-  public product: BelongsTo<typeof Product>
+  declare product: BelongsTo<typeof Product>
+
+  @beforeCreate()
+  static async generateUuid(item: OrderItem) {
+    if (!item.id) {
+      item.id = uuidv4()
+    }
+  }
 }

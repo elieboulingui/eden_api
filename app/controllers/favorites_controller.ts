@@ -1,10 +1,10 @@
-// app/Controllers/Http/FavoritesController.ts
-import type { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
-import Favorite from '#models/Favorite'
+// app/controllers/favorites_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import Favorite from '#models/favorite'  // Note: Majuscule pour cohérence
 
 export default class FavoritesController {
   // Ajouter un produit aux favoris
-  public async add({ request, response }: HttpContextContract) {
+  public async add({ request, response }: HttpContext) {
     const { userId, productId } = request.body()
 
     if (!userId || !productId) {
@@ -17,8 +17,8 @@ export default class FavoritesController {
     try {
       // Vérifier si le favori existe déjà
       const existing = await Favorite.query()
-        .where('user_id', userId)
-        .andWhere('product_id', productId)
+        .where('user_id', userId)  // snake_case
+        .andWhere('product_id', productId)  // snake_case
         .first()
 
       if (existing) {
@@ -28,10 +28,10 @@ export default class FavoritesController {
         })
       }
 
-      // Créer le favori
+      // Créer le favori - utiliser snake_case
       const favorite = await Favorite.create({
-        userId,
-        productId
+        user_id: userId,  // Changé de userId à user_id
+        product_id: productId  // Changé de productId à product_id
       })
 
       return response.status(201).json({
@@ -49,7 +49,7 @@ export default class FavoritesController {
   }
 
   // Supprimer un produit des favoris
-  public async remove({ request, response }: HttpContextContract) {
+  public async remove({ request, response }: HttpContext) {
     const { userId, productId } = request.body()
 
     if (!userId || !productId) {
@@ -61,8 +61,8 @@ export default class FavoritesController {
 
     try {
       const favorite = await Favorite.query()
-        .where('user_id', userId)
-        .andWhere('product_id', productId)
+        .where('user_id', userId)  // snake_case
+        .andWhere('product_id', productId)  // snake_case
         .first()
 
       if (!favorite) {
@@ -88,7 +88,7 @@ export default class FavoritesController {
   }
 
   // Récupérer tous les favoris d'un utilisateur
-  public async index({ request, response }: HttpContextContract) {
+  public async index({ request, response }: HttpContext) {
     const { userId } = request.qs()
 
     if (!userId) {
@@ -100,7 +100,7 @@ export default class FavoritesController {
 
     try {
       const favorites = await Favorite.query()
-        .where('user_id', userId)
+        .where('user_id', userId)  // snake_case
         .preload('product')
         .orderBy('created_at', 'desc')
 
@@ -120,7 +120,7 @@ export default class FavoritesController {
   }
 
   // Vérifier si un produit est en favori
-  public async check({ request, response }: HttpContextContract) {
+  public async check({ request, response }: HttpContext) {
     const { userId, productId } = request.qs()
 
     if (!userId || !productId) {
@@ -132,8 +132,8 @@ export default class FavoritesController {
 
     try {
       const favorite = await Favorite.query()
-        .where('user_id', userId)
-        .andWhere('product_id', productId)
+        .where('user_id', userId)  // snake_case
+        .andWhere('product_id', productId)  // snake_case
         .first()
 
       return response.json({

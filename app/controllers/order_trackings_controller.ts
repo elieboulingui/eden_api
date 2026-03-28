@@ -1,8 +1,8 @@
-// app/Controllers/Http/OrderTrackingController.ts
+// app/controllers/order_trackings_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
-import OrderItem from '#models/OrderItem'
 import OrderTracking from '#models/order_tracking'
+import { DateTime } from 'luxon'
 
 export default class OrderTrackingController {
   /**
@@ -34,7 +34,7 @@ export default class OrderTrackingController {
       }
 
       // Si email est fourni, vérifier qu'il correspond
-      if (email && order.customerEmail !== email) {
+      if (email && order.customer_email !== email) {
         return response.status(404).json({
           success: false,
           message: 'Commande non trouvée'
@@ -49,39 +49,39 @@ export default class OrderTrackingController {
       // Formater la réponse
       const orderData = {
         id: order.id,
-        number: order.orderNumber,
-        date: order.createdAt,
+        number: order.order_number,
+        date: order.created_at,
         status: this.getStatusLabel(order.status),
         statusCode: order.status,
-        items: order.items.map(item => ({
+        items: order.items.map((item: any) => ({
           id: item.id,
-          name: item.productName,
+          name: item.product_name,
           quantity: item.quantity,
           price: item.price,
           subtotal: item.subtotal
         })),
         shipping: {
           method: 'Livraison standard',
-          address: order.shippingAddress,
-          estimatedDelivery: order.estimatedDelivery,
+          address: order.shipping_address,
+          estimatedDelivery: order.estimated_delivery,
           trackingEvents: trackingEvents.map(event => ({
-            date: event.trackedAt,
+            date: event.tracked_at,
             status: event.description || this.getStatusLabel(event.status),
             statusCode: event.status,
             location: event.location
           }))
         },
         payment: {
-          method: order.paymentMethod,
-          subtotal: order.total - (order.shippingCost || 0),
-          shipping: order.shippingCost || 0,
+          method: order.payment_method,
+          subtotal: order.total - (order.shipping_cost || 0),
+          shipping: order.shipping_cost || 0,
           total: order.total
         }
       }
 
       // Si pas d'événements de suivi, en générer par défaut
       if (trackingEvents.length === 0) {
-        orderData.shipping.trackingEvents = this.generateDefaultTrackingEvents(order.status, order.createdAt)
+        orderData.shipping.trackingEvents = this.generateDefaultTrackingEvents(order.status, order.created_at)
       }
 
       return response.status(200).json({
@@ -118,18 +118,18 @@ export default class OrderTrackingController {
 
       // Créer l'événement de suivi
       const tracking = await OrderTracking.create({
-        orderId: order.id,
+        order_id: order.id,
         status,
         location,
         description,
-        trackedAt: new Date()
+        tracked_at: DateTime.now()
       })
 
       // Mettre à jour le statut de la commande si nécessaire
       if (status === 'shipped' || status === 'delivered' || status === 'cancelled') {
         order.status = status
         if (status === 'delivered') {
-          order.deliveredAt = new Date()
+          order.delivered_at = DateTime.now()
         }
         await order.save()
       }
@@ -195,17 +195,17 @@ export default class OrderTrackingController {
 
       // Ajouter un événement de suivi
       await OrderTracking.create({
-        orderId: order.id,
+        order_id: order.id,
         status,
         location,
         description,
-        trackedAt: new Date()
+        tracked_at: DateTime.now()
       })
 
       // Mettre à jour le statut de la commande
       order.status = status
       if (status === 'delivered') {
-        order.deliveredAt = new Date()
+        order.delivered_at = DateTime.now()
       }
       await order.save()
 

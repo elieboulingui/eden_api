@@ -1,41 +1,41 @@
-// app/Models/Favorite.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-
-import User from './User.js'
-import Product from './Product.js'
 import { v4 as uuidv4 } from 'uuid'
+import User from './user.js'
+import Product from './Product.js'
 
 export default class Favorite extends BaseModel {
+  static table = 'favorites'
+
   @column({ isPrimary: true })
-  public id: string
+  declare id: string
 
   @column()
-  public userId: string  // UUID donc string
+  declare user_id: string  // Changed from userId to snake_case
 
   @column()
-  public productId: number
+  declare product_id: number  // Changed from productId to snake_case
 
   @column.dateTime({ autoCreate: true })
-  public createdAt: DateTime
+  declare created_at: DateTime  // Changed from createdAt to snake_case
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  public updatedAt: DateTime
+  declare updated_at: DateTime  // Changed from updatedAt to snake_case
 
   @belongsTo(() => User, {
-    foreignKey: 'userId',
-    localKey: 'uuid'  // Important: User utilise 'uuid' comme clé primaire pour la relation
+    foreignKey: 'user_id',  // Changed to snake_case
+    localKey: 'id'  // User uses 'id' as primary key, not 'uuid'
   })
-  public user: BelongsTo<typeof User>
+  declare user: BelongsTo<typeof User>
 
   @belongsTo(() => Product, {
-    foreignKey: 'productId'
+    foreignKey: 'product_id'  // Changed to snake_case
   })
-  public product: BelongsTo<typeof Product>
+  declare product: BelongsTo<typeof Product>
 
   @beforeCreate()
-  public static assignUuid(favorite: Favorite) {
+  static async generateUuid(favorite: Favorite) {
     if (!favorite.id) {
       favorite.id = uuidv4()
     }

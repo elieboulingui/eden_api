@@ -6,7 +6,7 @@ import hash from '@adonisjs/core/services/hash'
 import { compose } from '@adonisjs/core/helpers'
 import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
 import { DbAccessTokensProvider } from '@adonisjs/auth/access_tokens'
-import Product from './product.js'
+import Product from './Product.js'  // Good
 import Review from './review.js'
 import Wallet from './wallet.js'
 
@@ -27,8 +27,8 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column()
   declare email: string
 
-  @column()
-  public uuid: string
+@column()
+  declare uuid: string
 
   @column({ serializeAs: null })
   declare password: string
@@ -114,7 +114,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   }
 
   async getWalletBalance(): Promise<number> {
-    await this.load('wallet')
+    await this.load('wallet' as any)
     return this.wallet?.balance || 0
   }
 
@@ -125,7 +125,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
       })
       .avg('rating as average')
 
-    return parseFloat(result[0].$extras.average) || 0
+    return Number.parseFloat(result[0].$extras.average) || 0
   }
 
   async getTotalReviews(): Promise<number> {
@@ -135,6 +135,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
       })
       .count('* as total')
 
-    return parseInt(result[0].$extras.total) || 0
+    return Number.parseInt(result[0].$extras.total) || 0
   }
 }

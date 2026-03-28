@@ -1,7 +1,7 @@
 // app/controllers/categories_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import Category from '#models/categories'
-import Product from '#models/product'
+import Product from '#models/Product'
 
 export default class CategoriesController {
   /**

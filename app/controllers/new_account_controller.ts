@@ -7,7 +7,7 @@ export default class NewAccountController {
    * Inscription d'un nouvel utilisateur (API)
    * POST /api/register
    */
-  async store({ request, response, auth }: HttpContext) {
+  async store({ request, response }: HttpContext) {
     try {
       // Valider les données envoyées
       const payload = await request.validateUsing(signupValidator)

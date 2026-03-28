@@ -1,31 +1,61 @@
-import Cart from './Cart.ts'
+import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
-import { v4 as uuidv4 } from 'uuid'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import { v4 as uuidv4 } from 'uuid'
+import Order from './Order.js'  // Changé: order.js -> Order.js (majuscule)
+import Product from './Product.js'  // Gardé: Product.js (majuscule)
 
-export default class CartItem extends BaseModel {
+export default class OrderItem extends BaseModel {
+  static table = 'Orderitem'
+
   @column({ isPrimary: true })
-  public id: string
+  declare id: string
 
   @column()
-  public cart_id: string
+  declare order_id: string
 
   @column()
-  public product_id: number
+  declare product_id: number
 
   @column()
-  public quantity: number
+  declare product_name: string
 
-  // Relation avec Cart
-  @belongsTo(() => Cart, { foreignKey: 'cart_id' })
-  public cart: BelongsTo<typeof Cart>
+  @column()
+  declare product_description: string | null
 
-  // Relation avec Product - AJOUTER CETTE RELATION
-  @belongsTo(() => Product, { foreignKey: 'product_id' })
-  public product: BelongsTo<typeof Product>
+  @column()
+  declare price: number
+
+  @column()
+  declare quantity: number
+
+  @column()
+  declare category: string | null
+
+  @column()
+  declare image: string | null
+
+  @column()
+  declare subtotal: number
+
+  @column.dateTime({ autoCreate: true })
+  declare created_at: DateTime
+
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updated_at: DateTime
+
+  @belongsTo(() => Order, {
+    foreignKey: 'order_id'  // Ajout explicite de la clé étrangère
+  })
+  declare order: BelongsTo<typeof Order>
+
+  @belongsTo(() => Product, {
+    foreignKey: 'product_id'  // Ajout explicite de la clé étrangère
+  })
+  declare product: BelongsTo<typeof Product>
 
   @beforeCreate()
-  public static assignUuid(item: CartItem) {
+  static async generateUuid(item: OrderItem) {
     if (!item.id) {
       item.id = uuidv4()
     }

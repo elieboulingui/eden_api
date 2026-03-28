@@ -1,12 +1,13 @@
-// app/Controllers/Http/OrdersController.ts
+// app/controllers/OrdersController.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
 import OrderTracking from '#models/order_tracking'
 import Cart from '#models/Cart'
 import CartItem from '#models/CartItem'
-import User from '#models/User'
-import Product from '#models/Product'
+import User from '#models/user'
+import Product from '#models/Product'  // Majuscule
+
 import { DateTime } from 'luxon'
 
 export default class OrdersController {
@@ -101,7 +102,7 @@ export default class OrdersController {
           price: product.price,
           quantity: cartItem.quantity,
           category: product.category,
-          image: product.image,
+          image: product.image_url,  // Changé: image -> image_url
           subtotal: itemTotal
         })
         console.log(`✅ Item ajouté: ${product.name} x ${cartItem.quantity} = ${itemTotal}`)
@@ -112,43 +113,50 @@ export default class OrdersController {
       console.log(`🔵 Total calculé: subtotal=${subtotal}, delivery=${deliveryPrice}, total=${total}`)
       console.log(`🔵 Numéro de commande généré: ${orderNumber}`)
 
-      // Créer la commande
+      // Créer la commande - utiliser snake_case
       console.log('🔵 Création de la commande...')
       const order = await Order.create({
-        userId: userId,
-        orderNumber,
+        user_id: userId,  // Changé: userId -> user_id
+        order_number: orderNumber,  // Changé: orderNumber -> order_number
         status: 'pending',
         total: total,
         subtotal: subtotal,
-        shippingCost: deliveryPrice,
-        deliveryMethod: deliveryMethod,
-        customerName: customerName || (user ? user.full_name : null),
-        customerEmail: customerEmail || (user ? user.email : null),
-        customerPhone: customerPhone,
-        shippingAddress: shippingAddress,
-        billingAddress: billingAddress || shippingAddress,
-        paymentMethod: paymentMethod,
+        shipping_cost: deliveryPrice,  // Changé: shippingCost -> shipping_cost
+        delivery_method: deliveryMethod,  // Changé: deliveryMethod -> delivery_method
+        customer_name: customerName || (user ? user.full_name : null),  // Changé: customerName -> customer_name
+        customer_email: customerEmail || (user ? user.email : null),  // Changé: customerEmail -> customer_email
+        customer_phone: customerPhone,  // Changé: customerPhone -> customer_phone
+        shipping_address: shippingAddress,  // Changé: shippingAddress -> shipping_address
+        billing_address: billingAddress || shippingAddress,  // Changé: billingAddress -> billing_address
+        payment_method: paymentMethod,  // Changé: paymentMethod -> payment_method
         notes: notes || null
       })
-      console.log(`✅ Commande créée avec ID: ${order.id}, numéro: ${order.orderNumber}`)
+      console.log(`✅ Commande créée avec ID: ${order.id}, numéro: ${order.order_number}`)
 
-      // Créer les items de commande
+      // Créer les items de commande - utiliser snake_case
       console.log('🔵 Création des items de commande...')
       for (const item of orderItems) {
         await OrderItem.create({
-          orderId: order.id,
-          ...item
+          order_id: order.id,  // Changé: orderId -> order_id
+          product_id: Number(item.productId),
+          product_name: item.productName,
+          product_description: item.productDescription,
+          price: item.price,
+          quantity: item.quantity,
+          category: typeof item.category === 'string' ? item.category : null,  // S'assurer que c'est une string
+          image: item.image,
+          subtotal: item.subtotal
         })
         console.log(`✅ Item créé: ${item.productName} x ${item.quantity}`)
       }
 
-      // Ajouter l'événement de suivi initial
+      // Ajouter l'événement de suivi initial - utiliser snake_case
       console.log('🔵 Ajout de l\'événement de suivi initial...')
       await OrderTracking.create({
-        orderId: order.id,
+        order_id: order.id,  // Changé: orderId -> order_id
         status: 'pending',
         description: 'Commande confirmée et en attente de traitement',
-        trackedAt: DateTime.now()
+        tracked_at: DateTime.now()  // Changé: trackedAt -> tracked_at
       })
       console.log('✅ Événement de suivi ajouté')
 
@@ -168,10 +176,10 @@ export default class OrdersController {
         success: true,
         message: '✅ Commande créée avec succès !',
         data: {
-          orderNumber: order.orderNumber,
+          orderNumber: order.order_number,  // Changé: orderNumber -> order_number
           total: order.total,
           status: order.status,
-          estimatedDelivery: order.estimatedDelivery,
+          estimatedDelivery: order.estimated_delivery,  // Changé: estimatedDelivery -> estimated_delivery
           itemsCount: order.items.length
         }
       })
@@ -263,7 +271,7 @@ export default class OrdersController {
         })
       }
 
-      console.log(`✅ Commande trouvée: ${order.orderNumber}`)
+      console.log(`✅ Commande trouvée: ${order.order_number}`)
       console.log('🟢 ========== FIN RECUPERATION ==========')
       return response.status(200).json({
         success: true,
@@ -312,18 +320,18 @@ export default class OrdersController {
       const eventDescription = description || this.getStatusDescription(status)
       console.log(`🔵 Ajout événement de suivi: ${status} - ${eventDescription}`)
       await OrderTracking.create({
-        orderId: order.id,
+        order_id: order.id,  // Changé: orderId -> order_id
         status: status,
         description: eventDescription,
         location: location || null,
-        trackedAt: DateTime.now()
+        tracked_at: DateTime.now()  // Changé: trackedAt -> tracked_at
       })
 
       // Mettre à jour la commande
       order.status = status
-      if (trackingNumber) order.trackingNumber = trackingNumber
-      if (estimatedDelivery) order.estimatedDelivery = estimatedDelivery
-      if (status === 'delivered') order.deliveredAt = DateTime.now()
+      if (trackingNumber) order.tracking_number = trackingNumber  // Changé: trackingNumber -> tracking_number
+      if (estimatedDelivery) order.estimated_delivery = estimatedDelivery  // Changé: estimatedDelivery -> estimated_delivery
+      if (status === 'delivered') order.delivered_at = DateTime.now()  // Changé: deliveredAt -> delivered_at
       
       await order.save()
       console.log(`✅ Nouveau statut: ${order.status}`)
@@ -395,10 +403,10 @@ export default class OrdersController {
       // Ajouter un événement de suivi pour l'annulation
       console.log('🔵 Ajout événement d\'annulation...')
       await OrderTracking.create({
-        orderId: order.id,
+        order_id: order.id,  // Changé: orderId -> order_id
         status: 'cancelled',
         description: 'Commande annulée par le client',
-        trackedAt: DateTime.now()
+        tracked_at: DateTime.now()  // Changé: trackedAt -> tracked_at
       })
       console.log('✅ Événement ajouté')
 
@@ -451,29 +459,29 @@ export default class OrdersController {
         })
       }
 
-      console.log(`✅ Facture générée pour la commande ${order.orderNumber}`)
+      console.log(`✅ Facture générée pour la commande ${order.order_number}`)
       console.log('🟢 ========== FIN GENERATION ==========')
       return response.status(200).json({
         success: true,
         message: 'Facture générée avec succès',
         data: {
           order: {
-            number: order.orderNumber,
-            date: order.createdAt,
+            number: order.order_number,  // Changé: orderNumber -> order_number
+            date: order.created_at,  // Changé: createdAt -> created_at
             status: order.status,
             subtotal: order.subtotal,
-            shippingCost: order.shippingCost,
+            shippingCost: order.shipping_cost,  // Changé: shippingCost -> shipping_cost
             total: order.total,
-            deliveryMethod: order.deliveryMethod,
-            customerName: order.customerName,
-            customerEmail: order.customerEmail,
-            customerPhone: order.customerPhone,
-            shippingAddress: order.shippingAddress,
-            billingAddress: order.billingAddress,
-            paymentMethod: order.paymentMethod,
-            trackingNumber: order.trackingNumber,
-            estimatedDelivery: order.estimatedDelivery,
-            deliveredAt: order.deliveredAt,
+            deliveryMethod: order.delivery_method,  // Changé: deliveryMethod -> delivery_method
+            customerName: order.customer_name,  // Changé: customerName -> customer_name
+            customerEmail: order.customer_email,  // Changé: customerEmail -> customer_email
+            customerPhone: order.customer_phone,  // Changé: customerPhone -> customer_phone
+            shippingAddress: order.shipping_address,  // Changé: shippingAddress -> shipping_address
+            billingAddress: order.billing_address,  // Changé: billingAddress -> billing_address
+            paymentMethod: order.payment_method,  // Changé: paymentMethod -> payment_method
+            trackingNumber: order.tracking_number,  // Changé: trackingNumber -> tracking_number
+            estimatedDelivery: order.estimated_delivery,  // Changé: estimatedDelivery -> estimated_delivery
+            deliveredAt: order.delivered_at,  // Changé: deliveredAt -> delivered_at
             notes: order.notes
           },
           items: order.items
@@ -523,7 +531,7 @@ export default class OrdersController {
 
       const tracking = await OrderTracking.query()
         .where('order_id', orderId)
-        .orderBy('tracked_at', 'asc')
+        .orderBy('tracked_at', 'asc')  // Changé: trackedAt -> tracked_at
 
       console.log(`✅ ${tracking.length} événements de suivi trouvés`)
       console.log('🟢 ========== FIN RECUPERATION ==========')

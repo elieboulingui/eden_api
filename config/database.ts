@@ -2,13 +2,13 @@ import env from '#start/env'
 import { defineConfig } from '@adonisjs/lucid'
 
 const dbConfig = defineConfig({
-  connection: 'pg', // 👈 Doit être 'pg' pas 'sqlite'
+  connection: 'pg',
   connections: {
     pg: {
       client: 'pg',
       connection: {
         host: env.get('DB_HOST'),
-        port: env.get('DB_PORT'),
+        port: Number(env.get('DB_PORT')), // Convert to number
         user: env.get('DB_USER'),
         password: env.get('DB_PASSWORD'),
         database: env.get('DB_DATABASE'),

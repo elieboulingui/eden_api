@@ -1,6 +1,6 @@
 // app/controllers/products_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
-import Product from '#models/product'
+import Product from '#models/Product'  // Changé: product -> Product (majuscule)
 
 export default class ProductsController {
 

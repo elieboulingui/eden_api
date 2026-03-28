@@ -1,39 +1,45 @@
-// app/Models/OrderTracking.ts
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
+import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import Order from '#models/Order'
+import { v4 as uuidv4 } from 'uuid'
+import Order from './Order.js'
 
 export default class OrderTracking extends BaseModel {
-  // AJOUTEZ CETTE LIGNE POUR FORCER LE NOM DE LA TABLE
-  public static table = 'order_tracking'
+  static table = 'order_trackings'
 
   @column({ isPrimary: true })
-  public id: number
+  declare id: string  // Changed to string for UUID consistency
 
   @column()
-  public orderId: string
+  declare order_id: string  // Changed from orderId to snake_case
 
   @column()
-  public status: string
+  declare status: string
 
   @column()
-  public location: string | null
+  declare location: string | null
 
   @column()
-  public description: string | null
+  declare description: string | null
 
   @column.dateTime()
-  public trackedAt: DateTime
+  declare tracked_at: DateTime  // Changed from trackedAt to snake_case
 
   @column.dateTime({ autoCreate: true })
-  public createdAt: DateTime
+  declare created_at: DateTime  // Changed from createdAt to snake_case
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  public updatedAt: DateTime
+  declare updated_at: DateTime  // Changed from updatedAt to snake_case
 
   @belongsTo(() => Order, {
-    foreignKey: 'orderId'
+    foreignKey: 'order_id'  // Changed to snake_case
   })
-  public order: BelongsTo<typeof Order>
+  declare order: BelongsTo<typeof Order>
+
+  @beforeCreate()
+  static async generateUuid(tracking: OrderTracking) {
+    if (!tracking.id) {
+      tracking.id = uuidv4()
+    }
+  }
 }

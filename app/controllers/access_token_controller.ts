@@ -43,23 +43,25 @@ export default class AccessTokenController {
   /**
    * Logout - Supprime le token courant
    */
-  async destroy({ auth, response }: HttpContext) {
-    try {
-      const user = await auth.getUserOrFail()
-      if (user.currentAccessToken) {
-        await User.accessTokens.delete(user, user.currentAccessToken.identifier)
-      }
-
-      return response.status(200).json({
-        success: true,
-        message: 'Déconnexion réussie',
-      })
-    } catch (error) {
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur lors de la déconnexion',
-        error: error.message,
-      })
+async destroy({ auth, response }: HttpContext) {
+  try {
+    const user = await auth.getUserOrFail()
+    const userWithToken = user as User & { currentAccessToken: any }
+    
+    if (userWithToken.currentAccessToken) {
+      await User.accessTokens.delete(user, userWithToken.currentAccessToken.identifier)
     }
+
+    return response.status(200).json({
+      success: true,
+      message: 'Déconnexion réussie',
+    })
+  } catch (error) {
+    return response.status(500).json({
+      success: false,
+      message: 'Erreur lors de la déconnexion',
+      error: error.message,
+    })
   }
+}
 }

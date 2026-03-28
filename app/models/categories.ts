@@ -3,13 +3,13 @@ import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import Product from './Product.js'
-import User from './user.js'
+import User from './User.js'  // Majuscule
 
 export default class Category extends BaseModel {
   static table = 'categories'
 
   @column({ isPrimary: true })
-  declare id: string // UUID en string
+  declare id: string
 
   @column()
   declare name: string
@@ -38,9 +38,9 @@ export default class Category extends BaseModel {
   @column()
   declare sort_order: number
 
-  // AJOUTEZ CETTE LIGNE - c'est ce qui manquait
+  // Déclaration UNIQUE de user_id
   @column()
-  declare user_id: number  // ou string selon le type de votre User.id
+  declare user_id: string  // String pour correspondre à User.id (UUID)
 
   @belongsTo(() => User, {
     foreignKey: 'user_id',
