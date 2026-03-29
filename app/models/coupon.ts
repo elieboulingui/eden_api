@@ -1,9 +1,10 @@
 // app/models/coupon.ts
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
+import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import crypto from 'node:crypto'
 import User from './user.js'
-import Product from './Product.js'
+import Product from './product.js'  // ← Lowercase
 
 export default class Coupon extends BaseModel {
   static table = 'coupons'
@@ -68,6 +69,19 @@ export default class Coupon extends BaseModel {
   })
   declare product: BelongsTo<typeof Product>
 
+  @beforeCreate()
+  static async generateUuid(coupon: Coupon) {
+    if (!coupon.id) {
+      coupon.id = crypto.randomUUID()
+    }
+    if (!coupon.used_count) {
+      coupon.used_count = 0
+    }
+    if (!coupon.status) {
+      coupon.status = 'active'
+    }
+  }
+
   // Vérifier si le coupon est valide
   isValid(): boolean {
     const now = DateTime.now()
@@ -99,6 +113,11 @@ export default class Coupon extends BaseModel {
     } else {
       // Type fixed
       discountAmount = this.discount
+    }
+
+    // S'assurer que la réduction ne dépasse pas le montant total
+    if (discountAmount > amount) {
+      discountAmount = amount
     }
 
     return discountAmount

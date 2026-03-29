@@ -1,45 +1,49 @@
+// app/models/order_tracking.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import { v4 as uuidv4 } from 'uuid'
-import Order from './Order.js'
+import crypto from 'node:crypto'
+import Order from './order.js'  // ← Lowercase
 
 export default class OrderTracking extends BaseModel {
-  static table = 'order_trackings'
+  static table = 'order_tracking'
 
   @column({ isPrimary: true })
-  declare id: string  // Changed to string for UUID consistency
+  declare id: string
 
   @column()
-  declare order_id: string  // Changed from orderId to snake_case
+  declare order_id: string
 
   @column()
   declare status: string
 
   @column()
-  declare location: string | null
-
-  @column()
   declare description: string | null
 
-  @column.dateTime()
-  declare tracked_at: DateTime  // Changed from trackedAt to snake_case
+  @column()
+  declare location: string | null
 
   @column.dateTime({ autoCreate: true })
-  declare created_at: DateTime  // Changed from createdAt to snake_case
+  declare tracked_at: DateTime
+
+  @column.dateTime({ autoCreate: true })
+  declare created_at: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updated_at: DateTime  // Changed from updatedAt to snake_case
+  declare updated_at: DateTime
 
   @belongsTo(() => Order, {
-    foreignKey: 'order_id'  // Changed to snake_case
+    foreignKey: 'order_id'
   })
   declare order: BelongsTo<typeof Order>
 
   @beforeCreate()
   static async generateUuid(tracking: OrderTracking) {
     if (!tracking.id) {
-      tracking.id = uuidv4()
+      tracking.id = crypto.randomUUID()
+    }
+    if (!tracking.tracked_at) {
+      tracking.tracked_at = DateTime.now()
     }
   }
 }

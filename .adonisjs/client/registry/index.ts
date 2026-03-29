@@ -6,12 +6,6 @@ import type { ApiDefinition } from './tree.d.ts'
 const placeholder: any = {}
 
 const routes = {
-  'api.client.profile.update': {
-    methods: ["PUT"],
-    pattern: '/api/profile/update',
-    tokens: [{"old":"/api/profile/update","type":0,"val":"api","end":""},{"old":"/api/profile/update","type":0,"val":"profile","end":""},{"old":"/api/profile/update","type":0,"val":"update","end":""}],
-    types: placeholder as Registry['api.client.profile.update']['types'],
-  },
   'api.client.register': {
     methods: ["POST"],
     pattern: '/api/client/register',
@@ -23,6 +17,30 @@ const routes = {
     pattern: '/api/client/login',
     tokens: [{"old":"/api/client/login","type":0,"val":"api","end":""},{"old":"/api/client/login","type":0,"val":"client","end":""},{"old":"/api/client/login","type":0,"val":"login","end":""}],
     types: placeholder as Registry['api.client.login']['types'],
+  },
+  'merchant_dashboard.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/merchant/orders/:id',
+    tokens: [{"old":"/api/merchant/orders/:id","type":0,"val":"api","end":""},{"old":"/api/merchant/orders/:id","type":0,"val":"merchant","end":""},{"old":"/api/merchant/orders/:id","type":0,"val":"orders","end":""},{"old":"/api/merchant/orders/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['merchant_dashboard.index']['types'],
+  },
+  'api.tracking.search': {
+    methods: ["POST"],
+    pattern: '/api/tracking/search',
+    tokens: [{"old":"/api/tracking/search","type":0,"val":"api","end":""},{"old":"/api/tracking/search","type":0,"val":"tracking","end":""},{"old":"/api/tracking/search","type":0,"val":"search","end":""}],
+    types: placeholder as Registry['api.tracking.search']['types'],
+  },
+  'api.tracking.events': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/tracking/:orderId/events',
+    tokens: [{"old":"/api/tracking/:orderId/events","type":0,"val":"api","end":""},{"old":"/api/tracking/:orderId/events","type":0,"val":"tracking","end":""},{"old":"/api/tracking/:orderId/events","type":1,"val":"orderId","end":""},{"old":"/api/tracking/:orderId/events","type":0,"val":"events","end":""}],
+    types: placeholder as Registry['api.tracking.events']['types'],
+  },
+  'api.client.profile.update': {
+    methods: ["PUT"],
+    pattern: '/api/profile/update',
+    tokens: [{"old":"/api/profile/update","type":0,"val":"api","end":""},{"old":"/api/profile/update","type":0,"val":"profile","end":""},{"old":"/api/profile/update","type":0,"val":"update","end":""}],
+    types: placeholder as Registry['api.client.profile.update']['types'],
   },
   'api.client.logout': {
     methods: ["POST"],
@@ -198,6 +216,24 @@ const routes = {
     tokens: [{"old":"/api/orders/:orderId/status","type":0,"val":"api","end":""},{"old":"/api/orders/:orderId/status","type":0,"val":"orders","end":""},{"old":"/api/orders/:orderId/status","type":1,"val":"orderId","end":""},{"old":"/api/orders/:orderId/status","type":0,"val":"status","end":""}],
     types: placeholder as Registry['api.orders.update-status']['types'],
   },
+  'api.merchant.dashboard': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/merchant/dashboard/:userId',
+    tokens: [{"old":"/api/merchant/dashboard/:userId","type":0,"val":"api","end":""},{"old":"/api/merchant/dashboard/:userId","type":0,"val":"merchant","end":""},{"old":"/api/merchant/dashboard/:userId","type":0,"val":"dashboard","end":""},{"old":"/api/merchant/dashboard/:userId","type":1,"val":"userId","end":""}],
+    types: placeholder as Registry['api.merchant.dashboard']['types'],
+  },
+  'api.merchant.stats': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/merchant/stats/:userId',
+    tokens: [{"old":"/api/merchant/stats/:userId","type":0,"val":"api","end":""},{"old":"/api/merchant/stats/:userId","type":0,"val":"merchant","end":""},{"old":"/api/merchant/stats/:userId","type":0,"val":"stats","end":""},{"old":"/api/merchant/stats/:userId","type":1,"val":"userId","end":""}],
+    types: placeholder as Registry['api.merchant.stats']['types'],
+  },
+  'api.merchant.orders': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/merchant/orders/:userId',
+    tokens: [{"old":"/api/merchant/orders/:userId","type":0,"val":"api","end":""},{"old":"/api/merchant/orders/:userId","type":0,"val":"merchant","end":""},{"old":"/api/merchant/orders/:userId","type":0,"val":"orders","end":""},{"old":"/api/merchant/orders/:userId","type":1,"val":"userId","end":""}],
+    types: placeholder as Registry['api.merchant.orders']['types'],
+  },
   'api.merchant.products': {
     methods: ["GET","HEAD"],
     pattern: '/api/merchant/products/:userId',
@@ -270,29 +306,23 @@ const routes = {
     tokens: [{"old":"/api/merchant/coupons/:userId/:couponId","type":0,"val":"api","end":""},{"old":"/api/merchant/coupons/:userId/:couponId","type":0,"val":"merchant","end":""},{"old":"/api/merchant/coupons/:userId/:couponId","type":0,"val":"coupons","end":""},{"old":"/api/merchant/coupons/:userId/:couponId","type":1,"val":"userId","end":""},{"old":"/api/merchant/coupons/:userId/:couponId","type":1,"val":"couponId","end":""}],
     types: placeholder as Registry['api.merchant.coupons.delete']['types'],
   },
-  'api.merchant.stats': {
+  'api.coupons.index': {
     methods: ["GET","HEAD"],
-    pattern: '/api/merchant/stats/:userId',
-    tokens: [{"old":"/api/merchant/stats/:userId","type":0,"val":"api","end":""},{"old":"/api/merchant/stats/:userId","type":0,"val":"merchant","end":""},{"old":"/api/merchant/stats/:userId","type":0,"val":"stats","end":""},{"old":"/api/merchant/stats/:userId","type":1,"val":"userId","end":""}],
-    types: placeholder as Registry['api.merchant.stats']['types'],
+    pattern: '/api/merchant/coupons',
+    tokens: [{"old":"/api/merchant/coupons","type":0,"val":"api","end":""},{"old":"/api/merchant/coupons","type":0,"val":"merchant","end":""},{"old":"/api/merchant/coupons","type":0,"val":"coupons","end":""}],
+    types: placeholder as Registry['api.coupons.index']['types'],
   },
-  'api.merchant.orders': {
+  'api.coupons.verify': {
     methods: ["GET","HEAD"],
-    pattern: '/api/merchant/orders/:userId',
-    tokens: [{"old":"/api/merchant/orders/:userId","type":0,"val":"api","end":""},{"old":"/api/merchant/orders/:userId","type":0,"val":"merchant","end":""},{"old":"/api/merchant/orders/:userId","type":0,"val":"orders","end":""},{"old":"/api/merchant/orders/:userId","type":1,"val":"userId","end":""}],
-    types: placeholder as Registry['api.merchant.orders']['types'],
+    pattern: '/api/merchant/coupons/verify/:code',
+    tokens: [{"old":"/api/merchant/coupons/verify/:code","type":0,"val":"api","end":""},{"old":"/api/merchant/coupons/verify/:code","type":0,"val":"merchant","end":""},{"old":"/api/merchant/coupons/verify/:code","type":0,"val":"coupons","end":""},{"old":"/api/merchant/coupons/verify/:code","type":0,"val":"verify","end":""},{"old":"/api/merchant/coupons/verify/:code","type":1,"val":"code","end":""}],
+    types: placeholder as Registry['api.coupons.verify']['types'],
   },
-  'api.tracking.search': {
-    methods: ["POST"],
-    pattern: '/api/tracking/search',
-    tokens: [{"old":"/api/tracking/search","type":0,"val":"api","end":""},{"old":"/api/tracking/search","type":0,"val":"tracking","end":""},{"old":"/api/tracking/search","type":0,"val":"search","end":""}],
-    types: placeholder as Registry['api.tracking.search']['types'],
-  },
-  'api.tracking.events': {
+  'api.coupons.show': {
     methods: ["GET","HEAD"],
-    pattern: '/api/tracking/:orderId/events',
-    tokens: [{"old":"/api/tracking/:orderId/events","type":0,"val":"api","end":""},{"old":"/api/tracking/:orderId/events","type":0,"val":"tracking","end":""},{"old":"/api/tracking/:orderId/events","type":1,"val":"orderId","end":""},{"old":"/api/tracking/:orderId/events","type":0,"val":"events","end":""}],
-    types: placeholder as Registry['api.tracking.events']['types'],
+    pattern: '/api/merchant/coupons/:id',
+    tokens: [{"old":"/api/merchant/coupons/:id","type":0,"val":"api","end":""},{"old":"/api/merchant/coupons/:id","type":0,"val":"merchant","end":""},{"old":"/api/merchant/coupons/:id","type":0,"val":"coupons","end":""},{"old":"/api/merchant/coupons/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['api.coupons.show']['types'],
   },
   'api.tracking.add-event': {
     methods: ["POST"],

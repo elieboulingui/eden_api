@@ -6,7 +6,7 @@ import User from './user.js'
 import OrderItem from './OrderItem.js'
 
 export default class Order extends BaseModel {
-  static table = 'order'
+  static table = 'orders'
 
   @column({ isPrimary: true })
   declare id: string

@@ -1,22 +1,22 @@
-// app/models/order_item.ts
+// app/models/OrderItem.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import { v4 as uuidv4 } from 'uuid'
-import Order from './Order.js'
-import Product from './Product.js'
+import crypto from 'node:crypto'
+import Order from './order.js'  // ← Lowercase
+import Product from './product.js'  // ← Lowercase
 
 export default class OrderItem extends BaseModel {
-  static table = 'Orderitem'
+  static table = 'order_items'
 
   @column({ isPrimary: true })
   declare id: string
 
   @column()
-  declare order_id: string  // This must match the foreignKey in Order's hasMany relation
+  declare order_id: string
 
   @column()
-  declare product_id: number
+  declare product_id: string  // ← Changé de product_uuid à product_id
 
   @column()
   declare product_name: string
@@ -51,14 +51,17 @@ export default class OrderItem extends BaseModel {
   declare order: BelongsTo<typeof Order>
 
   @belongsTo(() => Product, {
-    foreignKey: 'product_id'
+    foreignKey: 'product_id'  // ← Changé de product_uuid à product_id
   })
   declare product: BelongsTo<typeof Product>
 
   @beforeCreate()
   static async generateUuid(item: OrderItem) {
     if (!item.id) {
-      item.id = uuidv4()
+      item.id = crypto.randomUUID()
+    }
+    if (!item.subtotal && item.price && item.quantity) {
+      item.subtotal = item.price * item.quantity
     }
   }
 }

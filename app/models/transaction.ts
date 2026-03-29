@@ -1,7 +1,8 @@
 // app/models/transaction.ts
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
+import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import crypto from 'node:crypto'
 import Wallet from './wallet.js'
 import User from './user.js'
 
@@ -50,7 +51,6 @@ export default class Transaction extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updated_at: DateTime
 
-  // Relations
   @belongsTo(() => Wallet, {
     foreignKey: 'wallet_id',
   })
@@ -60,4 +60,12 @@ export default class Transaction extends BaseModel {
     foreignKey: 'user_id',
   })
   declare user: BelongsTo<typeof User>
+
+  @beforeCreate()
+  static assignUuid(transaction: Transaction) {
+    transaction.id = crypto.randomUUID()
+    if (!transaction.reference) {
+      transaction.reference = `TRX-${Date.now()}-${crypto.randomUUID().substring(0, 8)}`
+    }
+  }
 }

@@ -1,20 +1,32 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
-import type { Authenticators } from '@adonisjs/auth/types'
+import jwt from 'jsonwebtoken'
+import User from '#models/user'
 
-/**
- * Auth middleware is used authenticate HTTP requests and deny
- * access to unauthenticated users.
- */
 export default class AuthMiddleware {
-  async handle(
-    ctx: HttpContext,
-    next: NextFn,
-    options: {
-      guards?: (keyof Authenticators)[]
-    } = {}
-  ) {
-    await ctx.auth.authenticateUsing(options.guards)
-    return next()
+  async handle({ request, response }: HttpContext, next: () => Promise<void>) {
+    const authHeader = request.header('authorization')
+
+    if (!authHeader) {
+      return response.unauthorized({ message: 'Token manquant' })
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+
+    try {
+      const decoded: any = jwt.verify(token, process.env.JWT_SECRET!)
+
+      const user = await User.find(decoded.id)
+
+      if (!user) {
+        return response.unauthorized({ message: 'Utilisateur invalide' })
+      }
+
+      // 🔥 Injecter user dans le contexte
+      request.user = user
+
+      await next()
+    } catch (error) {
+      return response.unauthorized({ message: 'Token invalide' })
+    }
   }
 }

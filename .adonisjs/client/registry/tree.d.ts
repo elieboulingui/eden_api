@@ -4,12 +4,18 @@ import type { routes } from './index.ts'
 export interface ApiDefinition {
   api: {
     client: {
+      register: typeof routes['api.client.register']
+      login: typeof routes['api.client.login']
       profile: {
         update: typeof routes['api.client.profile.update']
       }
-      register: typeof routes['api.client.register']
-      login: typeof routes['api.client.login']
       logout: typeof routes['api.client.logout']
+    }
+    tracking: {
+      search: typeof routes['api.tracking.search']
+      events: typeof routes['api.tracking.events']
+      addEvent: typeof routes['api.tracking.add-event']
+      updateStatus: typeof routes['api.tracking.update-status']
     }
     users: {
       index: typeof routes['api.users.index']
@@ -54,6 +60,9 @@ export interface ApiDefinition {
       updateStatus: typeof routes['api.orders.update-status']
     }
     merchant: {
+      dashboard: typeof routes['api.merchant.dashboard']
+      stats: typeof routes['api.merchant.stats']
+      orders: typeof routes['api.merchant.orders']
       products: typeof routes['api.merchant.products'] & {
         create: typeof routes['api.merchant.products.create']
         update: typeof routes['api.merchant.products.update']
@@ -69,14 +78,14 @@ export interface ApiDefinition {
         update: typeof routes['api.merchant.coupons.update']
         delete: typeof routes['api.merchant.coupons.delete']
       }
-      stats: typeof routes['api.merchant.stats']
-      orders: typeof routes['api.merchant.orders']
     }
-    tracking: {
-      search: typeof routes['api.tracking.search']
-      events: typeof routes['api.tracking.events']
-      addEvent: typeof routes['api.tracking.add-event']
-      updateStatus: typeof routes['api.tracking.update-status']
+    coupons: {
+      index: typeof routes['api.coupons.index']
+      verify: typeof routes['api.coupons.verify']
+      show: typeof routes['api.coupons.show']
     }
+  }
+  merchantDashboard: {
+    index: typeof routes['merchant_dashboard.index']
   }
 }

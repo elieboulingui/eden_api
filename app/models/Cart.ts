@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid'
 import CartItem from './CartItem.js'  // Changé de Cartitem.js à CartItem.js
 
 export default class Cart extends BaseModel {
-  static table = 'cart'
+  static table = 'carts'
 
   @column({ isPrimary: true })
   declare id: string

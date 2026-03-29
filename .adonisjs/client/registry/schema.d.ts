@@ -7,18 +7,6 @@ import type { InferInput, SimpleError } from '@vinejs/vine/types'
 export type ParamValue = string | number | bigint | boolean
 
 export interface Registry {
-  'api.client.profile.update': {
-    methods: ["PUT"]
-    pattern: '/api/profile/update'
-    types: {
-      body: {}
-      paramsTuple: []
-      params: {}
-      query: {}
-      response: unknown
-      errorResponse: unknown
-    }
-  }
   'api.client.register': {
     methods: ["POST"]
     pattern: '/api/client/register'
@@ -34,6 +22,54 @@ export interface Registry {
   'api.client.login': {
     methods: ["POST"]
     pattern: '/api/client/login'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'merchant_dashboard.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/merchant/orders/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'api.tracking.search': {
+    methods: ["POST"]
+    pattern: '/api/tracking/search'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'api.tracking.events': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/tracking/:orderId/events'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { orderId: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'api.client.profile.update': {
+    methods: ["PUT"]
+    pattern: '/api/profile/update'
     types: {
       body: {}
       paramsTuple: []
@@ -391,6 +427,42 @@ export interface Registry {
       errorResponse: unknown
     }
   }
+  'api.merchant.dashboard': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/merchant/dashboard/:userId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { userId: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'api.merchant.stats': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/merchant/stats/:userId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { userId: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'api.merchant.orders': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/merchant/orders/:userId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { userId: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
   'api.merchant.products': {
     methods: ["GET","HEAD"]
     pattern: '/api/merchant/products/:userId'
@@ -535,33 +607,9 @@ export interface Registry {
       errorResponse: unknown
     }
   }
-  'api.merchant.stats': {
+  'api.coupons.index': {
     methods: ["GET","HEAD"]
-    pattern: '/api/merchant/stats/:userId'
-    types: {
-      body: {}
-      paramsTuple: [ParamValue]
-      params: { userId: ParamValue }
-      query: {}
-      response: unknown
-      errorResponse: unknown
-    }
-  }
-  'api.merchant.orders': {
-    methods: ["GET","HEAD"]
-    pattern: '/api/merchant/orders/:userId'
-    types: {
-      body: {}
-      paramsTuple: [ParamValue]
-      params: { userId: ParamValue }
-      query: {}
-      response: unknown
-      errorResponse: unknown
-    }
-  }
-  'api.tracking.search': {
-    methods: ["POST"]
-    pattern: '/api/tracking/search'
+    pattern: '/api/merchant/coupons'
     types: {
       body: {}
       paramsTuple: []
@@ -571,13 +619,25 @@ export interface Registry {
       errorResponse: unknown
     }
   }
-  'api.tracking.events': {
+  'api.coupons.verify': {
     methods: ["GET","HEAD"]
-    pattern: '/api/tracking/:orderId/events'
+    pattern: '/api/merchant/coupons/verify/:code'
     types: {
       body: {}
       paramsTuple: [ParamValue]
-      params: { orderId: ParamValue }
+      params: { code: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'api.coupons.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/merchant/coupons/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
       query: {}
       response: unknown
       errorResponse: unknown

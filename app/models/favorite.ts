@@ -1,9 +1,10 @@
+// app/models/favorite.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import { v4 as uuidv4 } from 'uuid'
+import crypto from 'node:crypto'
 import User from './user.js'
-import Product from './Product.js'
+import Product from './product.js'  // ← Lowercase
 
 export default class Favorite extends BaseModel {
   static table = 'favorites'
@@ -12,32 +13,31 @@ export default class Favorite extends BaseModel {
   declare id: string
 
   @column()
-  declare user_id: string  // Changed from userId to snake_case
+  declare user_id: string
 
   @column()
-  declare product_id: number  // Changed from productId to snake_case
+  declare product_id: string  // ← Changé de number à string pour UUID
 
   @column.dateTime({ autoCreate: true })
-  declare created_at: DateTime  // Changed from createdAt to snake_case
+  declare created_at: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updated_at: DateTime  // Changed from updatedAt to snake_case
+  declare updated_at: DateTime
 
   @belongsTo(() => User, {
-    foreignKey: 'user_id',  // Changed to snake_case
-    localKey: 'id'  // User uses 'id' as primary key, not 'uuid'
+    foreignKey: 'user_id',
   })
   declare user: BelongsTo<typeof User>
 
   @belongsTo(() => Product, {
-    foreignKey: 'product_id'  // Changed to snake_case
+    foreignKey: 'product_id'
   })
   declare product: BelongsTo<typeof Product>
 
   @beforeCreate()
   static async generateUuid(favorite: Favorite) {
     if (!favorite.id) {
-      favorite.id = uuidv4()
+      favorite.id = crypto.randomUUID()
     }
   }
 }

@@ -1,17 +1,18 @@
 // app/models/wallet.ts
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
+import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import crypto from 'node:crypto'
 import User from './user.js'
 
 export default class Wallet extends BaseModel {
   static table = 'wallets'
 
   @column({ isPrimary: true })
-  declare id: string
+  declare id: string  // ← Changé de number à string
 
   @column()
-  declare user_id: string
+  declare user_id: string  // ← Changé de number à string
 
   @column()
   declare balance: number
@@ -32,6 +33,11 @@ export default class Wallet extends BaseModel {
     foreignKey: 'user_id',
   })
   declare user: BelongsTo<typeof User>
+
+  @beforeCreate()
+  static assignUuid(wallet: Wallet) {
+    wallet.id = crypto.randomUUID()
+  }
 
   // Méthodes utilitaires
   async addBalance(amount: number): Promise<void> {

@@ -12,22 +12,26 @@ import OrdersController from '#controllers/OrdersController'
 import OrderTrackingController from '#controllers/order_trackings_controller'
 import MerchantDashboardController from '#controllers/merchant_dashboard_controller'
 
-// =======================================================
-// Routes API JSON
-// =======================================================
+const CouponsController = () => import('#controllers/coupons_controller')
 
+// =======================================================
+// Routes API
+// =======================================================
 router.group(() => {
-  // ----------------------
-  // Auth API (public)
-  // ----------------------
-  router.put('/profile/update', [SessionController, 'update']).as('api.client.profile.update')
+
+  // ── Auth (public) ──────────────────────────────────
   router.post('/client/register', [NewAccountController, 'store']).as('api.client.register')
   router.post('/client/login', [SessionController, 'store']).as('api.client.login')
+  router.get('/merchant/orders/:id', [MerchantDashboardController, 'index'])
+  // ── Order Tracking (public) ────────────────────────
+  router.post('/tracking/search', [OrderTrackingController, 'search']).as('api.tracking.search')
+  router.get('/tracking/:orderId/events', [OrderTrackingController, 'getTrackingEvents']).as('api.tracking.events')
 
-  // ----------------------
-  // Routes protégées (auth required)
-  // ----------------------
+  // ── Routes protégées (auth required) ──────────────
   router.group(() => {
+
+    // Profile & Auth
+    router.put('/profile/update', [SessionController, 'update']).as('api.client.profile.update')
     router.post('/client/logout', [SessionController, 'destroy']).as('api.client.logout')
 
     // Users
@@ -47,33 +51,22 @@ router.group(() => {
     router.post('/categories', [CategoriesController, 'store']).as('api.categories.store')
     router.put('/categories/:id', [CategoriesController, 'update']).as('api.categories.update')
     router.delete('/categories/:id', [CategoriesController, 'destroy']).as('api.categories.destroy')
+    router.post('/categories/:id/products', [CategoriesController, 'createProduct']).as('api.categories.products.store')
 
-    // Création de produit dans une catégorie
-    router.post(
-      '/categories/:id/products',
-      [CategoriesController, 'createProduct']
-    ).as('api.categories.products.store')
-
-    // ----------------------
-    // Cart routes
-    // ----------------------
+    // Cart
     router.get('/cart/:userId', [CartController, 'getCart']).as('api.cart.get')
     router.post('/cart/show', [CartController, 'show']).as('api.cart.show')
     router.post('/cart/add', [CartController, 'add']).as('api.cart.add')
     router.put('/cart/update', [CartController, 'update']).as('api.cart.update')
     router.delete('/cart/item/:itemId', [CartController, 'deleteItem']).as('api.cart.delete')
 
-    // ----------------------
-    // Favorites routes
-    // ----------------------
+    // Favorites
     router.post('/favorites/add', [FavoritesController, 'add']).as('api.favorites.add')
     router.post('/favorites/remove', [FavoritesController, 'remove']).as('api.favorites.remove')
     router.get('/favorites', [FavoritesController, 'index']).as('api.favorites.index')
     router.get('/favorites/check', [FavoritesController, 'check']).as('api.favorites.check')
 
-    // ----------------------
-    // Orders routes
-    // ----------------------
+    // Orders
     router.post('/orders', [OrdersController, 'store']).as('api.orders.store')
     router.get('/orders/:userId', [OrdersController, 'index']).as('api.orders.index')
     router.get('/orders/:orderId/user/:userId', [OrdersController, 'show']).as('api.orders.show')
@@ -81,74 +74,45 @@ router.group(() => {
     router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice']).as('api.orders.invoice')
     router.put('/orders/:orderId/status', [OrdersController, 'updateStatus']).as('api.orders.update-status')
 
-    // ----------------------
-    // Merchant Dashboard routes
-    // ----------------------
-    // Dashboard principal
-  
+    // ── Merchant Dashboard ─────────────────────────
+    router.group(() => {
 
-    // Produits du marchand
-    router.get('/merchant/products/:userId', [MerchantDashboardController, 'getProducts'])
-      .as('api.merchant.products')
+      // Dashboard
+      router.get('/dashboard/:userId', [MerchantDashboardController, 'dashboard']).as('api.merchant.dashboard')
+      router.get('/stats/:userId', [MerchantDashboardController, 'getStats']).as('api.merchant.stats')
+      router.get('/orders/:userId', [MerchantDashboardController, 'getRecentOrders']).as('api.merchant.orders')
 
-    // CRUD Produits du marchand
-    router.post('/merchant/products/:userId', [MerchantDashboardController, 'createProduct'])
-      .as('api.merchant.products.create')
+      // Produits
+      router.get('/products/:userId', [MerchantDashboardController, 'getProducts']).as('api.merchant.products')
+      router.post('/products/:userId', [MerchantDashboardController, 'createProduct']).as('api.merchant.products.create')
+      router.put('/products/:userId/:productId', [MerchantDashboardController, 'updateProduct']).as('api.merchant.products.update')
+      router.delete('/products/:userId/:productId', [MerchantDashboardController, 'deleteProduct']).as('api.merchant.products.delete')
 
-    router.put('/merchant/products/:userId/:productId', [MerchantDashboardController, 'updateProduct'])
-      .as('api.merchant.products.update')
+      // Catégories
+      router.get('/categories/:userId', [MerchantDashboardController, 'getCategories']).as('api.merchant.categories')
+      router.post('/categories/:userId', [MerchantDashboardController, 'createCategory']).as('api.merchant.categories.create')
+      router.put('/categories/:userId/:categoryId', [MerchantDashboardController, 'updateCategory']).as('api.merchant.categories.update')
+      router.delete('/categories/:userId/:categoryId', [MerchantDashboardController, 'deleteCategory']).as('api.merchant.categories.delete')
 
-    router.delete('/merchant/products/:userId/:productId', [MerchantDashboardController, 'deleteProduct'])
-      .as('api.merchant.products.delete')
+      // Coupons
+      router.get('/coupons/:userId', [MerchantDashboardController, 'getCoupons']).as('api.merchant.coupons')
+      router.post('/coupons/:userId', [MerchantDashboardController, 'createCoupon']).as('api.merchant.coupons.create')
+      router.put('/coupons/:userId/:couponId', [MerchantDashboardController, 'updateCoupon']).as('api.merchant.coupons.update')
+      router.delete('/coupons/:userId/:couponId', [MerchantDashboardController, 'deleteCoupon']).as('api.merchant.coupons.delete')
 
-    // Catégories du marchand
-    router.get('/merchant/categories/:userId', [MerchantDashboardController, 'getCategories'])
-      .as('api.merchant.categories')
+      // Coupons publics (CouponsController)
+      router.get('/coupons', CouponsController, 'index').as('api.coupons.index')
+      router.get('/coupons/verify/:code', CouponsController, 'verify').as('api.coupons.verify')
+      router.get('/coupons/:id', CouponsController, 'show').as('api.coupons.show')
 
-    router.post('/merchant/categories/:userId', [MerchantDashboardController, 'createCategory'])
-      .as('api.merchant.categories.create')
+    }).prefix('/merchant')
 
-    router.put('/merchant/categories/:userId/:categoryId', [MerchantDashboardController, 'updateCategory'])
-      .as('api.merchant.categories.update')
+    // ── Order Tracking Admin ───────────────────────
+    router.group(() => {
+      router.post('/tracking/:orderId/event', [OrderTrackingController, 'addTrackingEvent']).as('api.tracking.add-event')
+      router.put('/tracking/:orderId/status', [OrderTrackingController, 'updateOrderStatus']).as('api.tracking.update-status')
+    })
 
-    router.delete('/merchant/categories/:userId/:categoryId', [MerchantDashboardController, 'deleteCategory'])
-      .as('api.merchant.categories.delete')
-
-    // Coupons du marchand
-    router.get('/merchant/coupons/:userId', [MerchantDashboardController, 'getCoupons'])
-      .as('api.merchant.coupons')
-
-    router.post('/merchant/coupons/:userId', [MerchantDashboardController, 'createCoupon'])
-      .as('api.merchant.coupons.create')
-
-    router.put('/merchant/coupons/:userId/:couponId', [MerchantDashboardController, 'updateCoupon'])
-      .as('api.merchant.coupons.update')
-
-    router.delete('/merchant/coupons/:userId/:couponId', [MerchantDashboardController, 'deleteCoupon'])
-      .as('api.merchant.coupons.delete')
-
-    // Statistiques rapides
-    router.get('/merchant/stats/:userId', [MerchantDashboardController, 'getStats'])
-      .as('api.merchant.stats')
-
-    // Commandes récentes
-    router.get('/merchant/orders/:userId', [MerchantDashboardController, 'getRecentOrders'])
-      .as('api.merchant.orders')
-
-  }) // Appliquer le middleware auth
-
-  // ----------------------
-  // Order Tracking routes (publiques)
-  // ----------------------
-  router.post('/tracking/search', [OrderTrackingController, 'search']).as('api.tracking.search')
-  router.get('/tracking/:orderId/events', [OrderTrackingController, 'getTrackingEvents']).as('api.tracking.events')
-
-  // ----------------------
-  // Admin routes pour le suivi
-  // ----------------------
-  router.group(() => {
-    router.post('/tracking/:orderId/event', [OrderTrackingController, 'addTrackingEvent']).as('api.tracking.add-event')
-    router.put('/tracking/:orderId/status', [OrderTrackingController, 'updateOrderStatus']).as('api.tracking.update-status')
   })
 
 }).prefix('/api')

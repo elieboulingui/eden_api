@@ -8,7 +8,7 @@ export const signupValidator = vine.compile(
     full_name: vine.string().trim().minLength(2).maxLength(255), // 👈 full_name (underscore)
     email: vine.string().email().trim(),
     password: vine.string().minLength(8),
-    role: vine.enum(['client', 'merchant']).optional(), // Correction: .optional() sans .default()
+    role: vine.enum(['client', 'marchant']).optional(), // Correction: .optional() sans .default()
 
   })
 )

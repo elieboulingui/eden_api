@@ -2,11 +2,11 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, hasMany, hasOne, beforeCreate } from '@adonisjs/lucid/orm'
 import type { HasMany, HasOne } from '@adonisjs/lucid/types/relations'
-import { v4 as uuidv4 } from 'uuid'
 import hash from '@adonisjs/core/services/hash'
 import { compose } from '@adonisjs/core/helpers'
 import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
 import { DbAccessTokensProvider } from '@adonisjs/auth/access_tokens'
+import crypto from 'node:crypto'
 import Product from './Product.js'
 import Review from './review.js'
 import Wallet from './wallet.js'
@@ -20,7 +20,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   static table = 'users'
 
   @column({ isPrimary: true })
-  declare id: string
+  declare id: string  // ← Changé de number à string pour UUID
 
   @column()
   declare full_name: string | null
@@ -29,9 +29,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare email: string
 
   @column()
-  declare uuid: string
-
-  @column({ serializeAs: null })
   declare password: string
 
   @column()
@@ -77,6 +74,11 @@ export default class User extends compose(BaseModel, AuthFinder) {
     tokenSecretLength: 40,
   })
 
+  @beforeCreate()
+  static assignUuid(user: User) {
+    user.id = crypto.randomUUID()
+  }
+
   get isSuperAdmin(): boolean {
     return this.role === 'superadmin'
   }
@@ -109,7 +111,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   }
 
   async getWalletBalance(): Promise<number> {
-    await this.load('wallet' as any)
+    await this.load('wallet')
     return this.wallet?.balance || 0
   }
 
@@ -129,15 +131,5 @@ export default class User extends compose(BaseModel, AuthFinder) {
       })
       .count('* as total')
     return Number.parseInt(result[0].$extras.total) || 0
-  }
-
-  @beforeCreate()
-  static async generateUuid(user: User) {
-    if (!user.id) {
-      user.id = uuidv4()
-    }
-    if (!user.uuid) {
-      user.uuid = uuidv4()
-    }
   }
 }

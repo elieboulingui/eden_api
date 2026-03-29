@@ -1,42 +1,25 @@
+// app/models/CartItem.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import { v4 as uuidv4 } from 'uuid'
-import Order from './Order.js'  // Changé: order.js -> Order.js (majuscule)
-import Product from './Product.js'  // Gardé: Product.js (majuscule)
+import Cart from './Cart.js'
+import Product from './Product.js'
 
-export default class OrderItem extends BaseModel {
-  static table = 'Orderitem'
+export default class CartItem extends BaseModel {
+  public static table = 'cart_items'
 
   @column({ isPrimary: true })
   declare id: string
 
   @column()
-  declare order_id: string
+  declare cart_id: string
 
   @column()
-  declare product_id: number
-
-  @column()
-  declare product_name: string
-
-  @column()
-  declare product_description: string | null
-
-  @column()
-  declare price: number
+  declare product_id: string // ✅ UUID aussi
 
   @column()
   declare quantity: number
-
-  @column()
-  declare category: string | null
-
-  @column()
-  declare image: string | null
-
-  @column()
-  declare subtotal: number
 
   @column.dateTime({ autoCreate: true })
   declare created_at: DateTime
@@ -44,18 +27,18 @@ export default class OrderItem extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updated_at: DateTime
 
-  @belongsTo(() => Order, {
-    foreignKey: 'order_id'  // Ajout explicite de la clé étrangère
+  @belongsTo(() => Cart, {
+    foreignKey: 'cart_id',
   })
-  declare order: BelongsTo<typeof Order>
+  declare cart: BelongsTo<typeof Cart>
 
   @belongsTo(() => Product, {
-    foreignKey: 'product_id'  // Ajout explicite de la clé étrangère
+    foreignKey: 'product_id',
   })
   declare product: BelongsTo<typeof Product>
 
   @beforeCreate()
-  static async generateUuid(item: OrderItem) {
+  static generateUuid(item: CartItem) {
     if (!item.id) {
       item.id = uuidv4()
     }

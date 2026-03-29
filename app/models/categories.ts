@@ -1,9 +1,10 @@
-// app/models/categories.ts
+// app/models/category.ts  // ← Renommé de categories.ts à category.ts (singulier)
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo, hasMany } from '@adonisjs/lucid/orm'
+import { BaseModel, column, belongsTo, hasMany, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
-import Product from './Product.js'
-import User from './user.js'  // Assurez-vous que le fichier User.ts existe
+import crypto from 'node:crypto'
+import Product from './Product.js'  // ← Lowercase
+import User from './user.js'
 
 export default class Category extends BaseModel {
   static table = 'categories'
@@ -61,4 +62,15 @@ export default class Category extends BaseModel {
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updated_at: DateTime
+
+  @beforeCreate()
+  static async generateUuid(category: Category) {
+    if (!category.id) {
+      category.id = crypto.randomUUID()
+    }
+    if (!category.slug && category.name) {
+      category.slug = category.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    }
+    
+  }
 }
