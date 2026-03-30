@@ -5,23 +5,36 @@ import Product from '#models/Product'
 export default class CategoriesController {
   async index({ response }: HttpContext) {
     try {
+      console.log('🔍 Récupération de toutes les catégories...')
+      
+      // Récupérer toutes les catégories sans order_by
       const categories = await Category.query()
-        .where('is_active', true)
-        .orderBy('sort_order', 'asc')
-        .preload('subCategories', (query) => {
-          query.where('is_active', true).orderBy('sort_order', 'asc')
-        })
 
+      // Formater les données
+      const formattedCategories = categories.map(category => ({
+        id: category.id,
+        name: category.name,
+        slug: category.slug,
+        image_url: category.image_url,
+        icon_name: category.icon_name,
+        description: category.description
+      }))
+
+      console.log(`✅ ${formattedCategories.length} catégories récupérées`)
+      
       return response.status(200).json({
         success: true,
-        data: categories,
-        count: categories.length,
+        message: 'Catégories récupérées avec succès',
+        data: formattedCategories,
+        count: formattedCategories.length
       })
+      
     } catch (error) {
+      console.error('❌ Erreur récupération catégories:', error)
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des catégories',
-        error: error.message,
+        error: error.message
       })
     }
   }
