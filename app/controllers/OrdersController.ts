@@ -60,7 +60,7 @@ export default class OrdersController {
 
       // ========== ÉTAPE 1: APPELER L'API KYC ==========
       console.log('🔵 🌐 APPEL API KYC...')
-      const kycUrl = `http://localhost:3001/api/mypvit/kyc/marchant?customerAccountNumber=${customerAccountNumber}`
+      const kycUrl = `https://187e-41-158-102-190.ngrok-free.app/api/mypvit/kyc/marchant?customerAccountNumber=${customerAccountNumber}`
 
       let operator = 'non renseigné'
       let fullName = customerNameFallback || 'non renseigné'
@@ -217,7 +217,7 @@ export default class OrdersController {
 
       try {
         const paymentResponse = await axios.post(
-          'http://localhost:3001/api/payment',
+          'https://187e-41-158-102-190.ngrok-free.app/api/payment',
           {
             amount: total,
             customer_account_number: accountNumber,
