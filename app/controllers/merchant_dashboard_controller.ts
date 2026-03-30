@@ -9,8 +9,6 @@ import order_tracking from '#models/order_tracking'
 
 export default class MerchantDashboardController {
 
-
-
   public async index({ params, response }: HttpContext) {
     // Debug pour vérifier l'ID reçu
     console.log('Filtrage pour user_id:', params.id)
@@ -25,11 +23,9 @@ export default class MerchantDashboardController {
       const orders = await order_tracking.query()
         // On filtre directement sur la colonne user_id de la table orders
         .where('user_id', id)
-
         // On charge quand même les produits et le suivi
         .preload('items')
         .preload('order_tracking', (q) => q.orderBy('tracked_at', 'desc'))
-
         .orderBy('created_at', 'desc')
 
       return response.ok({
@@ -46,6 +42,7 @@ export default class MerchantDashboardController {
       })
     }
   }
+
   async dashboard(ctx: HttpContext) {
     const { params, response } = ctx
     const userId = params.userId
@@ -79,7 +76,7 @@ export default class MerchantDashboardController {
           description: p.description,
           price: p.price,
           stock: p.stock,
-          image_url: p.imageUrl,
+          image_url: p.imageUrl, // Correction: imageUrl au lieu de image_url
           likes: 0,
           sales: 0,
           status: 'active',
@@ -91,8 +88,7 @@ export default class MerchantDashboardController {
         popularProducts: [],
         merchant: {
           id: user.id,
-          id: user.id,
-          full_name: user.full_name,
+          full_name: user.full_name, // Correction: doublon supprimé
           email: user.email,
           avatar: null,
           availableBalance: 0,
@@ -100,6 +96,7 @@ export default class MerchantDashboardController {
       }
     })
   }
+
   // ============= PRODUITS =============
 
   async getProducts({ params, request, response }: HttpContext) {
@@ -117,7 +114,7 @@ export default class MerchantDashboardController {
       const products = await Product.query()
         .where('user_id', user.id)
         .whereNull('deleted_at')
-        .preload('category')  // Changez 'categoryRelation' en 'category'
+        .preload('category')
         .orderBy('created_at', 'desc')
         .paginate(page, limit)
 
@@ -168,14 +165,13 @@ export default class MerchantDashboardController {
       }
 
       const product = await Product.create({
-        name,
-        name,
+        name: name,
         description: description || null,
         price: parseFloat(price),
         stock: parseInt(stock),
-        imageUrl: image_url || null, // Ensure this matches the property in Product.ts
-        user_id: user.id,            // Don't use parseInt() if it's a UUID string!
-        category_id: categoryId,     // This will work now that we added it to the model
+        imageUrl: image_url || null, // Utilisation correcte de imageUrl
+        user_id: user.id,
+        category_id: categoryId,
         isNew: true,
         isOnSale: false,
         rating: 0,
@@ -194,6 +190,7 @@ export default class MerchantDashboardController {
       })
     }
   }
+
   async updateProduct({ params, request, response }: HttpContext) {
     try {
       const { userId, productId } = params
@@ -209,7 +206,7 @@ export default class MerchantDashboardController {
 
       const product = await Product.query()
         .where('id', productId)
-        .where('user_id', Number(user.id))
+        .where('user_id', user.id)
         .first()
 
       if (!product) {
@@ -241,7 +238,7 @@ export default class MerchantDashboardController {
       if (description !== undefined) product.description = description
       if (price) product.price = parseFloat(price)
       if (stock !== undefined) product.stock = parseInt(stock)
-      if (image_url !== undefined) product.image_url = image_url
+      if (image_url !== undefined) product.imageUrl = image_url // Correction: imageUrl au lieu de image_url
       if (categoryId) product.category_id = categoryId
 
       await product.save()
@@ -271,7 +268,7 @@ export default class MerchantDashboardController {
 
       const product = await Product.query()
         .where('id', productId)
-        .where('user_id', Number(user.id))
+        .where('user_id', user.id)
         .first()
 
       if (!product) {
@@ -336,7 +333,7 @@ export default class MerchantDashboardController {
       const category = await Category.create({
         name,
         slug: slugToUse,
-        user_id: user.id, // user.id est une string, Category.user_id doit être string aussi
+        user_id: user.id,
       })
 
       return response.created({
@@ -631,6 +628,7 @@ export default class MerchantDashboardController {
       return response.internalServerError({ success: false, message: error.message })
     }
   }
+
   /**
    * Méthode privée pour récupérer et vérifier le marchand via l'ID dans les params
    */
