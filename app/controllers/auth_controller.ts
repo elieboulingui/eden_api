@@ -1,3 +1,4 @@
+// app/controllers/auth_controller.ts
 import User from '#models/user'
 import type { HttpContext } from '@adonisjs/core/http'
 import { signupValidator, loginValidator } from '#validators/user'
@@ -32,7 +33,6 @@ export default class ApiAuthController {
         message: 'Inscription réussie',
         user: {
           id: user.id,
-          uuid: user.uuid,  // AJOUTÉ: inclure l'UUID
           full_name: user.full_name,
           email: user.email,
           role: user.role,
@@ -76,7 +76,6 @@ export default class ApiAuthController {
         message: 'Connexion réussie',
         user: {
           id: user.id,
-          uuid: user.uuid,  // AJOUTÉ: inclure l'UUID
           full_name: user.full_name,
           email: user.email,
           role: user.role,
@@ -120,7 +119,6 @@ export default class ApiAuthController {
         success: true,
         user: {
           id: user.id,
-          uuid: user.uuid,  // AJOUTÉ: inclure l'UUID
           full_name: user.full_name,
           email: user.email,
           role: user.role,
