@@ -92,7 +92,7 @@ export default class CartController {
     return { success: true, data: { ...cart.toJSON(), items: itemsWithProducts } }
   }
 
-  // METTRE À JOUR LE PANIER (C'est cette méthode qui manquait dans tes logs !)
+  // METTRE À JOUR LE PANIER
   public async update({ request, response }: HttpContext) {
     const { userId, items } = request.body()
     console.log('🔵 [Cart.update] - userId:', userId)
@@ -152,7 +152,7 @@ export default class CartController {
             id: product.id,
             name: product.name,
             price: product.price,
-            image: product.image_url, // Assurez-vous que c'est bien "image_url" dans votre modèle Product
+            image: product.imageUrl, // Correction: imageUrl au lieu de image_url
           } : null
         }
       })
