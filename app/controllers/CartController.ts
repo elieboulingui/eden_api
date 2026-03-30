@@ -4,7 +4,6 @@ import Cart from '#models/Cart'
 import CartItem from '#models/CartItem'
 import Product from '#models/Product'
 import User from '#models/user'
-import axios from 'axios'
 
 export default class CartController {
 
