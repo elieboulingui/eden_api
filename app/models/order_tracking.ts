@@ -3,7 +3,7 @@ import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import crypto from 'node:crypto'
-import Order from './order.js'  // ← Lowercase
+import Order from './Order.ts'  // ← Lowercase
 
 export default class OrderTracking extends BaseModel {
   static table = 'order_tracking'

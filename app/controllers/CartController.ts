@@ -1,274 +1,312 @@
-// app/controllers/OrdersController.ts
+// app/controllers/CartController.ts
+
 import type { HttpContext } from '@adonisjs/core/http'
-import Order from '#models/Order'
-import OrderItem from '#models/OrderItem'
-import Product from '#models/Product'
-import User from '#models/user'
 import Cart from '#models/Cart'
 import CartItem from '#models/CartItem'
+import Product from '#models/Product'
+import User from '#models/user'
 
-export default class OrdersController {
+export default class CartController {
   /**
-   * Helper pour résoudre l'ID utilisateur (UUID string)
+   * Add item to cart
    */
-  private async resolveUserId(userIdentifier: string | number): Promise<string | null> {
-    console.log('🔍 [Resolve] Tentative pour User:', userIdentifier)
+  public async add({ request, response }: HttpContext) {
+    try {
+      const { userId, productId, quantity } = request.body()
 
-    const user = await User.find(userIdentifier)
-    if (user) {
-      console.log('✅ [Resolve] User trouvé:', user.id)
-      return user.id
-    }
+      console.log('🛒 [Cart.add] Request:', { userId, productId, quantity })
 
-    console.error('❌ [Resolve] Utilisateur introuvable pour:', userIdentifier)
-    return null
-  }
-
-  /**
-   * Créer une commande à partir du panier
-   */
-  public async createFromCart({ request, response }: HttpContext) {
-    const { userId, shippingAddress, paymentMethod, notes } = request.body()
-    console.log('🔵 [Orders.createFromCart] - userId:', userId)
-
-    const resolvedUserId = await this.resolveUserId(userId)
-    if (!resolvedUserId) {
-      return response.badRequest({ success: false, message: 'Utilisateur non trouvé' })
-    }
-
-    // Récupérer le panier de l'utilisateur
-    const cart = await Cart.query()
-      .where('user_id', resolvedUserId)
-      .preload('items')
-      .first()
-
-    if (!cart || cart.items.length === 0) {
-      return response.badRequest({ success: false, message: 'Panier vide' })
-    }
-
-    // Enrichir les items avec les détails des produits
-    const itemsWithProducts = await this.enrichCartItems(cart.items)
-
-    // Calculer le montant total
-    let totalAmount = 0
-    for (const item of itemsWithProducts) {
-      if (item.product) {
-        totalAmount += item.product.price * item.quantity
-      }
-    }
-
-    // Créer la commande
-    const order = await Order.create({
-      user_id: resolvedUserId,
-      total_amount: totalAmount,
-      status: 'pending', // Statut initial
-      shipping_address: shippingAddress,
-      payment_method: paymentMethod,
-      notes: notes,
-    })
-
-    // Créer les items de la commande
-    for (const item of itemsWithProducts) {
-      if (item.product) {
-        await OrderItem.create({
-          order_id: order.id,
-          product_id: item.product_id,
-          quantity: item.quantity,
-          price: item.product.price,
+      if (!userId) {
+        return response.badRequest({
+          success: false,
+          message: 'Utilisateur non identifié'
         })
-
-        // Mettre à jour le stock du produit
-        const product = await Product.find(item.product_id)
-        if (product) {
-          product.stock -= item.quantity
-          await product.save()
-        }
       }
-    }
 
-    // Vider le panier après la création de la commande
-    await CartItem.query().where('cart_id', cart.id).delete()
+      if (!productId) {
+        return response.badRequest({
+          success: false,
+          message: 'Produit non spécifié'
+        })
+      }
 
-    return response.status(201).json({
-      success: true,
-      message: 'Commande créée avec succès',
-      data: order,
-    })
-  }
+      // Verify user exists
+      const user = await User.find(userId)
+      if (!user) {
+        return response.badRequest({
+          success: false,
+          message: 'Utilisateur non trouvé'
+        })
+      }
 
-  /**
-   * Récupérer toutes les commandes d'un utilisateur
-   */
-  public async getUserOrders({ request, response }: HttpContext) {
-    const { userId } = request.body()
-    const resolvedUserId = await this.resolveUserId(userId)
+      // Verify product exists and has stock
+      const product = await Product.find(productId)
+      if (!product) {
+        return response.badRequest({
+          success: false,
+          message: 'Produit non trouvé'
+        })
+      }
 
-    if (!resolvedUserId) {
-      return response.notFound({ success: false, message: 'User non trouvé' })
-    }
+      if (product.stock < quantity) {
+        return response.badRequest({
+          success: false,
+          message: 'Stock insuffisant'
+        })
+      }
 
-    const orders = await Order.query()
-      .where('user_id', resolvedUserId)
-      .preload('items', (itemsQuery) => {
+      // Find or create cart for user
+      let cart = await Cart.query()
+        .where('user_id', userId)
+        .first()
+
+      if (!cart) {
+        cart = await Cart.create({
+          user_id: userId
+        })
+      }
+
+      // Check if product already in cart
+      let cartItem = await CartItem.query()
+        .where('cart_id', cart.id)
+        .where('product_id', productId)
+        .first()
+
+      if (cartItem) {
+        // Update quantity
+        cartItem.quantity += quantity
+        await cartItem.save()
+      } else {
+        // Add new item
+        cartItem = await CartItem.create({
+          cart_id: cart.id,
+          product_id: productId,
+          quantity: quantity
+        })
+      }
+
+      // Get updated cart with items
+      await cart.load('items', (itemsQuery) => {
         itemsQuery.preload('product')
       })
-      .orderBy('created_at', 'desc')
 
-    // Enrichir les commandes avec les détails des produits
-    const enrichedOrders = await Promise.all(
-      orders.map(async (order) => {
-        const enrichedItems = await this.enrichOrderItems(order.items)
-        return {
-          ...order.toJSON(),
-          items: enrichedItems,
+      return response.status(200).json({
+        success: true,
+        message: 'Produit ajouté au panier',
+        data: {
+          cart,
+          cartItem
         }
       })
-    )
 
-    return response.json({
-      success: true,
-      data: enrichedOrders,
-    })
-  }
-
-  /**
-   * Récupérer une commande spécifique
-   */
-  public async show({ params, response }: HttpContext) {
-    const order = await Order.find(params.id)
-
-    if (!order) {
-      return response.notFound({ success: false, message: 'Commande non trouvée' })
-    }
-
-    await order.load('items', (itemsQuery) => {
-      itemsQuery.preload('product')
-    })
-
-    const enrichedItems = await this.enrichOrderItems(order.items)
-
-    return response.json({
-      success: true,
-      data: {
-        ...order.toJSON(),
-        items: enrichedItems,
-      },
-    })
-  }
-
-  /**
-   * Mettre à jour le statut d'une commande
-   */
-  public async updateStatus({ request, params, response }: HttpContext) {
-    const { status } = request.body()
-    const order = await Order.find(params.id)
-
-    if (!order) {
-      return response.notFound({ success: false, message: 'Commande non trouvée' })
-    }
-
-    // Vérifier que le statut est valide
-    const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled']
-    if (!validStatuses.includes(status)) {
-      return response.badRequest({
+    } catch (error) {
+      console.error('❌ [Cart.add] Error:', error)
+      return response.status(500).json({
         success: false,
-        message: `Statut invalide. Les statuts valides sont: ${validStatuses.join(', ')}`,
+        message: 'Erreur lors de l\'ajout au panier',
+        error: error.message
       })
     }
-
-    order.status = status as 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
-    await order.save()
-
-    return response.json({
-      success: true,
-      message: 'Statut de la commande mis à jour',
-      data: order,
-    })
   }
 
   /**
-   * Annuler une commande
+   * Get cart for user
    */
-  public async cancel({ params, response }: HttpContext) {
-    const order = await Order.find(params.id)
+  public async getCart({ request, response }: HttpContext) {
+    try {
+      const { userId } = request.body()
 
-    if (!order) {
-      return response.notFound({ success: false, message: 'Commande non trouvée' })
-    }
-
-    if (order.status !== 'pending' && order.status !== 'processing') {
-      return response.badRequest({
-        success: false,
-        message: 'Seules les commandes en attente ou en traitement peuvent être annulées',
-      })
-    }
-
-    order.status = 'cancelled'
-    await order.save()
-
-    // Restaurer le stock des produits
-    await order.load('items')
-    for (const item of order.items) {
-      const product = await Product.find(item.product_id)
-      if (product) {
-        product.stock += item.quantity
-        await product.save()
+      if (!userId) {
+        return response.badRequest({
+          success: false,
+          message: 'Utilisateur non identifié'
+        })
       }
+
+      const cart = await Cart.query()
+        .where('user_id', userId)
+        .preload('items', (itemsQuery) => {
+          itemsQuery.preload('product')
+        })
+        .first()
+
+      if (!cart) {
+        return response.json({
+          success: true,
+          data: {
+            items: [],
+            total: 0
+          }
+        })
+      }
+
+      // Calculate total
+      let total = 0
+      for (const item of cart.items) {
+        if (item.product) {
+          total += item.product.price * item.quantity
+        }
+      }
+
+      return response.json({
+        success: true,
+        data: {
+          id: cart.id,
+          items: cart.items,
+          total
+        }
+      })
+
+    } catch (error) {
+      console.error('❌ [Cart.getCart] Error:', error)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la récupération du panier',
+        error: error.message
+      })
     }
-
-    return response.json({
-      success: true,
-      message: 'Commande annulée avec succès',
-      data: order,
-    })
   }
 
   /**
-   * Helper pour enrichir les items du panier avec les détails des produits
+   * Update cart item quantity
    */
-  private async enrichCartItems(items: CartItem[]) {
-    return await Promise.all(
-      items.map(async (item) => {
-        const product = await Product.find(item.product_id)
-        return {
-          id: item.id,
-          product_id: item.product_id,
-          quantity: item.quantity,
-          product: product
-            ? {
-                id: product.id,
-                name: product.name,
-                price: product.price,
-                image: product.imageUrl, // Correction: imageUrl au lieu de image_url
-              }
-            : null,
-        }
+  public async updateQuantity({ request, response }: HttpContext) {
+    try {
+      const { userId, productId, quantity } = request.body()
+
+      if (!userId || !productId || quantity === undefined) {
+        return response.badRequest({
+          success: false,
+          message: 'Données manquantes'
+        })
+      }
+
+      const cart = await Cart.query()
+        .where('user_id', userId)
+        .first()
+
+      if (!cart) {
+        return response.notFound({
+          success: false,
+          message: 'Panier non trouvé'
+        })
+      }
+
+      const cartItem = await CartItem.query()
+        .where('cart_id', cart.id)
+        .where('product_id', productId)
+        .first()
+
+      if (!cartItem) {
+        return response.notFound({
+          success: false,
+          message: 'Produit non trouvé dans le panier'
+        })
+      }
+
+      if (quantity <= 0) {
+        await cartItem.delete()
+      } else {
+        cartItem.quantity = quantity
+        await cartItem.save()
+      }
+
+      return response.json({
+        success: true,
+        message: 'Quantité mise à jour'
       })
-    )
+
+    } catch (error) {
+      console.error('❌ [Cart.updateQuantity] Error:', error)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la mise à jour',
+        error: error.message
+      })
+    }
   }
 
   /**
-   * Helper pour enrichir les items de commande avec les détails des produits
+   * Remove item from cart
    */
-  private async enrichOrderItems(items: OrderItem[]) {
-    return await Promise.all(
-      items.map(async (item) => {
-        const product = item.product || (await Product.find(item.product_id))
-        return {
-          id: item.id,
-          product_id: item.product_id,
-          quantity: item.quantity,
-          price: item.price,
-          product: product
-            ? {
-                id: product.id,
-                name: product.name,
-                price: product.price,
-                image: product.imageUrl, // Correction: imageUrl au lieu de image_url
-              }
-            : null,
-        }
+  public async remove({ request, response }: HttpContext) {
+    try {
+      const { userId, productId } = request.body()
+
+      if (!userId || !productId) {
+        return response.badRequest({
+          success: false,
+          message: 'Données manquantes'
+        })
+      }
+
+      const cart = await Cart.query()
+        .where('user_id', userId)
+        .first()
+
+      if (!cart) {
+        return response.notFound({
+          success: false,
+          message: 'Panier non trouvé'
+        })
+      }
+
+      await CartItem.query()
+        .where('cart_id', cart.id)
+        .where('product_id', productId)
+        .delete()
+
+      return response.json({
+        success: true,
+        message: 'Produit retiré du panier'
       })
-    )
+
+    } catch (error) {
+      console.error('❌ [Cart.remove] Error:', error)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors du retrait',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Clear cart
+   */
+  public async clear({ request, response }: HttpContext) {
+    try {
+      const { userId } = request.body()
+
+      if (!userId) {
+        return response.badRequest({
+          success: false,
+          message: 'Utilisateur non identifié'
+        })
+      }
+
+      const cart = await Cart.query()
+        .where('user_id', userId)
+        .first()
+
+      if (cart) {
+        await CartItem.query()
+          .where('cart_id', cart.id)
+          .delete()
+      }
+
+      return response.json({
+        success: true,
+        message: 'Panier vidé'
+      })
+
+    } catch (error) {
+      console.error('❌ [Cart.clear] Error:', error)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors du vidage du panier',
+        error: error.message
+      })
+    }
   }
 }

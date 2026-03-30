@@ -29,8 +29,6 @@ export default class OrdersController {
         notes,
         deliveryMethod = 'standard',
         deliveryPrice = 2500,
-        paymentApiKeyPublic="pk_1773325888803_dt8diavuh3h",
-        paymentApiKeySecret="sk_1773325888803_qt015a3cr5",
         customerName: customerNameFallback,
         customerEmail: customerEmailFallback,
       } = request.only([
@@ -150,7 +148,7 @@ export default class OrdersController {
           price: product.price,
           quantity: cartItem.quantity,
           category: product.category,
-          image: product.image_url,
+          image: product.imageUrl,
           subtotal: itemTotal,
         })
         console.log(`✅ Item: ${product.name} x ${cartItem.quantity} = ${itemTotal}`)
@@ -217,21 +215,21 @@ export default class OrdersController {
 
       try {
         const paymentResponse = await axios.post(
-          'https://187e-41-158-102-190.ngrok-free.app/api/payment',
+          'http://localhost:3001/api/payment',
           {
             amount: total,
             customer_account_number: accountNumber,
             payment_api_key_public: "pk_1773325888803_dt8diavuh3h",
-            payment_api_key_secret:"pk_1773325888803_dt8diavuh3",
+            payment_api_key_secret:"sk_1773325888803_qt015a3cr5",
           },
-          { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
+          { headers: { 'Content-Type': 'application/json' } }
         )
 
         paymentResult = paymentResponse.data
         console.log('✅ Réponse paiement:', JSON.stringify(paymentResult, null, 2))
 
         if (paymentResult.success) {
-          order.status = 'paid'
+          order.status = 'pending'
           await order.save()
           await OrderTracking.create({
             order_id: order.id,

@@ -4,7 +4,7 @@ import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import crypto from 'node:crypto'
 import User from './user.js'
-import Product from './product.js'  // ← Lowercase
+import Product from './Product.ts'  // ← Lowercase
 
 export default class Favorite extends BaseModel {
   static table = 'favorites'
