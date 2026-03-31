@@ -5,9 +5,9 @@ import jwt from 'jsonwebtoken'
 const JWT_SECRET = process.env.JWT_SECRET || 'linemarket'
 
 export default class SessionController {
+
   /**
-   * Connexion d'un utilisateur (API)
-   * POST /api/client/login
+   * Connexion utilisateur
    */
   async store({ request, response }: HttpContext) {
     try {
@@ -15,19 +15,17 @@ export default class SessionController {
 
       const user = await User.verifyCredentials(email, password)
 
-      // Générer un JWT
       const token = jwt.sign(
         { id: user.id, email: user.email, role: user.role },
         JWT_SECRET,
         { expiresIn: '7d' }
       )
 
-      return response.status(200).json({
+      return response.ok({
         success: true,
         message: 'Connexion réussie',
         user: {
           id: user.id,
-          uuid: user.uuid,
           full_name: user.full_name,
           email: user.email,
           role: user.role,
@@ -36,10 +34,10 @@ export default class SessionController {
           created_at: user.created_at,
           updated_at: user.updated_at,
         },
-        token, // JWT ici
+        token,
       })
+
     } catch (error) {
-      console.error('❌ Erreur de connexion:', error)
       return response.status(401).json({
         success: false,
         message: 'Email ou mot de passe incorrect',
@@ -48,61 +46,87 @@ export default class SessionController {
   }
 
   /**
-   * Middleware : récupérer l'utilisateur depuis le JWT
+   * 🔐 Récupérer user depuis JWT
    */
   private async getUserFromToken(request: HttpContext['request']) {
     const authHeader = request.header('Authorization')
+
     if (!authHeader) return null
 
     const token = authHeader.replace('Bearer ', '')
+
     try {
       const payload: any = jwt.verify(token, JWT_SECRET)
-      const user = await User.find(payload.id)
-      return user
+      return await User.find(payload.id)
     } catch {
       return null
     }
   }
 
   /**
-   * Récupérer le profil utilisateur
-   * GET /api/profile
+   * Profil utilisateur
    */
   async profile({ request, response }: HttpContext) {
     const user = await this.getUserFromToken(request)
+
     if (!user) {
-      return response.status(401).json({
+      return response.unauthorized({
         success: false,
         message: 'Non authentifié',
       })
     }
 
-    return response.status(200).json({
+    return response.ok({
       success: true,
-      user: {
-        id: user.id,
-        uuid: user.uuid,
-        full_name: user.full_name,
-        email: user.email,
-        role: user.role,
-        phone: user.phone,
-        address: user.address,
-        created_at: user.created_at,
-        updated_at: user.updated_at,
-      },
+      user,
     })
   }
 
   /**
-   * Déconnexion (JWT stateless => côté client)
-   * POST /api/session/logout
+   * ✅ UPDATE PROFIL (FIX ERREUR TS)
+   */
+  async update({ request, response }: HttpContext) {
+    try {
+      const user = await this.getUserFromToken(request)
+
+      if (!user) {
+        return response.unauthorized({
+          success: false,
+          message: 'Non authentifié',
+        })
+      }
+
+      const data = request.only([
+        'full_name',
+        'phone',
+        'address',
+      ])
+
+      user.merge(data)
+      await user.save()
+
+      return response.ok({
+        success: true,
+        message: 'Profil mis à jour',
+        user,
+      })
+
+    } catch (error) {
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur update profil',
+        error: error.message,
+      })
+    }
+  }
+
+  /**
+   * Déconnexion
    */
   async destroy({ response }: HttpContext) {
-    // Avec JWT classique, la "déconnexion" est côté client :
-    // il suffit de supprimer le token côté frontend.
-    return response.status(200).json({
+    return response.ok({
       success: true,
-      message: 'Déconnexion réussie. Supprimez le token côté client.',
+      message: 'Déconnexion réussie (supprimer le token côté client)',
     })
   }
 }

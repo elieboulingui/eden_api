@@ -75,6 +75,9 @@ export default class Product extends BaseModel {
     product.id = crypto.randomUUID()
   }
 
+  @column({ columnName: 'category_id' })
+  declare categoryId: number | null
+
   // Relations
   @belongsTo(() => User, {
     foreignKey: 'user_id',

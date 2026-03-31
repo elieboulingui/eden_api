@@ -7,7 +7,6 @@ export default class UserTransformer extends BaseTransformer<User> {
       'id',
       'full_name',      // Change from 'fullName' to 'full_name'
       'email',
-      'uuid',
       'role',
       'avatar',
       'phone',

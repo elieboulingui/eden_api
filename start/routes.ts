@@ -1,6 +1,6 @@
 import router from '@adonisjs/core/services/router'
 
-// Import des contrôleurs
+// Controllers
 import NewAccountController from '#controllers/new_account_controller'
 import SessionController from '#controllers/session_controller'
 import UsersController from '#controllers/users_controller'
@@ -12,106 +12,110 @@ import OrdersController from '#controllers/OrdersController'
 import OrderTrackingController from '#controllers/order_trackings_controller'
 import MerchantDashboardController from '#controllers/merchant_dashboard_controller'
 
-const CouponsController = () => import('#controllers/coupons_controller')
-
-// =======================================================
-// Routes API
-// =======================================================
 router.group(() => {
 
-  // ── Auth (public) ──────────────────────────────────
-  router.post('/client/register', [NewAccountController, 'store']).as('api.client.register')
-  router.post('/client/login', [SessionController, 'store']).as('api.client.login')
-  router.get('/merchant/orders/:id', [MerchantDashboardController, 'index'])
-  // ── Order Tracking (public) ────────────────────────
-  router.post('/tracking/search', [OrderTrackingController, 'search']).as('api.tracking.search')
-  router.get('/tracking/:orderId/events', [OrderTrackingController, 'getTrackingEvents']).as('api.tracking.events')
+  // ───────────── MERCHANT ─────────────
+  router.get('/merchant/wallet/:userId', (ctx) => new MerchantDashboardController().getWallet(ctx))
+  router.get('/merchant/dashboard/:userId', (ctx) => new MerchantDashboardController().dashboard(ctx))
+  router.get('/merchant/stats/:userId', (ctx) => new MerchantDashboardController().getStats(ctx))
 
-  // ── Routes protégées (auth required) ──────────────
+  router.get('/merchant/orders/all/:userId', (ctx) => new MerchantDashboardController().getMerchantOrders(ctx))
+  router.get('/merchant/orders/pending/:userId', (ctx) => new MerchantDashboardController().getPendingOrders(ctx))
+  router.get('/merchant/orders/detail/:userId/:orderId', (ctx) => new MerchantDashboardController().getOrderDetails(ctx))
+  router.get('/merchant/orders/recent/:userId', (ctx) => new MerchantDashboardController().getRecentOrders(ctx))
+
+  router.get('/merchant/products/:userId', (ctx) => new MerchantDashboardController().getProducts(ctx))
+  router.post('/merchant/products/:userId', (ctx) => new MerchantDashboardController().createProduct(ctx))
+  router.put('/merchant/products/:userId/:productId', (ctx) => new MerchantDashboardController().updateProduct(ctx))
+  router.delete('/merchant/products/:userId/:productId', (ctx) => new MerchantDashboardController().deleteProduct(ctx))
+
+  router.get('/merchant/categories/:userId', (ctx) => new MerchantDashboardController().getCategories(ctx))
+  router.post('/merchant/categories/:userId', (ctx) => new MerchantDashboardController().createCategory(ctx))
+  router.put('/merchant/categories/:userId/:categoryId', (ctx) => new MerchantDashboardController().updateCategory(ctx))
+  router.delete('/merchant/categories/:userId/:categoryId', (ctx) => new MerchantDashboardController().deleteCategory(ctx))
+
+  router.get('/merchant/coupons/:userId', (ctx) => new MerchantDashboardController().getCoupons(ctx))
+  router.post('/merchant/coupons/:userId', (ctx) => new MerchantDashboardController().createCoupon(ctx))
+  router.put('/merchant/coupons/:userId/:couponId', (ctx) => new MerchantDashboardController().updateCoupon(ctx))
+  router.delete('/merchant/coupons/:userId/:couponId', (ctx) => new MerchantDashboardController().deleteCoupon(ctx))
+
+  // ───────────── AUTH ─────────────
+  router.post('/client/register', (ctx) => new NewAccountController().store(ctx))
+  router.post('/client/login', (ctx) => new SessionController().store(ctx))
+
+  // ───────────── TRACKING ─────────────
+  router.post('/tracking/search', (ctx) => new OrderTrackingController().search(ctx))
+  router.get('/tracking/:orderId/events', (ctx) => new OrderTrackingController().getTrackingEvents(ctx))
+
+  // ───────────── COUPONS (lazy OK) ─────────────
+  router.get('/coupons', async (ctx) => {
+    const { default: CouponsController } = await import('#controllers/coupons_controller')
+    return new CouponsController().index(ctx)
+  })
+  // Profile
+  router.put('/profile/update', (ctx) => new SessionController().update(ctx))
+  router.post('/client/logout', (ctx) => new SessionController().destroy(ctx))
+
+  // Cart
+  router.get('/cart/:userId', (ctx) => new CartController().getCart(ctx))
+  router.post('/cart/show', (ctx) => new CartController().getCart(ctx))
+  router.post('/cart/add', (ctx) => new CartController().add(ctx))
+  router.put('/cart/update', (ctx) => new CartController().updateQuantity(ctx))
+  router.delete('/cart/item/:itemId', (ctx) => new CartController().remove(ctx))
+  router.delete('/cart/clear', (ctx) => new CartController().clear(ctx))
+
+  router.get('/coupons/verify/:code', async (ctx) => {
+    const { default: CouponsController } = await import('#controllers/coupons_controller')
+    return new CouponsController().verify(ctx)
+  })
+
+  router.get('/coupons/:id', async (ctx) => {
+    const { default: CouponsController } = await import('#controllers/coupons_controller')
+    return new CouponsController().show(ctx)
+  })
+
+  // ───────────── PROTECTED ─────────────
   router.group(() => {
 
-    // Profile & Auth
-    router.put('/profile/update', [SessionController, 'update']).as('api.client.profile.update')
-    router.post('/client/logout', [SessionController, 'destroy']).as('api.client.logout')
+    router.put('/profile/update', (ctx) => new SessionController().update(ctx))
+    router.post('/client/logout', (ctx) => new SessionController().destroy(ctx))
 
-    // Users
-    router.get('/users', [UsersController, 'index']).as('api.users.index')
-    router.get('/users/:id', [UsersController, 'show']).as('api.users.show')
+    router.get('/users', (ctx) => new UsersController().index(ctx))
+    router.get('/users/:id', (ctx) => new UsersController().show(ctx))
 
-    // Products
-    router.get('/products', [ProductsController, 'index']).as('api.products.index')
-    router.get('/products/:id', [ProductsController, 'show']).as('api.products.show')
-    router.post('/products', [ProductsController, 'store']).as('api.products.store')
-    router.put('/products/:id', [ProductsController, 'update']).as('api.products.update')
-    router.delete('/products/:id', [ProductsController, 'destroy']).as('api.products.destroy')
+    router.get('/products', (ctx) => new ProductsController().index(ctx))
+    router.get('/products/:id', (ctx) => new ProductsController().show(ctx))
+    router.post('/products', (ctx) => new ProductsController().store(ctx))
+    router.put('/products/:id', (ctx) => new ProductsController().update(ctx))
+    router.delete('/products/:id', (ctx) => new ProductsController().destroy(ctx))
 
-    // Categories
-    router.get('/categories', [CategoriesController, 'index']).as('api.categories.index')
-    router.get('/categories/:slug', [CategoriesController, 'show']).as('api.categories.show')
-    router.post('/categories', [CategoriesController, 'store']).as('api.categories.store')
-    router.put('/categories/:id', [CategoriesController, 'update']).as('api.categories.update')
-    router.delete('/categories/:id', [CategoriesController, 'destroy']).as('api.categories.destroy')
-    router.post('/categories/:id/products', [CategoriesController, 'createProduct']).as('api.categories.products.store')
+    router.get('/categories', (ctx) => new CategoriesController().index(ctx))
+    router.get('/categories/:slug', (ctx) => new CategoriesController().show(ctx))
+    router.post('/categories', (ctx) => new CategoriesController().store(ctx))
+    router.put('/categories/:id', (ctx) => new CategoriesController().update(ctx))
+    router.delete('/categories/:id', (ctx) => new CategoriesController().destroy(ctx))
+    router.post('/categories/:id/products', (ctx) => new CategoriesController().createProduct(ctx))
 
-    // Cart
-    router.get('/cart/:userId', [CartController, 'getCart']).as('api.cart.get')
-    router.post('/cart/show', [CartController, 'show']).as('api.cart.show')
-    router.post('/cart/add', [CartController, 'add']).as('api.cart.add')
-    router.put('/cart/update', [CartController, 'update']).as('api.cart.update')
-    router.delete('/cart/item/:itemId', [CartController, 'deleteItem']).as('api.cart.delete')
+    router.get('/cart/:userId', (ctx) => new CartController().getCart(ctx))
+    router.post('/cart/show', (ctx) => new CartController().show(ctx))
+    router.post('/cart/add', (ctx) => new CartController().add(ctx))
+    router.put('/cart/update', (ctx) => new CartController().update(ctx))
+    router.delete('/cart/item/:itemId', (ctx) => new CartController().deleteItem(ctx))
 
-    // Favorites
-    router.post('/favorites/add', [FavoritesController, 'add']).as('api.favorites.add')
-    router.post('/favorites/remove', [FavoritesController, 'remove']).as('api.favorites.remove')
-    router.get('/favorites', [FavoritesController, 'index']).as('api.favorites.index')
-    router.get('/favorites/check', [FavoritesController, 'check']).as('api.favorites.check')
+    router.post('/favorites/add', (ctx) => new FavoritesController().add(ctx))
+    router.post('/favorites/remove', (ctx) => new FavoritesController().remove(ctx))
+    router.get('/favorites', (ctx) => new FavoritesController().index(ctx))
+    router.get('/favorites/check', (ctx) => new FavoritesController().check(ctx))
 
-    // Orders
-    router.post('/orders', [OrdersController, 'store']).as('api.orders.store')
-    router.get('/orders/:userId', [OrdersController, 'index']).as('api.orders.index')
-    router.get('/orders/:orderId/user/:userId', [OrdersController, 'show']).as('api.orders.show')
-    router.post('/orders/:orderId/cancel', [OrdersController, 'cancel']).as('api.orders.cancel')
-    router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice']).as('api.orders.invoice')
-    router.put('/orders/:orderId/status', [OrdersController, 'updateStatus']).as('api.orders.update-status')
+    router.post('/orders', (ctx) => new OrdersController().store(ctx))
+    router.get('/orders/:userId', (ctx) => new OrdersController().index(ctx))
+    router.get('/orders/:orderId/user/:userId', (ctx) => new OrdersController().show(ctx))
+    router.post('/orders/:orderId/cancel', (ctx) => new OrdersController().cancel(ctx))
+    router.get('/orders/:orderId/invoice/:userId', (ctx) => new OrdersController().invoice(ctx))
+    router.put('/orders/:orderId/status', (ctx) => new OrdersController().updateStatus(ctx))
 
-    // ── Merchant Dashboard ─────────────────────────
-    router.group(() => {
-
-      // Dashboard
-      router.get('/dashboard/:userId', [MerchantDashboardController, 'dashboard']).as('api.merchant.dashboard')
-      router.get('/stats/:userId', [MerchantDashboardController, 'getStats']).as('api.merchant.stats')
-      router.get('/orders/:userId', [MerchantDashboardController, 'getRecentOrders']).as('api.merchant.orders')
-
-      // Produits
-      router.get('/products/:userId', [MerchantDashboardController, 'getProducts']).as('api.merchant.products')
-      router.post('/products/:userId', [MerchantDashboardController, 'createProduct']).as('api.merchant.products.create')
-      router.put('/products/:userId/:productId', [MerchantDashboardController, 'updateProduct']).as('api.merchant.products.update')
-      router.delete('/products/:userId/:productId', [MerchantDashboardController, 'deleteProduct']).as('api.merchant.products.delete')
-
-      // Catégories
-      router.get('/categories/:userId', [MerchantDashboardController, 'getCategories']).as('api.merchant.categories')
-      router.post('/categories/:userId', [MerchantDashboardController, 'createCategory']).as('api.merchant.categories.create')
-      router.put('/categories/:userId/:categoryId', [MerchantDashboardController, 'updateCategory']).as('api.merchant.categories.update')
-      router.delete('/categories/:userId/:categoryId', [MerchantDashboardController, 'deleteCategory']).as('api.merchant.categories.delete')
-
-      // Coupons
-      router.get('/coupons/:userId', [MerchantDashboardController, 'getCoupons']).as('api.merchant.coupons')
-      router.post('/coupons/:userId', [MerchantDashboardController, 'createCoupon']).as('api.merchant.coupons.create')
-      router.put('/coupons/:userId/:couponId', [MerchantDashboardController, 'updateCoupon']).as('api.merchant.coupons.update')
-      router.delete('/coupons/:userId/:couponId', [MerchantDashboardController, 'deleteCoupon']).as('api.merchant.coupons.delete')
-
-      // Coupons publics (CouponsController)
-      router.get('/coupons', CouponsController, 'index').as('api.coupons.index')
-      router.get('/coupons/verify/:code', CouponsController, 'verify').as('api.coupons.verify')
-      router.get('/coupons/:id', CouponsController, 'show').as('api.coupons.show')
-
-    }).prefix('/merchant')
-
-    // ── Order Tracking Admin ───────────────────────
-    router.group(() => {
-      router.post('/tracking/:orderId/event', [OrderTrackingController, 'addTrackingEvent']).as('api.tracking.add-event')
-      router.put('/tracking/:orderId/status', [OrderTrackingController, 'updateOrderStatus']).as('api.tracking.update-status')
-    })
+    router.post('/tracking/:orderId/event', (ctx) => new OrderTrackingController().addTrackingEvent(ctx))
+    router.put('/tracking/:orderId/status', (ctx) => new OrderTrackingController().updateOrderStatus(ctx))
 
   })
 

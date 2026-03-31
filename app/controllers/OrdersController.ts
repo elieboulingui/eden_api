@@ -215,7 +215,7 @@ export default class OrdersController {
 
       try {
         const paymentResponse = await axios.post(
-          'http://localhost:3001/api/payment',
+          'https://api-akiba-1.onrender.com/api/payment',
           {
             amount: total,
             customer_account_number: accountNumber,

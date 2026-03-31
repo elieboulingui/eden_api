@@ -4,15 +4,386 @@ import Product from '#models/Product'
 import Category from '#models/categories'
 import Coupon from '#models/coupon'
 import Order from '#models/Order'
+import OrderItem from '#models/OrderItem'
+import OrderTracking from '#models/order_tracking'
+import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
-import order_tracking from '#models/order_tracking'
 
 export default class MerchantDashboardController {
 
-  public async index({ params, response }: HttpContext) {
-    // Debug pour vérifier l'ID reçu
-    console.log('Filtrage pour user_id:', params.id)
+  // ============= WALLET =============
 
+  async getWallet({ params, response }: HttpContext) {
+    try {
+      const { userId } = params
+
+      console.log('getWallet called for userId:', userId)
+
+      if (!userId) {
+        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      let wallet = await Wallet.query()
+        .where('user_id', user.id)
+        .first()
+
+      if (!wallet) {
+        wallet = await Wallet.create({
+          user_id: user.id,
+          balance: 0,
+          currency: 'XAF',
+          status: 'active'
+        })
+      }
+
+      return response.ok({
+        success: true,
+        data: {
+          id: wallet.id,
+          user_id: wallet.user_id,
+          balance: wallet.balance,
+          currency: wallet.currency,
+          status: wallet.status,
+          created_at: wallet.created_at,
+          updated_at: wallet.updated_at
+        }
+      })
+
+    } catch (error) {
+      console.error('Erreur dans getWallet:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
+    }
+  }
+
+  // ============= COMMANDES MARCHAND =============
+
+  async getMerchantOrders({ params, response }: HttpContext) {
+    try {
+      const { userId } = params
+
+      console.log('getMerchantOrders called for userId:', userId)
+
+      if (!userId) {
+        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      const merchantProducts = await Product.query()
+        .where('user_id', user.id)
+        .whereNull('deleted_at')
+        .select('id', 'name', 'price', 'imageUrl')
+
+      const productIds = merchantProducts.map(p => p.id)
+
+      if (productIds.length === 0) {
+        return response.ok({
+          success: true,
+          data: [],
+          stats: {
+            totalOrders: 0,
+            totalRevenue: 0,
+            pendingOrders: 0,
+            processingOrders: 0,
+            shippedOrders: 0,
+            deliveredOrders: 0,
+            cancelledOrders: 0,
+            totalItems: 0,
+            averageOrderValue: 0
+          }
+        })
+      }
+
+      const orderItems = await OrderItem.query()
+        .whereIn('product_id', productIds)
+        .preload('order', (orderQuery) => {
+          orderQuery
+            .preload('user', (userQuery) => {
+              userQuery.select('id', 'full_name', 'email')
+            })
+            .orderBy('created_at', 'desc')
+        })
+
+      if (orderItems.length === 0) {
+        return response.ok({
+          success: true,
+          data: [],
+          stats: {
+            totalOrders: 0,
+            totalRevenue: 0,
+            pendingOrders: 0,
+            processingOrders: 0,
+            shippedOrders: 0,
+            deliveredOrders: 0,
+            cancelledOrders: 0,
+            totalItems: 0,
+            averageOrderValue: 0
+          }
+        })
+      }
+
+      const ordersMap = new Map()
+
+      for (const item of orderItems) {
+        const order = item.order
+        if (order && !ordersMap.has(order.id)) {
+          const tracking = await OrderTracking.query()
+            .where('order_id', order.id)
+            .orderBy('tracked_at', 'desc')
+            .first()
+
+          ordersMap.set(order.id, {
+            id: order.id,
+            order_number: order.order_number,
+            status: order.status,
+            total: order.total,
+            subtotal: order.subtotal,
+            shipping_cost: order.shipping_cost,
+            customer_name: order.customer_name,
+            customer_email: order.customer_email,
+            customer_phone: order.customer_phone,
+            shipping_address: order.shipping_address,
+            payment_method: order.payment_method,
+            tracking_number: order.tracking_number,
+            created_at: order.created_at,
+            estimated_delivery: order.estimated_delivery,
+            delivered_at: order.delivered_at,
+            notes: order.notes,
+            items: [],
+            tracking: tracking ? {
+              status: tracking.status,
+              description: tracking.description,
+              location: tracking.location,
+              tracked_at: tracking.tracked_at
+            } : null,
+            user: order.user ? {
+              id: order.user.id,
+              full_name: order.user.full_name,
+              email: order.user.email
+            } : null
+          })
+        }
+
+        if (ordersMap.has(order.id)) {
+          const orderData = ordersMap.get(order.id)
+          orderData.items.push({
+            id: item.id,
+            product_id: item.product_id,
+            product_name: item.product_name,
+            product_description: item.product_description,
+            price: item.price,
+            quantity: item.quantity,
+            subtotal: item.subtotal,
+            category: item.category,
+            image: item.image
+          })
+        }
+      }
+
+      const orders = Array.from(ordersMap.values())
+
+      orders.sort((a, b) => {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      })
+
+      const stats = {
+        totalOrders: orders.length,
+        totalRevenue: orders.reduce((sum, order) => sum + order.total, 0),
+        pendingOrders: orders.filter(o => o.status === 'pending').length,
+        processingOrders: orders.filter(o => o.status === 'processing').length,
+        shippedOrders: orders.filter(o => o.status === 'shipped').length,
+        deliveredOrders: orders.filter(o => o.status === 'delivered').length,
+        cancelledOrders: orders.filter(o => o.status === 'cancelled').length,
+        totalItems: orders.reduce((sum, order) => sum + order.items.length, 0),
+        averageOrderValue: orders.length > 0
+          ? orders.reduce((sum, order) => sum + order.total, 0) / orders.length
+          : 0
+      }
+
+      return response.ok({
+        success: true,
+        data: orders,
+        stats: stats,
+        count: orders.length
+      })
+
+    } catch (error) {
+      console.error('Erreur dans getMerchantOrders:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
+    }
+  }
+
+  async getPendingOrders({ params, response }: HttpContext) {
+    try {
+      const { userId } = params
+
+      if (!userId) {
+        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      const merchantProducts = await Product.query()
+        .where('user_id', user.id)
+        .whereNull('deleted_at')
+        .select('id')
+
+      const productIds = merchantProducts.map(p => p.id)
+
+      if (productIds.length === 0) {
+        return response.ok({
+          success: true,
+          data: [],
+          count: 0
+        })
+      }
+
+      const orderItems = await OrderItem.query()
+        .whereIn('product_id', productIds)
+        .preload('order', (orderQuery) => {
+          orderQuery
+            .where('status', 'pending')
+            .preload('user', (userQuery) => {
+              userQuery.select('id', 'full_name', 'email')
+            })
+        })
+
+      const ordersMap = new Map()
+
+      for (const item of orderItems) {
+        const order = item.order
+        if (order && order.status === 'pending' && !ordersMap.has(order.id)) {
+          ordersMap.set(order.id, {
+            id: order.id,
+            order_number: order.order_number,
+            status: order.status,
+            total: order.total,
+            customer_name: order.customer_name,
+            customer_email: order.customer_email,
+            customer_phone: order.customer_phone,
+            created_at: order.created_at,
+            items_count: 0,
+            user: order.user ? {
+              full_name: order.user.full_name,
+              email: order.user.email
+            } : null
+          })
+        }
+
+        if (ordersMap.has(order.id)) {
+          const orderData = ordersMap.get(order.id)
+          orderData.items_count++
+        }
+      }
+
+      const pendingOrders = Array.from(ordersMap.values())
+      pendingOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+      return response.ok({
+        success: true,
+        data: pendingOrders,
+        count: pendingOrders.length
+      })
+
+    } catch (error) {
+      console.error('Erreur dans getPendingOrders:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
+    }
+  }
+
+  async getOrderDetails({ params, response }: HttpContext) {
+    try {
+      const { userId, orderId } = params
+
+      if (!userId || !orderId) {
+        return response.badRequest({ success: false, message: "Paramètres manquants" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      const order = await Order.query()
+        .where('id', orderId)
+        .preload('user', (userQuery) => {
+          userQuery.select('id', 'full_name', 'email', 'phone')
+        })
+        .preload('items', (itemsQuery) => {
+          itemsQuery.preload('product')
+        })
+        .first()
+
+      if (!order) {
+        return response.notFound({ success: false, message: 'Commande non trouvée' })
+      }
+
+      const merchantProducts = await Product.query()
+        .where('user_id', user.id)
+        .select('id')
+
+      const merchantProductIds = merchantProducts.map(p => p.id)
+      const hasMerchantProducts = order.items.some(item => merchantProductIds.includes(item.product_id))
+
+      if (!hasMerchantProducts) {
+        return response.forbidden({ success: false, message: 'Cette commande ne contient pas de vos produits' })
+      }
+
+      const tracking = await OrderTracking.query()
+        .where('order_id', order.id)
+        .orderBy('tracked_at', 'desc')
+        .first()
+
+      return response.ok({
+        success: true,
+        data: {
+          ...order.toJSON(),
+          tracking: tracking ? {
+            status: tracking.status,
+            description: tracking.description,
+            location: tracking.location,
+            tracked_at: tracking.tracked_at
+          } : null,
+          merchant_items: order.items.filter(item => merchantProductIds.includes(item.product_id))
+        }
+      })
+
+    } catch (error) {
+      console.error('Erreur dans getOrderDetails:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
+    }
+  }
+
+  // ============= VOS MÉTHODES EXISTANTES =============
+
+  public async index({ params, response }: HttpContext) {
     const { id } = params
 
     if (!id) {
@@ -20,13 +391,13 @@ export default class MerchantDashboardController {
     }
 
     try {
-      const orders = await order_tracking.query()
-        // On filtre directement sur la colonne user_id de la table orders
+      const orders = await OrderTracking.query()
         .where('user_id', id)
-        // On charge quand même les produits et le suivi
-        .preload('items')
-        .preload('order_tracking', (q) => q.orderBy('tracked_at', 'desc'))
-        .orderBy('created_at', 'desc')
+        .preload('order', (orderQuery) => {
+          orderQuery.preload('items', (itemsQuery) => {
+            itemsQuery.preload('product')
+          })
+        })
 
       return response.ok({
         success: true,
@@ -54,11 +425,8 @@ export default class MerchantDashboardController {
 
     const products = await Product.query()
       .where('user_id', user.id)
-      .whereNull('deleted_at')
-      .preload('category')
       .orderBy('created_at', 'desc')
 
-    const categories = await Category.query().where('user_id', user.id)
 
     return response.ok({
       success: true,
@@ -76,7 +444,7 @@ export default class MerchantDashboardController {
           description: p.description,
           price: p.price,
           stock: p.stock,
-          image_url: p.imageUrl, // Correction: imageUrl au lieu de image_url
+          image_url: p.imageUrl,
           likes: 0,
           sales: 0,
           status: 'active',
@@ -88,7 +456,7 @@ export default class MerchantDashboardController {
         popularProducts: [],
         merchant: {
           id: user.id,
-          full_name: user.full_name, // Correction: doublon supprimé
+          full_name: user.full_name,
           email: user.email,
           avatar: null,
           availableBalance: 0,
@@ -96,8 +464,6 @@ export default class MerchantDashboardController {
       }
     })
   }
-
-  // ============= PRODUITS =============
 
   async getProducts({ params, request, response }: HttpContext) {
     try {
@@ -114,7 +480,6 @@ export default class MerchantDashboardController {
       const products = await Product.query()
         .where('user_id', user.id)
         .whereNull('deleted_at')
-        .preload('category')
         .orderBy('created_at', 'desc')
         .paginate(page, limit)
 
@@ -136,7 +501,6 @@ export default class MerchantDashboardController {
         'image_url',
       ])
 
-      // Trouver l'utilisateur par UUID (string)
       const user = await User.findBy('id', userId)
 
       if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
@@ -169,7 +533,7 @@ export default class MerchantDashboardController {
         description: description || null,
         price: parseFloat(price),
         stock: parseInt(stock),
-        imageUrl: image_url || null, // Utilisation correcte de imageUrl
+        imageUrl: image_url || null,
         user_id: user.id,
         category_id: categoryId,
         isNew: true,
@@ -238,7 +602,7 @@ export default class MerchantDashboardController {
       if (description !== undefined) product.description = description
       if (price) product.price = parseFloat(price)
       if (stock !== undefined) product.stock = parseInt(stock)
-      if (image_url !== undefined) product.imageUrl = image_url // Correction: imageUrl au lieu de image_url
+      if (image_url !== undefined) product.imageUrl = image_url
       if (categoryId) product.category_id = categoryId
 
       await product.save()
@@ -282,8 +646,6 @@ export default class MerchantDashboardController {
     }
   }
 
-  // ============= CATÉGORIES =============
-
   async getCategories({ params, response }: HttpContext) {
     try {
       const { userId } = params
@@ -296,10 +658,6 @@ export default class MerchantDashboardController {
 
       if (!user) {
         return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
-      }
-
-      if (user.role !== 'marchant' && user.role !== 'merchant') {
-        return response.forbidden({ success: false, message: 'Cet utilisateur n\'est pas un marchand' })
       }
 
       const categories = await Category.query()
@@ -440,8 +798,6 @@ export default class MerchantDashboardController {
     }
   }
 
-  // ============= COUPONS =============
-
   async getCoupons({ params, response }: HttpContext) {
     try {
       const { userId } = params
@@ -571,15 +927,17 @@ export default class MerchantDashboardController {
     }
   }
 
-  // ============= STATISTIQUES =============
-
   async getStats({ params, response }: HttpContext) {
     try {
       const { userId } = params
       const user = await User.findBy('id', userId)
 
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
       const totalProducts = await Product.query()
-        .where('user_id', user?.id || 0)
+        .where('user_id', user.id)
         .whereNull('deleted_at')
         .count('* as total')
 
@@ -629,20 +987,5 @@ export default class MerchantDashboardController {
     }
   }
 
-  /**
-   * Méthode privée pour récupérer et vérifier le marchand via l'ID dans les params
-   */
-  private async getMerchant(ctx: HttpContext) {
-    const userId = ctx.params.userId || ctx.request.input('userId')
-    if (!userId) return null
 
-    const user = await User.find(userId)
-
-    // On vérifie si l'utilisateur existe et s'il est bien un marchand
-    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-      return null
-    }
-
-    return user
-  }
 }

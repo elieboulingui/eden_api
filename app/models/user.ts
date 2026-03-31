@@ -111,8 +111,12 @@ export default class User extends compose(BaseModel, AuthFinder) {
   }
 
   async getWalletBalance(): Promise<number> {
-    await this.load('wallet')
-    return this.wallet?.balance || 0
+    const wallet = await Wallet
+      .query()
+      .where('user_id', this.id)
+      .first()
+
+    return wallet?.balance ?? 0
   }
 
   async getAverageRating(): Promise<number> {

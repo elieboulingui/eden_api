@@ -7,6 +7,7 @@ import Product from '#models/Product'
 import User from '#models/user'
 
 export default class CartController {
+
   /**
    * Add item to cart
    */
@@ -14,133 +15,87 @@ export default class CartController {
     try {
       const { userId, productId, quantity } = request.body()
 
-      console.log('🛒 [Cart.add] Request:', { userId, productId, quantity })
-
       if (!userId) {
-        return response.badRequest({
-          success: false,
-          message: 'Utilisateur non identifié'
-        })
+        return response.badRequest({ success: false, message: 'Utilisateur non identifié' })
       }
 
       if (!productId) {
-        return response.badRequest({
-          success: false,
-          message: 'Produit non spécifié'
-        })
+        return response.badRequest({ success: false, message: 'Produit non spécifié' })
       }
 
-      // Verify user exists
       const user = await User.find(userId)
       if (!user) {
-        return response.badRequest({
-          success: false,
-          message: 'Utilisateur non trouvé'
-        })
+        return response.badRequest({ success: false, message: 'Utilisateur non trouvé' })
       }
 
-      // Verify product exists and has stock
       const product = await Product.find(productId)
       if (!product) {
-        return response.badRequest({
-          success: false,
-          message: 'Produit non trouvé'
-        })
+        return response.badRequest({ success: false, message: 'Produit non trouvé' })
       }
 
       if (product.stock < quantity) {
-        return response.badRequest({
-          success: false,
-          message: 'Stock insuffisant'
-        })
+        return response.badRequest({ success: false, message: 'Stock insuffisant' })
       }
 
-      // Find or create cart for user
-      let cart = await Cart.query()
-        .where('user_id', userId)
-        .first()
+      let cart = await Cart.query().where('user_id', userId).first()
 
       if (!cart) {
-        cart = await Cart.create({
-          user_id: userId
-        })
+        cart = await Cart.create({ user_id: userId })
       }
 
-      // Check if product already in cart
       let cartItem = await CartItem.query()
         .where('cart_id', cart.id)
         .where('product_id', productId)
         .first()
 
       if (cartItem) {
-        // Update quantity
         cartItem.quantity += quantity
         await cartItem.save()
       } else {
-        // Add new item
         cartItem = await CartItem.create({
           cart_id: cart.id,
           product_id: productId,
-          quantity: quantity
+          quantity
         })
       }
 
-      // Get updated cart with items
-      await cart.load('items', (itemsQuery) => {
-        itemsQuery.preload('product')
-      })
+      await cart.load('items', (q) => q.preload('product'))
 
-      return response.status(200).json({
+      return response.ok({
         success: true,
         message: 'Produit ajouté au panier',
-        data: {
-          cart,
-          cartItem
-        }
+        data: { cart, cartItem }
       })
 
     } catch (error) {
-      console.error('❌ [Cart.add] Error:', error)
-      return response.status(500).json({
+      return response.internalServerError({
         success: false,
-        message: 'Erreur lors de l\'ajout au panier',
+        message: 'Erreur ajout panier',
         error: error.message
       })
     }
   }
 
   /**
-   * Get cart for user
+   * Get cart
    */
-  public async getCart({ request, response }: HttpContext) {
+  public async getCart({ params, request, response }: HttpContext) {
     try {
-      const { userId } = request.body()
+      const userId = params.userId || request.input('userId')
 
       if (!userId) {
-        return response.badRequest({
-          success: false,
-          message: 'Utilisateur non identifié'
-        })
+        return response.badRequest({ success: false, message: 'Utilisateur non identifié' })
       }
 
       const cart = await Cart.query()
         .where('user_id', userId)
-        .preload('items', (itemsQuery) => {
-          itemsQuery.preload('product')
-        })
+        .preload('items', (q) => q.preload('product'))
         .first()
 
       if (!cart) {
-        return response.json({
-          success: true,
-          data: {
-            items: [],
-            total: 0
-          }
-        })
+        return response.ok({ success: true, data: { items: [], total: 0 } })
       }
 
-      // Calculate total
       let total = 0
       for (const item of cart.items) {
         if (item.product) {
@@ -148,48 +103,34 @@ export default class CartController {
         }
       }
 
-      return response.json({
+      return response.ok({
         success: true,
-        data: {
-          id: cart.id,
-          items: cart.items,
-          total
-        }
+        data: { id: cart.id, items: cart.items, total }
       })
 
     } catch (error) {
-      console.error('❌ [Cart.getCart] Error:', error)
-      return response.status(500).json({
+      return response.internalServerError({
         success: false,
-        message: 'Erreur lors de la récupération du panier',
+        message: 'Erreur récupération panier',
         error: error.message
       })
     }
   }
 
   /**
-   * Update cart item quantity
+   * Update quantity
    */
   public async updateQuantity({ request, response }: HttpContext) {
     try {
       const { userId, productId, quantity } = request.body()
 
       if (!userId || !productId || quantity === undefined) {
-        return response.badRequest({
-          success: false,
-          message: 'Données manquantes'
-        })
+        return response.badRequest({ success: false, message: 'Données manquantes' })
       }
 
-      const cart = await Cart.query()
-        .where('user_id', userId)
-        .first()
-
+      const cart = await Cart.query().where('user_id', userId).first()
       if (!cart) {
-        return response.notFound({
-          success: false,
-          message: 'Panier non trouvé'
-        })
+        return response.notFound({ success: false, message: 'Panier non trouvé' })
       }
 
       const cartItem = await CartItem.query()
@@ -198,10 +139,7 @@ export default class CartController {
         .first()
 
       if (!cartItem) {
-        return response.notFound({
-          success: false,
-          message: 'Produit non trouvé dans le panier'
-        })
+        return response.notFound({ success: false, message: 'Produit non trouvé dans le panier' })
       }
 
       if (quantity <= 0) {
@@ -211,44 +149,31 @@ export default class CartController {
         await cartItem.save()
       }
 
-      return response.json({
-        success: true,
-        message: 'Quantité mise à jour'
-      })
+      return response.ok({ success: true, message: 'Quantité mise à jour' })
 
     } catch (error) {
-      console.error('❌ [Cart.updateQuantity] Error:', error)
-      return response.status(500).json({
+      return response.internalServerError({
         success: false,
-        message: 'Erreur lors de la mise à jour',
+        message: 'Erreur update',
         error: error.message
       })
     }
   }
 
   /**
-   * Remove item from cart
+   * Remove item
    */
   public async remove({ request, response }: HttpContext) {
     try {
       const { userId, productId } = request.body()
 
       if (!userId || !productId) {
-        return response.badRequest({
-          success: false,
-          message: 'Données manquantes'
-        })
+        return response.badRequest({ success: false, message: 'Données manquantes' })
       }
 
-      const cart = await Cart.query()
-        .where('user_id', userId)
-        .first()
-
+      const cart = await Cart.query().where('user_id', userId).first()
       if (!cart) {
-        return response.notFound({
-          success: false,
-          message: 'Panier non trouvé'
-        })
+        return response.notFound({ success: false, message: 'Panier non trouvé' })
       }
 
       await CartItem.query()
@@ -256,16 +181,12 @@ export default class CartController {
         .where('product_id', productId)
         .delete()
 
-      return response.json({
-        success: true,
-        message: 'Produit retiré du panier'
-      })
+      return response.ok({ success: true, message: 'Produit supprimé' })
 
     } catch (error) {
-      console.error('❌ [Cart.remove] Error:', error)
-      return response.status(500).json({
+      return response.internalServerError({
         success: false,
-        message: 'Erreur lors du retrait',
+        message: 'Erreur suppression',
         error: error.message
       })
     }
@@ -279,34 +200,37 @@ export default class CartController {
       const { userId } = request.body()
 
       if (!userId) {
-        return response.badRequest({
-          success: false,
-          message: 'Utilisateur non identifié'
-        })
+        return response.badRequest({ success: false, message: 'Utilisateur requis' })
       }
 
-      const cart = await Cart.query()
-        .where('user_id', userId)
-        .first()
+      const cart = await Cart.query().where('user_id', userId).first()
 
       if (cart) {
-        await CartItem.query()
-          .where('cart_id', cart.id)
-          .delete()
+        await CartItem.query().where('cart_id', cart.id).delete()
       }
 
-      return response.json({
-        success: true,
-        message: 'Panier vidé'
-      })
+      return response.ok({ success: true, message: 'Panier vidé' })
 
     } catch (error) {
-      console.error('❌ [Cart.clear] Error:', error)
-      return response.status(500).json({
+      return response.internalServerError({
         success: false,
-        message: 'Erreur lors du vidage du panier',
+        message: 'Erreur clear cart',
         error: error.message
       })
     }
+  }
+
+  // ================= ALIAS POUR ROUTES =================
+
+  public async show(ctx: HttpContext) {
+    return this.getCart(ctx)
+  }
+
+  public async update(ctx: HttpContext) {
+    return this.updateQuantity(ctx)
+  }
+
+  public async deleteItem(ctx: HttpContext) {
+    return this.remove(ctx)
   }
 }
