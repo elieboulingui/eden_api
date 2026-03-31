@@ -13,7 +13,7 @@ import OrderTrackingController from '#controllers/order_trackings_controller'
 import MerchantDashboardController from '#controllers/merchant_dashboard_controller'
 
 // ============ ROUTES PUBLIQUES (sans authentification) ============
-router.get('/api/merchant/coupons', (ctx) => new MerchantDashboardController().getAllCoupons(ctx))
+router.get('/api/merchant/coupons', (ctx) => new MerchantDashboardController().getCoupons(ctx))
 
 // ============ ROUTES AVEC AUTHENTIFICATION ============
 router.group(() => {
