@@ -59,7 +59,6 @@ router.group(() => {
   })
   
   // Profile
-  router.post('/client/logout', (ctx) => new SessionController().destroy(ctx))
 
   // Cart
   router.get('/cart/:userId', (ctx) => new CartController().getCart(ctx))
