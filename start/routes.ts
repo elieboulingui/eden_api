@@ -38,6 +38,7 @@ router.group(() => {
   router.post('/merchant/coupons/:userId', (ctx) => new MerchantDashboardController().createCoupon(ctx))
   router.put('/merchant/coupons/:userId/:couponId', (ctx) => new MerchantDashboardController().updateCoupon(ctx))
   router.delete('/merchant/coupons/:userId/:couponId', (ctx) => new MerchantDashboardController().deleteCoupon(ctx))
+router.post('/api/coupons/apply', [CouponsController, 'apply'])
 
   // ───────────── AUTH ─────────────
   router.post('/client/register', (ctx) => new NewAccountController().store(ctx))
