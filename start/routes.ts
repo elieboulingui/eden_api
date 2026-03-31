@@ -1,6 +1,7 @@
 import router from '@adonisjs/core/services/router'
 
 // Controllers
+import CouponsController form '#controllers/coupons_controller'
 import NewAccountController from '#controllers/new_account_controller'
 import SessionController from '#controllers/session_controller'
 import UsersController from '#controllers/users_controller'
