@@ -53,7 +53,6 @@ router.group(() => {
     return new CouponsController().index(ctx)
   })
   // Profile
-  router.put('/profile/update', (ctx) => new SessionController().update(ctx))
   router.post('/client/logout', (ctx) => new SessionController().destroy(ctx))
 
   // Cart
