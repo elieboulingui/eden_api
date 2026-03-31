@@ -17,7 +17,7 @@ export default class CouponsController {
  * Body: { code: string, order_amount: number, user_id?: string }
  */
 async apply({ request, response }: HttpContext) {
-  const { code, order_amount, user_id } = request.body()
+  const { code, order_amount } = request.body()
 
   if (!code || !order_amount) {
     return response.badRequest({
