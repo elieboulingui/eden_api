@@ -77,7 +77,6 @@ router.group(() => {
   // ───────────── PROTECTED ─────────────
   router.group(() => {
 
-    router.put('/profile/update', (ctx) => new SessionController().update(ctx))
     router.post('/client/logout', (ctx) => new SessionController().destroy(ctx))
 
     router.get('/users', (ctx) => new UsersController().index(ctx))
