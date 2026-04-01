@@ -10,7 +10,6 @@ import OrdersController from '#controllers/OrdersController'
 import CouponsController from '#controllers/coupons_controller'
 import OrderTrackingController from '#controllers/order_trackings_controller'
 import MerchantDashboardController from '#controllers/merchant_dashboard_controller'
-import CouponsController from '#controllers/coupons_controller' // ← Ajoutez cet import
 
 router.group(() => {
 
@@ -40,16 +39,9 @@ router.group(() => {
   router.delete('/merchant/coupons/:userId/:couponId', (ctx) => new MerchantDashboardController().deleteCoupon(ctx))
 
   // ───────────── COUPONS ─────────────
-  // Route GET pour lister tous les coupons (AJOUTEZ CETTE ROUTE)
   router.get('/coupons', (ctx) => new CouponsController().index(ctx))
-  
-  // Route POST pour appliquer un coupon
   router.post('/coupons/apply', (ctx) => new CouponsController().apply(ctx))
-  
-  // Route POST pour vérifier un coupon
   router.post('/coupons/verify', (ctx) => new CouponsController().verify(ctx))
-  
-  // Route GET pour un coupon spécifique
   router.get('/coupons/:id', (ctx) => new CouponsController().show(ctx))
 
   // ───────────── AUTH ─────────────
