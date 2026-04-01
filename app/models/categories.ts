@@ -1,5 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import Category from '#models/categories'  // ← Ici c'est Category, pas CategoriesController
+import Category from '#models/categories'  // ← Correction: importer le modèle Category, pas CategoriesController
 import Product from '#models/Product'
 
 export default class CategoriesController {
@@ -7,9 +7,9 @@ export default class CategoriesController {
   // 🔹 Liste toutes les catégories
   async index({ response }: HttpContext) {
     try {
-      const categories = await Category.query()  // ← Utilisez Category, pas this
+      const categories = await Category.query()  // ← Utiliser Category
 
-      const formattedCategories = categories.map(c => ({
+      const formattedCategories = categories.map((c: Category) => ({  // ← Ajouter le type
         id: c.id,
         name: c.name,
         slug: c.slug,
@@ -40,20 +40,17 @@ export default class CategoriesController {
   // 🔹 Détails d'une catégorie
   async show({ params, response }: HttpContext) {
     try {
-      // Récupérer la catégorie
-      const category = await Category.query()
+      const category = await Category.query()  // ← Utiliser Category
         .where('slug', params.slug)
         .where('is_active', true)
         .firstOrFail()
 
-      // Récupérer les sous-catégories
-      const subCategories = await Category.query()
+      const subCategories = await Category.query()  // ← Utiliser Category
         .where('parent_id', category.id)
         .where('is_active', true)
         .orderBy('sort_order', 'asc')
 
-      // Récupérer les produits en utilisant les product_ids
-      let products: any[] = []
+      let products: Product[] = []
       if (category.product_ids && category.product_ids.length > 0) {
         products = await Product.query()
           .whereIn('id', category.product_ids)
@@ -61,7 +58,6 @@ export default class CategoriesController {
           .limit(12)
       }
 
-      // Construire l'objet réponse
       const categoryData = {
         id: category.id,
         name: category.name,
@@ -75,14 +71,14 @@ export default class CategoriesController {
         product_ids: category.product_ids,
         created_at: category.created_at,
         updated_at: category.updated_at,
-        subCategories: subCategories.map(sub => ({
+        subCategories: subCategories.map((sub: Category) => ({
           id: sub.id,
           name: sub.name,
           slug: sub.slug,
           image_url: sub.image_url,
           product_count: sub.product_count,
         })),
-        products: products.map(product => ({
+        products: products.map((product: Product) => ({
           id: product.id,
           name: product.name,
           price: product.price,
@@ -120,7 +116,7 @@ export default class CategoriesController {
         'icon_name'
       ])
       
-      const category = await Category.create(data)
+      const category = await Category.create(data)  // ← Utiliser Category
 
       return response.status(201).json({
         success: true,
@@ -140,7 +136,7 @@ export default class CategoriesController {
   // 🔹 Mettre à jour une catégorie
   async update({ params, request, response }: HttpContext) {
     try {
-      const category = await Category.findOrFail(params.id)
+      const category = await Category.findOrFail(params.id)  // ← Utiliser Category
       const data = request.only([
         'name', 
         'slug', 
@@ -173,7 +169,7 @@ export default class CategoriesController {
   // 🔹 Supprimer une catégorie
   async destroy({ params, response }: HttpContext) {
     try {
-      const category = await Category.findOrFail(params.id)
+      const category = await Category.findOrFail(params.id)  // ← Utiliser Category
       await category.delete()
 
       return response.status(200).json({
@@ -193,7 +189,7 @@ export default class CategoriesController {
   // 🔹 Créer un produit dans une catégorie
   async createProduct({ params, request, response }: HttpContext) {
     try {
-      const category = await Category.findOrFail(params.id)
+      const category = await Category.findOrFail(params.id)  // ← Utiliser Category
 
       const data = request.only([
         'name',
@@ -210,13 +206,11 @@ export default class CategoriesController {
         'user_id',
       ])
 
-      // Création du produit
       const product = await Product.create({
         ...data,
         category_id: category.id,
       })
 
-      // Ajouter l'ID du produit dans product_ids de la catégorie
       if (!category.product_ids) {
         category.product_ids = []
       }
