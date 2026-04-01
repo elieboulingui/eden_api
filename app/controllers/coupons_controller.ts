@@ -5,54 +5,54 @@ import CartItem from '#models/CartItem'
 
 export default class CouponsController {
 
-  public async index({ request, response }: HttpContext) {
-    const { page = 1, limit = 10, includeProduct = 'true' } = request.qs()
+public async index({ request, response }: HttpContext) {
+  const { page = 1, limit = 10, includeProduct = 'true' } = request.qs()
 
-    let query = Coupon.query()
-      .select('coupons.*')
-      .orderBy('coupons.created_at', 'desc')
+  let query = Coupon.query()
+    .select('coupons.*')
+    .orderBy('coupons.created_at', 'desc')
 
-    if (includeProduct === 'true') {
-      query = query
-        .leftJoin('products', 'coupons.product_id', 'products.id')
-        .select(
-          'products.id as product_id',
-          'products.name as product_name',
-          'products.image_url as product_image_url',
-          'products.price as product_price'
-        )
+  if (includeProduct === 'true') {
+    query = query
+      .leftJoin('products', 'coupons.product_id', 'products.id')
+      .select(
+        'products.id as product_id',
+        'products.name as product_name',
+        'products.image_url as product_image_url',
+        'products.price as product_price'
+      )
+  }
+
+  const coupons = await query.paginate(Number(page), Number(limit))
+
+  const data = coupons.all().map((coupon) => {
+    const json = coupon.toJSON()
+    const result: any = {}
+
+    Object.keys(json).forEach(key => {
+      if (!key.startsWith('product_')) {
+        result[key] = json[key]
+      }
+    })
+
+    if (json.product_id) {
+      result.product = {
+        id: json.product_id,
+        name: json.product_name,
+        image: json.product_image_url,
+        price: json.product_price
+      }
     }
 
-    const coupons = await query.paginate(Number(page), Number(limit))
+    return result
+  })
 
-    const data = coupons.all().map((coupon) => {
-      const json = coupon.toJSON()
-      const result: any = {}
-
-      Object.keys(json).forEach(key => {
-        if (!key.startsWith('product_')) {
-          result[key] = json[key]
-        }
-      })
-
-      if (json.product_id) {
-        result.product = {
-          id: json.product_id,
-          name: json.product_name,
-          image: json.product_image_url,
-          price: json.product_price
-        }
-      }
-
-      return result
-    })
-
-    return response.ok({
-      success: true,
-      data: data,
-      meta: coupons.getMeta(),
-    })
-  }
+  return response.ok({
+    success: true,
+    data: data,
+    meta: coupons.getMeta(),
+  })
+}
 
   public async show({ params, response }: HttpContext) {
     const coupon = await Coupon.query()
