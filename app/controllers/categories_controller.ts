@@ -38,30 +38,35 @@ export default class CategoriesController {
   }
 
   // 🔹 Détails d'une catégorie
-  async show({ params, response }: HttpContext) {
-    try {
-      const category = await Category.query()
-        .where('slug', params.slug)
-        .where('is_active', true)
-        .preload('subCategories', (q) =>
-          q.where('is_active', true).orderBy('sort_order', 'asc')
-        )
-        .preload('products', (q) =>
-          q.where('stock', '>', 0).limit(12)
-        )
-        .firstOrFail()
+// 🔹 Détails d'une catégorie
+async show({ params, response }: HttpContext) {
+  try {
+    const category = await Category.query()
+      .where('slug', params.slug)
+      .where('is_active', true)
+      .firstOrFail()
 
-      return response.status(200).json({
-        success: true,
-        data: category,
-      })
-    } catch {
-      return response.status(404).json({
-        success: false,
-        message: 'Catégorie non trouvée',
-      })
-    }
+    // Charge les relations après la requête principale
+    await category.load('subCategories', (query) => {
+      query.where('is_active', true).orderBy('sort_order', 'asc')
+    })
+    
+    await category.load('products', (query) => {
+      query.where('stock', '>', 0).limit(12)
+    })
+
+    return response.status(200).json({
+      success: true,
+      data: category,
+    })
+  } catch (error) {
+    console.error('Erreur show category:', error)
+    return response.status(404).json({
+      success: false,
+      message: 'Catégorie non trouvée',
+    })
   }
+}
 
   // 🔹 Créer une nouvelle catégorie
   async store({ request, response }: HttpContext) {
