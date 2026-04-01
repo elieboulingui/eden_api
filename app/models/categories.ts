@@ -1,5 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import Category from '#models/categories'
+import Category from '#models/categories'  // ← Ici c'est Category, pas CategoriesController
 import Product from '#models/Product'
 
 export default class CategoriesController {
@@ -7,7 +7,7 @@ export default class CategoriesController {
   // 🔹 Liste toutes les catégories
   async index({ response }: HttpContext) {
     try {
-      const categories = await Category.query()
+      const categories = await Category.query()  // ← Utilisez Category, pas this
 
       const formattedCategories = categories.map(c => ({
         id: c.id,
@@ -53,7 +53,7 @@ export default class CategoriesController {
         .orderBy('sort_order', 'asc')
 
       // Récupérer les produits en utilisant les product_ids
-      let products: Product[] = []
+      let products: any[] = []
       if (category.product_ids && category.product_ids.length > 0) {
         products = await Product.query()
           .whereIn('id', category.product_ids)
