@@ -1,6 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Category from '#models/categories'
 import Product from '#models/Product'
+import { ModelQueryBuilderContract } from '@adonisjs/lucid/types/model'
 
 export default class CategoriesController {
 
@@ -38,40 +39,50 @@ export default class CategoriesController {
   }
 
   // 🔹 Détails d'une catégorie
-// 🔹 Détails d'une catégorie
-async show({ params, response }: HttpContext) {
-  try {
-    const category = await Category.query()
-      .where('slug', params.slug)
-      .where('is_active', true)
-      .firstOrFail()
+  async show({ params, response }: HttpContext) {
+    try {
+      // Récupérer la catégorie d'abord
+      const category = await Category.query()
+        .where('slug', params.slug)
+        .where('is_active', true)
+        .firstOrFail()
 
-    // Charge les relations après la requête principale
-    await category.load('subCategories', (query) => {
-      query.where('is_active', true).orderBy('sort_order', 'asc')
-    })
-    
-    await category.load('products', (query) => {
-      query.where('stock', '>', 0).limit(12)
-    })
+      // Charger les sous-catégories séparément
+      const subCategories = await Category.query()
+        .where('parent_id', category.id)
+        .where('is_active', true)
+        .orderBy('sort_order', 'asc')
 
-    return response.status(200).json({
-      success: true,
-      data: category,
-    })
-  } catch (error) {
-    console.error('Erreur show category:', error)
-    return response.status(404).json({
-      success: false,
-      message: 'Catégorie non trouvée',
-    })
+      // Charger les produits séparément
+      const products = await Product.query()
+        .where('category_id', category.id)
+        .where('stock', '>', 0)
+        .limit(12)
+
+      // Construire l'objet réponse
+      const categoryWithRelations = {
+        ...category.toJSON(),
+        subCategories,
+        products,
+      }
+
+      return response.status(200).json({
+        success: true,
+        data: categoryWithRelations,
+      })
+    } catch (error) {
+      console.error('Erreur show category:', error)
+      return response.status(404).json({
+        success: false,
+        message: 'Catégorie non trouvée',
+      })
+    }
   }
-}
 
   // 🔹 Créer une nouvelle catégorie
   async store({ request, response }: HttpContext) {
     try {
-      const data = request.only(['name', 'slug', 'description', 'sort_order', 'is_active', 'user_id'])
+      const data = request.only(['name', 'slug', 'description', 'sort_order', 'is_active', 'user_id', 'parent_id'])
       const category = await Category.create(data)
 
       return response.status(201).json({
@@ -80,6 +91,7 @@ async show({ params, response }: HttpContext) {
         data: category,
       })
     } catch (error) {
+      console.error('Erreur store category:', error)
       return response.status(400).json({
         success: false,
         message: 'Erreur lors de la création de la catégorie',
@@ -92,7 +104,7 @@ async show({ params, response }: HttpContext) {
   async update({ params, request, response }: HttpContext) {
     try {
       const category = await Category.findOrFail(params.id)
-      const data = request.only(['name', 'slug', 'description', 'sort_order', 'is_active'])
+      const data = request.only(['name', 'slug', 'description', 'sort_order', 'is_active', 'parent_id'])
       category.merge(data)
       await category.save()
 
@@ -102,6 +114,7 @@ async show({ params, response }: HttpContext) {
         data: category,
       })
     } catch (error) {
+      console.error('Erreur update category:', error)
       return response.status(400).json({
         success: false,
         message: 'Erreur lors de la mise à jour de la catégorie',
@@ -121,6 +134,7 @@ async show({ params, response }: HttpContext) {
         message: 'Catégorie supprimée avec succès',
       })
     } catch (error) {
+      console.error('Erreur destroy category:', error)
       return response.status(400).json({
         success: false,
         message: 'Erreur lors de la suppression de la catégorie',
@@ -156,8 +170,12 @@ async show({ params, response }: HttpContext) {
       })
 
       // Ajouter l'ID du produit dans product_ids de la catégorie
-      if (!category.product_ids) category.product_ids = []
-      if (!category.product_ids.includes(product.id)) category.product_ids.push(product.id)
+      if (!category.product_ids) {
+        category.product_ids = []
+      }
+      if (!category.product_ids.includes(product.id)) {
+        category.product_ids.push(product.id)
+      }
       await category.save()
 
       return response.status(201).json({
