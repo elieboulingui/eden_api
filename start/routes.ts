@@ -7,6 +7,7 @@ import CategoriesController from '#controllers/categories_controller'
 import CartController from '#controllers/CartController'
 import FavoritesController from '#controllers/favorites_controller'
 import OrdersController from '#controllers/OrdersController'
+import CouponsController from '#controllers/coupons_controller'
 import OrderTrackingController from '#controllers/order_trackings_controller'
 import MerchantDashboardController from '#controllers/merchant_dashboard_controller'
 import CouponsController from '#controllers/coupons_controller' // ← Ajoutez cet import
