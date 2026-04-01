@@ -1,6 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Category from '#models/categories'
-
 import Product from '#models/Product'
 
 export default class CategoriesController {
@@ -39,8 +38,6 @@ export default class CategoriesController {
   }
 
   // 🔹 Détails d'une catégorie
-
-
   async show({ params, response }: HttpContext) {
     try {
       const category = await Category.query()
@@ -49,7 +46,7 @@ export default class CategoriesController {
         .preload('subCategories', (q) =>
           q.where('is_active', true).orderBy('sort_order', 'asc')
         )
-        .preload('products', (q: ModelQueryBuilderContract<typeof Product>) =>
+        .preload('products', (q) =>
           q.where('stock', '>', 0).limit(12)
         )
         .firstOrFail()
@@ -64,7 +61,8 @@ export default class CategoriesController {
         message: 'Catégorie non trouvée',
       })
     }
-}
+  }
+
   // 🔹 Créer une nouvelle catégorie
   async store({ request, response }: HttpContext) {
     try {
