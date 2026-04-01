@@ -1,5 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import Category from '#models/categories'  // ← Correction: importer le modèle Category, pas CategoriesController
+import Category from '#models/categories'
 import Product from '#models/Product'
 
 export default class CategoriesController {
@@ -7,9 +7,9 @@ export default class CategoriesController {
   // 🔹 Liste toutes les catégories
   async index({ response }: HttpContext) {
     try {
-      const categories = await Category.query()  // ← Utiliser Category
+      const categories = await Category.query()
 
-      const formattedCategories = categories.map((c: Category) => ({  // ← Ajouter le type
+      const formattedCategories = categories.map((c) => ({
         id: c.id,
         name: c.name,
         slug: c.slug,
@@ -40,17 +40,17 @@ export default class CategoriesController {
   // 🔹 Détails d'une catégorie
   async show({ params, response }: HttpContext) {
     try {
-      const category = await Category.query()  // ← Utiliser Category
+      const category = await Category.query()
         .where('slug', params.slug)
         .where('is_active', true)
         .firstOrFail()
 
-      const subCategories = await Category.query()  // ← Utiliser Category
+      const subCategories = await Category.query()
         .where('parent_id', category.id)
         .where('is_active', true)
         .orderBy('sort_order', 'asc')
 
-      let products: Product[] = []
+      let products: any[] = []
       if (category.product_ids && category.product_ids.length > 0) {
         products = await Product.query()
           .whereIn('id', category.product_ids)
@@ -71,14 +71,14 @@ export default class CategoriesController {
         product_ids: category.product_ids,
         created_at: category.created_at,
         updated_at: category.updated_at,
-        subCategories: subCategories.map((sub: Category) => ({
+        subCategories: subCategories.map((sub) => ({
           id: sub.id,
           name: sub.name,
           slug: sub.slug,
           image_url: sub.image_url,
           product_count: sub.product_count,
         })),
-        products: products.map((product: Product) => ({
+        products: products.map((product) => ({
           id: product.id,
           name: product.name,
           price: product.price,
@@ -116,7 +116,7 @@ export default class CategoriesController {
         'icon_name'
       ])
       
-      const category = await Category.create(data)  // ← Utiliser Category
+      const category = await Category.create(data)
 
       return response.status(201).json({
         success: true,
@@ -136,7 +136,7 @@ export default class CategoriesController {
   // 🔹 Mettre à jour une catégorie
   async update({ params, request, response }: HttpContext) {
     try {
-      const category = await Category.findOrFail(params.id)  // ← Utiliser Category
+      const category = await Category.findOrFail(params.id)
       const data = request.only([
         'name', 
         'slug', 
@@ -169,7 +169,7 @@ export default class CategoriesController {
   // 🔹 Supprimer une catégorie
   async destroy({ params, response }: HttpContext) {
     try {
-      const category = await Category.findOrFail(params.id)  // ← Utiliser Category
+      const category = await Category.findOrFail(params.id)
       await category.delete()
 
       return response.status(200).json({
@@ -189,7 +189,7 @@ export default class CategoriesController {
   // 🔹 Créer un produit dans une catégorie
   async createProduct({ params, request, response }: HttpContext) {
     try {
-      const category = await Category.findOrFail(params.id)  // ← Utiliser Category
+      const category = await Category.findOrFail(params.id)
 
       const data = request.only([
         'name',
