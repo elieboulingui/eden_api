@@ -10,7 +10,7 @@ export default class Product extends BaseModel {
   static table = 'products'
 
   @column({ isPrimary: true })
-  declare id: string  // ← Changé en string pour UUID
+  declare id: string  // UUID
 
   @column()
   declare name: string
@@ -31,32 +31,28 @@ export default class Product extends BaseModel {
   declare reviews_count: number
 
   @column()
-  declare user_id: string  // ← Changé de userId à user_id pour cohérence
+  declare user_id: string
 
-  // Add this inside your Product class
-  @column()
-  declare category_id: string | number | null
+  @column({ columnName: 'category_id' })
+  declare category_id: string | null  // Correspond à la DB
 
-  // Also, I noticed your controller uses 'image_url' (snake_case)
-  // but your model has 'imageUrl' (camelCase).
-  // Pick one and stay consistent. If the DB is image_url:
   @column({ columnName: 'image_url' })
-  declare imageUrl: string
+  declare image_url: string | null  // Assure que l'image soit stockée
 
   @column()
-  declare category: string
+  declare category: string | null
 
   @column()
-  declare origin: string
+  declare origin: string | null
 
   @column()
-  declare weight: string
+  declare weight: string | null
 
   @column()
-  declare packaging: string
+  declare packaging: string | null
 
   @column()
-  declare conservation: string
+  declare conservation: string | null
 
   @column()
   declare isNew: boolean
@@ -65,18 +61,17 @@ export default class Product extends BaseModel {
   declare isOnSale: boolean
 
   @column.dateTime({ autoCreate: true })
-  declare created_at: DateTime  // ← Standardisé en snake_case
+  declare created_at: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updated_at: DateTime  // ← Standardisé en snake_case
+  declare updated_at: DateTime
 
   @beforeCreate()
   static assignUuid(product: Product) {
-    product.id = crypto.randomUUID()
+    if (!product.id) {
+      product.id = crypto.randomUUID()
+    }
   }
-
-  @column({ columnName: 'category_id' })
-  declare categoryId: number | null
 
   // Relations
   @belongsTo(() => User, {

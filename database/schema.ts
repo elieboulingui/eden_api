@@ -38,7 +38,7 @@ export class CartSchema extends BaseModel {
 }
 
 export class CategorySchema extends BaseModel {
-  static $columns = ['createdAt', 'id', 'name', 'slug', 'updatedAt', 'userId'] as const
+  static $columns = ['createdAt', 'id', 'name', 'productIds', 'slug', 'updatedAt', 'userId'] as const
   $columns = CategorySchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime | null
@@ -46,6 +46,8 @@ export class CategorySchema extends BaseModel {
   declare id: string
   @column()
   declare name: string
+  @column()
+  declare productIds: any
   @column()
   declare slug: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
@@ -55,7 +57,7 @@ export class CategorySchema extends BaseModel {
 }
 
 export class CouponSchema extends BaseModel {
-  static $columns = ['code', 'createdAt', 'description', 'discount', 'id', 'maximumDiscountAmount', 'minimumOrderAmount', 'productId', 'status', 'type', 'updatedAt', 'usageLimit', 'usedCount', 'userId', 'validFrom', 'validUntil'] as const
+  static $columns = ['code', 'createdAt', 'description', 'discount', 'id', 'maximumDiscountAmount', 'minimumOrderAmount', 'productId', 'status', 'type', 'updatedAt', 'usageLimit', 'usedCount', 'userId', 'userIds', 'validFrom', 'validUntil'] as const
   $columns = CouponSchema.$columns
   @column()
   declare code: string
@@ -85,6 +87,8 @@ export class CouponSchema extends BaseModel {
   declare usedCount: number | null
   @column()
   declare userId: string
+  @column()
+  declare userIds: any | null
   @column.dateTime()
   declare validFrom: DateTime | null
   @column.dateTime()
@@ -204,10 +208,12 @@ export class OrderSchema extends BaseModel {
 }
 
 export class ProductSchema extends BaseModel {
-  static $columns = ['category', 'conservation', 'createdAt', 'description', 'id', 'imageUrl', 'isNew', 'isOnSale', 'name', 'origin', 'packaging', 'price', 'stock', 'updatedAt', 'userId', 'weight'] as const
+  static $columns = ['category', 'categoryId', 'conservation', 'createdAt', 'description', 'id', 'imageUrl', 'imageUrl', 'isNew', 'isOnSale', 'isNew', 'isOnSale', 'name', 'origin', 'packaging', 'price', 'rating', 'stock', 'updatedAt', 'userId', 'weight'] as const
   $columns = ProductSchema.$columns
   @column()
   declare category: string | null
+  @column()
+  declare categoryId: string | null
   @column()
   declare conservation: string | null
   @column.dateTime({ autoCreate: true })
@@ -218,6 +224,7 @@ export class ProductSchema extends BaseModel {
   declare id: string
   @column()
   declare imageUrl: string | null
+
   @column()
   declare isNew: boolean | null
   @column()
@@ -230,6 +237,8 @@ export class ProductSchema extends BaseModel {
   declare packaging: string | null
   @column()
   declare price: string
+  @column()
+  declare rating: number
   @column()
   declare stock: number | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })

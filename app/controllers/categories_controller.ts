@@ -1,55 +1,57 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Category from '#models/categories'
+
 import Product from '#models/Product'
 
 export default class CategoriesController {
+
+  // 🔹 Liste toutes les catégories
   async index({ response }: HttpContext) {
     try {
-      console.log('🔍 Récupération de toutes les catégories...')
-      
-      // Récupérer toutes les catégories sans order_by
       const categories = await Category.query()
 
-      // Formater les données
-      const formattedCategories = categories.map(category => ({
-        id: category.id,
-        name: category.name,
-        slug: category.slug,
-        image_url: category.image_url,
-        icon_name: category.icon_name,
-        description: category.description
+      const formattedCategories = categories.map(c => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        image_url: c.image_url,
+        icon_name: c.icon_name,
+        description: c.description,
+        product_count: c.product_count ?? 0,
+        sort_order: c.sort_order ?? 0,
+        is_active: c.is_active,
       }))
 
-      console.log(`✅ ${formattedCategories.length} catégories récupérées`)
-      
       return response.status(200).json({
         success: true,
         message: 'Catégories récupérées avec succès',
         data: formattedCategories,
-        count: formattedCategories.length
+        count: formattedCategories.length,
       })
-      
     } catch (error) {
-      console.error('❌ Erreur récupération catégories:', error)
+      console.error('Erreur récupération catégories:', error)
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des catégories',
-        error: error.message
+        error: error.message,
       })
     }
   }
+
+  // 🔹 Détails d'une catégorie
+
 
   async show({ params, response }: HttpContext) {
     try {
       const category = await Category.query()
         .where('slug', params.slug)
         .where('is_active', true)
-        .preload('subCategories', (query) => {
-          query.where('is_active', true).orderBy('sort_order', 'asc')
-        })
-        .preload('products', (query) => {
-          query.where('stock', '>', 0).limit(12)
-        })
+        .preload('subCategories', (q) =>
+          q.where('is_active', true).orderBy('sort_order', 'asc')
+        )
+        .preload('products', (q: ModelQueryBuilderContract<typeof Product>) =>
+          q.where('stock', '>', 0).limit(12)
+        )
         .firstOrFail()
 
       return response.status(200).json({
@@ -62,8 +64,8 @@ export default class CategoriesController {
         message: 'Catégorie non trouvée',
       })
     }
-  }
-
+}
+  // 🔹 Créer une nouvelle catégorie
   async store({ request, response }: HttpContext) {
     try {
       const data = request.only(['name', 'slug', 'description', 'sort_order', 'is_active', 'user_id'])
@@ -83,6 +85,7 @@ export default class CategoriesController {
     }
   }
 
+  // 🔹 Mettre à jour une catégorie
   async update({ params, request, response }: HttpContext) {
     try {
       const category = await Category.findOrFail(params.id)
@@ -104,6 +107,7 @@ export default class CategoriesController {
     }
   }
 
+  // 🔹 Supprimer une catégorie
   async destroy({ params, response }: HttpContext) {
     try {
       const category = await Category.findOrFail(params.id)
@@ -122,9 +126,11 @@ export default class CategoriesController {
     }
   }
 
+  // 🔹 Créer un produit dans une catégorie
   async createProduct({ params, request, response }: HttpContext) {
     try {
       const category = await Category.findOrFail(params.id)
+
       const data = request.only([
         'name',
         'price',
@@ -135,25 +141,32 @@ export default class CategoriesController {
         'weight',
         'packaging',
         'conservation',
-        'is_new',
-        'is_on_sale',
+        'isNew',
+        'isOnSale',
         'user_id',
       ])
 
+      // Création du produit
       const product = await Product.create({
         ...data,
         category_id: category.id,
       })
 
+      // Ajouter l'ID du produit dans product_ids de la catégorie
+      if (!category.product_ids) category.product_ids = []
+      if (!category.product_ids.includes(product.id)) category.product_ids.push(product.id)
+      await category.save()
+
       return response.status(201).json({
         success: true,
-        message: 'Produit créé dans la catégorie avec succès',
+        message: 'Produit créé et ajouté à la catégorie avec succès',
         data: product,
       })
     } catch (error) {
+      console.error('Erreur création produit:', error)
       return response.status(400).json({
         success: false,
-        message: 'Erreur lors de la création du produit dans la catégorie',
+        message: 'Erreur lors de la création du produit',
         error: error.message,
       })
     }

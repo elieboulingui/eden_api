@@ -148,7 +148,7 @@ export default class OrdersController {
           price: product.price,
           quantity: cartItem.quantity,
           category: product.category,
-          image: product.imageUrl,
+          image: product.image_url,
           subtotal: itemTotal,
         })
         console.log(`✅ Item: ${product.name} x ${cartItem.quantity} = ${itemTotal}`)

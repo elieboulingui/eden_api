@@ -444,7 +444,7 @@ export default class MerchantDashboardController {
           description: p.description,
           price: p.price,
           stock: p.stock,
-          image_url: p.imageUrl,
+          image_url: p.image_url,
           likes: 0,
           sales: 0,
           status: 'active',
@@ -507,44 +507,62 @@ export default class MerchantDashboardController {
         return response.forbidden({ success: false, message: 'Non autorisé' })
       }
 
-      let categoryId = null
+      // **Support pour plusieurs catégories séparées par des virgules**
+      const categoryNames = category_name ? category_name.split(',').map((c: string) => c.trim()) : []
+      const categoryIds: string[] = []
 
-      if (category_name && category_name.trim() !== '') {
-        const category = await Category.query()
-          .where('name', category_name)
-          .where('user_id', user.id)
-          .first()
+      for (const name of categoryNames) {
+        if (!name) continue
 
-        if (category) {
-          categoryId = category.id
-        } else {
-          const newCategory = await Category.create({
-            name: category_name,
-            slug: category_name.toLowerCase().replace(/\s+/g, '-'),
-            user_id: user.id.toString(),
+        // Cherche ou crée la catégorie
+        let category = await Category.query().where('name', name).where('user_id', user.id).first()
+
+        if (!category) {
+          category = await Category.create({
+            name,
+            image_url: image_url || null,
+            slug: name.toLowerCase().replace(/\s+/g, '-'),
+            user_id: user.id,
             is_active: true,
+            product_ids: [], // initialise le tableau
           })
-          categoryId = newCategory.id
         }
+
+        categoryIds.push(category.id)
       }
 
+      // Crée le produit
       const product = await Product.create({
-        name: name,
+        name,
         description: description || null,
         price: parseFloat(price),
         stock: parseInt(stock),
-        imageUrl: image_url || null,
+        image_url: image_url || null,
         user_id: user.id,
-        category_id: categoryId,
         isNew: true,
         isOnSale: false,
         rating: 0,
+        // pas besoin de category_id si tu veux gérer avec product_ids
       })
+
+      // **Ajoute l'ID du produit dans chaque catégorie**
+      for (const categoryId of categoryIds) {
+        const category = await Category.find(categoryId)
+        if (!category) continue
+
+        if (!category.product_ids) category.product_ids = []
+        // Évite les doublons
+        if (!category.product_ids.includes(product.id)) {
+          category.product_ids.push(product.id)
+        }
+
+        await category.save()
+      }
 
       return response.created({
         success: true,
         data: product,
-        message: 'Produit créé',
+        message: 'Produit créé et ajouté aux catégories',
       })
     } catch (error) {
       console.error('Erreur createProduct:', error)
@@ -602,7 +620,7 @@ export default class MerchantDashboardController {
       if (description !== undefined) product.description = description
       if (price) product.price = parseFloat(price)
       if (stock !== undefined) product.stock = parseInt(stock)
-      if (image_url !== undefined) product.imageUrl = image_url
+      if (image_url !== undefined) product.image_url = image_url
       if (categoryId) product.category_id = categoryId
 
       await product.save()
@@ -837,7 +855,7 @@ export default class MerchantDashboardController {
         valid_until: validUntil ? DateTime.fromJSDate(new Date(validUntil)) : null,
         usage_limit: parseInt(usageLimit) || 1,
         used_count: 0,
-        user_id: user.id,
+        userIds: [user.id], // <-- fixed,
         product_id: productId || null,
         status: 'active'
       })

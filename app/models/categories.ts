@@ -1,9 +1,8 @@
-// app/models/category.ts  // ← Renommé de categories.ts à category.ts (singulier)
+// app/models/Category.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, hasMany, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import crypto from 'node:crypto'
-import Product from './Product.js'  // ← Lowercase
 import User from './user.js'
 
 export default class Category extends BaseModel {
@@ -47,15 +46,27 @@ export default class Category extends BaseModel {
   })
   declare user: BelongsTo<typeof User>
 
-  @hasMany(() => Product, {
-    foreignKey: 'category_id',
-  })
-  declare products: HasMany<typeof Product>
-
   @hasMany(() => Category, {
     foreignKey: 'parent_id',
   })
   declare subCategories: HasMany<typeof Category>
+
+  // ----------------------------
+  // Champ product_ids sécurisé
+  // ----------------------------
+  @column({
+    serializeAs: 'product_ids',
+    consume: (value: string | null) => {
+      if (!value) return []  // retourne un tableau vide si null ou vide
+      try {
+        return JSON.parse(value)
+      } catch {
+        return [] // retourne tableau vide si JSON invalide
+      }
+    },
+    prepare: (value: string[]) => JSON.stringify(value),
+  })
+  declare product_ids: string[]
 
   @column.dateTime({ autoCreate: true })
   declare created_at: DateTime
@@ -71,6 +82,8 @@ export default class Category extends BaseModel {
     if (!category.slug && category.name) {
       category.slug = category.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
     }
-    
+    if (!category.product_ids) {
+      category.product_ids = []
+    }
   }
 }
