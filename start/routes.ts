@@ -1,5 +1,5 @@
 import router from '@adonisjs/core/services/router'
-import PubsController from '#controllers/pubs_controller'
+const PubsController = () => import('#controllers/pubs_controller')
 import NewAccountController from '#controllers/new_account_controller'
 import SessionController from '#controllers/session_controller'
 import UsersController from '#controllers/users_controller'
@@ -8,6 +8,7 @@ import CategoriesController from '#controllers/categories_controller'
 import CartController from '#controllers/CartController'
 import FavoritesController from '#controllers/favorites_controller'
 import OrdersController from '#controllers/OrdersController'
+import CouponsController from '#controllers/coupons_controller'
 import OrderTrackingController from '#controllers/order_trackings_controller'
 import MerchantDashboardController from '#controllers/merchant_dashboard_controller'
 
@@ -46,11 +47,11 @@ router.group(() => {
   router.put('/merchant/coupons/:userId/:couponId', (ctx) => new MerchantDashboardController().updateCoupon(ctx))
   router.delete('/merchant/coupons/:userId/:couponId', (ctx) => new MerchantDashboardController().deleteCoupon(ctx))
 
-  // ───────────── COUPONS / APPLY ─────────────
-  router.post('/api/coupons/apply', async (ctx) => {
-    const { default: CouponsController } = await import('#controllers/coupons_controller')
-    return new CouponsController().apply(ctx)
-  })
+  // ───────────── COUPONS ─────────────
+  router.get('/coupons', (ctx) => new CouponsController().index(ctx))
+  router.post('/coupons/apply', (ctx) => new CouponsController().apply(ctx))
+  router.post('/coupons/verify', (ctx) => new CouponsController().verify(ctx))
+  router.get('/coupons/:id', (ctx) => new CouponsController().show(ctx))
 
   // ───────────── AUTH ─────────────
   router.post('/client/register', (ctx) => new NewAccountController().store(ctx))
@@ -104,21 +105,5 @@ router.group(() => {
   router.get('/tracking/:orderId/events', (ctx) => new OrderTrackingController().getTrackingEvents(ctx))
   router.post('/tracking/:orderId/event', (ctx) => new OrderTrackingController().addTrackingEvent(ctx))
   router.put('/tracking/:orderId/status', (ctx) => new OrderTrackingController().updateOrderStatus(ctx))
-
-  // ───────────── COUPONS ─────────────
-  router.get('/coupons', async (ctx) => {
-    const { default: CouponsController } = await import('#controllers/coupons_controller')
-    return new CouponsController().index(ctx)
-  })
-
-  router.post('/coupons/verify', async (ctx) => {
-    const { default: CouponsController } = await import('#controllers/coupons_controller')
-    return new CouponsController().verify(ctx)
-  })
-
-  router.get('/coupons/:id', async (ctx) => {
-    const { default: CouponsController } = await import('#controllers/coupons_controller')
-    return new CouponsController().show(ctx)
-  })
 
 }).prefix('/api')

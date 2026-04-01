@@ -1,4 +1,3 @@
-// app/models/Category.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, hasMany, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
@@ -51,17 +50,14 @@ export default class Category extends BaseModel {
   })
   declare subCategories: HasMany<typeof Category>
 
-  // ----------------------------
-  // Champ product_ids sécurisé
-  // ----------------------------
   @column({
     serializeAs: 'product_ids',
     consume: (value: string | null) => {
-      if (!value) return []  // retourne un tableau vide si null ou vide
+      if (!value) return []
       try {
         return JSON.parse(value)
       } catch {
-        return [] // retourne tableau vide si JSON invalide
+        return []
       }
     },
     prepare: (value: string[]) => JSON.stringify(value),
