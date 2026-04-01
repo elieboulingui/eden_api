@@ -101,7 +101,7 @@ router.group(() => {
     const { default: CouponsController } = await import('#controllers/coupons_controller')
     return new CouponsController().index(ctx)
   })
-
+ router.get('/coupons', (ctx) => new CouponsController().index(ctx))
   router.post('/coupons/verify', async (ctx) => {
     const { default: CouponsController } = await import('#controllers/coupons_controller')
     return new CouponsController().verify(ctx)
