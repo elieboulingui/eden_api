@@ -224,7 +224,6 @@ export class ProductSchema extends BaseModel {
   declare id: string
   @column()
   declare imageUrl: string | null
-
   @column()
   declare isNew: boolean | null
   @column()
@@ -247,6 +246,39 @@ export class ProductSchema extends BaseModel {
   declare userId: string
   @column()
   declare weight: string | null
+}
+
+export class PubSchema extends BaseModel {
+  static $columns = ['createdAt', 'deletedAt', 'description', 'displayDuration', 'endDate', 'id', 'imageUrl', 'isActive', 'merchantId', 'name', 'priority', 'startDate', 'targetUrl', 'updatedAt'] as const
+  $columns = PubSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column.dateTime()
+  declare deletedAt: DateTime | null
+  @column()
+  declare description: string
+  @column()
+  declare displayDuration: number
+  @column.dateTime()
+  declare endDate: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare imageUrl: string
+  @column()
+  declare isActive: boolean | null
+  @column()
+  declare merchantId: string | null
+  @column()
+  declare name: string
+  @column()
+  declare priority: number | null
+  @column.dateTime()
+  declare startDate: DateTime | null
+  @column()
+  declare targetUrl: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
 }
 
 export class ReviewSchema extends BaseModel {

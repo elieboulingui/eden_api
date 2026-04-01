@@ -3,6 +3,7 @@ import User from '#models/user'
 import Product from '#models/Product'
 import Category from '#models/categories'
 import Coupon from '#models/coupon'
+import Database from '@adonisjs/lucid/services/db'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
 import OrderTracking from '#models/order_tracking'
@@ -477,13 +478,55 @@ export default class MerchantDashboardController {
       const page = request.input('page', 1)
       const limit = request.input('limit', 10)
 
+      // Récupérer les produits
       const products = await Product.query()
         .where('user_id', user.id)
         .whereNull('deleted_at')
         .orderBy('created_at', 'desc')
         .paginate(page, limit)
 
-      return response.ok({ success: true, data: products })
+      // Récupérer les IDs des produits
+      const productIds = products.map(p => p.id)
+
+      // Compter le nombre de favoris pour chaque produit
+      let favoritesCountMap: Record<string, number> = {}
+
+      if (productIds.length > 0) {
+        const favoritesCount = await Database
+          .from('favorites')
+          .select('product_id')
+          .count('* as total')
+          .whereIn('product_id', productIds)
+          .groupBy('product_id')
+
+        favoritesCountMap = favoritesCount.reduce((acc: Record<string, number>, curr: any) => {
+          acc[curr.product_id] = parseInt(curr.total)
+          return acc
+        }, {})
+      }
+
+      // Transformer les données
+      const transformedProducts = products.map((product: any) => ({
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        stock: product.stock,
+        image_url: product.image_url,
+        category: product.category,
+        likes: favoritesCountMap[product.id] || 0, // Nombre total de fois dans les favoris
+        sales: product.sales || 0,
+        created_at: product.created_at,
+        status: product.status || 'active'
+      }))
+
+      return response.ok({
+        success: true,
+        data: {
+          ...products,
+          data: transformedProducts
+        }
+      })
     } catch (error) {
       return response.internalServerError({ success: false, message: error.message })
     }

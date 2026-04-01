@@ -39,31 +39,43 @@ export default class CategoriesController {
   }
 
   // 🔹 Détails d'une catégorie
+  
 
-
-  async show({ params, response }: HttpContext) {
-    try {
-      const category = await Category.query()
-        .where('slug', params.slug)
-        .where('is_active', true)
-        .preload('subCategories', (q) =>
-          q.where('is_active', true).orderBy('sort_order', 'asc')
-        )
-        .preload('products', (q: ModelQueryBuilderContract<typeof Product>) =>
-          q.where('stock', '>', 0).limit(12)
-        )
-        .firstOrFail()
-
-      return response.status(200).json({
-        success: true,
-        data: category,
+async show({ params, response }: HttpContext) {
+  try {
+    // Recherche catégorie par slug ou par name
+    const category = await Category.query()
+      .where('is_active', true)
+      .where((query) => {
+        query.where('slug', params.slug).orWhere('name', params.slug)
       })
-    } catch {
-      return response.status(404).json({
-        success: false,
-        message: 'Catégorie non trouvée',
-      })
-    }
+      .firstOrFail()
+
+    // Récupération des produits liés via product_ids
+    const productIds = category.product_ids
+    const products = await Product.query()
+      .whereIn('id', productIds)
+
+    // Comparer les produits récupérés avec ceux existants en DB
+    const existingProductIds = products.map((p) => p.id)
+    const missingProductIds = productIds.filter(id => !existingProductIds.includes(id))
+
+    return response.status(200).json({
+      success: true,
+      category: {
+        id: category.id,
+        name: category.name,
+        slug: category.slug,
+      },
+      products,            // Produits existants
+      missingProductIds,   // IDs des produits manquants
+    })
+  } catch (err) {
+    return response.status(404).json({
+      success: false,
+      message: 'Catégorie non trouvée',
+    })
+  }
 }
   // 🔹 Créer une nouvelle catégorie
   async store({ request, response }: HttpContext) {

@@ -16,6 +16,7 @@ export const controllers = {
   Orders: () => import('#controllers/OrdersController'),
   Products: () => import('#controllers/products_controller'),
   Profile: () => import('#controllers/profile_controller'),
+  Pubs: () => import('#controllers/pubs_controller'),
   Reviews: () => import('#controllers/reviews_controller'),
   Session: () => import('#controllers/session_controller'),
   Users: () => import('#controllers/users_controller'),

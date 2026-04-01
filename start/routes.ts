@@ -1,4 +1,5 @@
 import router from '@adonisjs/core/services/router'
+import PubsController from '#controllers/pubs_controller'
 import NewAccountController from '#controllers/new_account_controller'
 import SessionController from '#controllers/session_controller'
 import UsersController from '#controllers/users_controller'
@@ -11,6 +12,14 @@ import OrderTrackingController from '#controllers/order_trackings_controller'
 import MerchantDashboardController from '#controllers/merchant_dashboard_controller'
 
 router.group(() => {
+
+
+
+    router.get('/pubs', [PubsController, 'getAllPubs'])
+    router.post('/pubs', [PubsController, 'createPub'])
+    router.put('/pubs/:id', [PubsController, 'updatePub'])
+    router.delete('/pubs/:id', [PubsController, 'deletePub'])
+    router.patch('/pubs/:id/toggle', [PubsController, 'togglePubStatus'])
 
   // ───────────── MERCHANT ─────────────
   router.get('/merchant/wallet/:userId', (ctx) => new MerchantDashboardController().getWallet(ctx))
