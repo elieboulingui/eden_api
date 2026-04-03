@@ -31,7 +31,7 @@ export interface Registry {
       errorResponse: unknown
     }
   }
-  'orders.payment_status_callback': {
+  'orders.payment_status_callbacks': {
     methods: ["GET","HEAD"]
     pattern: '/api/payment/status/:transactionId'
     types: {

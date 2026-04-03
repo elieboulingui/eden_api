@@ -18,11 +18,11 @@ const routes = {
     tokens: [{"old":"/api/orders/:orderId/:userId","type":0,"val":"api","end":""},{"old":"/api/orders/:orderId/:userId","type":0,"val":"orders","end":""},{"old":"/api/orders/:orderId/:userId","type":1,"val":"orderId","end":""},{"old":"/api/orders/:orderId/:userId","type":1,"val":"userId","end":""}],
     types: placeholder as Registry['orders.show']['types'],
   },
-  'orders.payment_status_callback': {
+  'orders.payment_status_callbacks': {
     methods: ["GET","HEAD"],
     pattern: '/api/payment/status/:transactionId',
     tokens: [{"old":"/api/payment/status/:transactionId","type":0,"val":"api","end":""},{"old":"/api/payment/status/:transactionId","type":0,"val":"payment","end":""},{"old":"/api/payment/status/:transactionId","type":0,"val":"status","end":""},{"old":"/api/payment/status/:transactionId","type":1,"val":"transactionId","end":""}],
-    types: placeholder as Registry['orders.payment_status_callback']['types'],
+    types: placeholder as Registry['orders.payment_status_callbacks']['types'],
   },
   'pubs.get_all_pubs': {
     methods: ["GET","HEAD"],

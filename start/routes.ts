@@ -7,7 +7,7 @@ import ProductsController from '#controllers/products_controller'
 import CategoriesController from '#controllers/categories_controller'
 import CartController from '#controllers/CartController'
 import FavoritesController from '#controllers/favorites_controller'
-const OrdersController = () => import('#controllers/OrdersController')
+import OrdersController from '#controllers/OrdersController'
 import CouponsController from '#controllers/coupons_controller'
 import OrderTrackingController from '#controllers/order_trackings_controller'
 import MerchantDashboardController from '#controllers/merchant_dashboard_controller'
@@ -95,12 +95,12 @@ router.group(() => {
   router.get('/favorites/check', (ctx) => new FavoritesController().check(ctx))
 
   // ───────────── ORDERS ─────────────
-  router.post('/orders', (ctx) => new OrdersController().store(ctx))
-  router.get('/orders/:userId', (ctx) => new OrdersController().index(ctx))
-  router.get('/orders/:orderId/user/:userId', (ctx) => new OrdersController().show(ctx))
-  router.post('/orders/:orderId/cancel', (ctx) => new OrdersController().cancel(ctx))
-  router.get('/orders/:orderId/invoice/:userId', (ctx) => new OrdersController().invoice(ctx))
-  router.put('/orders/:orderId/status', (ctx) => new OrdersController().updateStatus(ctx))
+  router.post('/orders', [OrdersController, 'store'])
+  router.get('/orders/:userId', [OrdersController, 'index'])
+  router.get('/orders/:orderId/user/:userId', [OrdersController, 'show'])
+  router.post('/orders/:orderId/cancel', [OrdersController, 'cancel'])
+  router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice'])
+  router.put('/orders/:orderId/status', [OrdersController, 'updateStatus'])
 
   // ───────────── TRACKING ─────────────
   router.post('/tracking/search', (ctx) => new OrderTrackingController().search(ctx))
