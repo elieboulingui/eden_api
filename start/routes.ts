@@ -7,16 +7,16 @@ import ProductsController from '#controllers/products_controller'
 import CategoriesController from '#controllers/categories_controller'
 import CartController from '#controllers/CartController'
 import FavoritesController from '#controllers/favorites_controller'
-import OrdersController from '#controllers/OrdersController'
+const OrdersController = () => import('#controllers/OrdersController')
 import CouponsController from '#controllers/coupons_controller'
 import OrderTrackingController from '#controllers/order_trackings_controller'
 import MerchantDashboardController from '#controllers/merchant_dashboard_controller'
 
 router.group(() => {
 
-  router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus'])
+  router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus']).as('orders.check_payment_status')
   router.get('/orders/:orderId/:userId', [OrdersController, 'show'])
-  router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus'])
+  router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus']).as('orders.payment_status_callbacks')
 
     router.get('/pubs', [PubsController, 'getAllPubs'])
     router.post('/pubs', [PubsController, 'createPub'])

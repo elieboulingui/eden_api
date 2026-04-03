@@ -5,6 +5,7 @@ export interface ApiDefinition {
   orders: {
     checkPaymentStatus: typeof routes['orders.check_payment_status']
     show: typeof routes['orders.show']
+    paymentStatusCallback: typeof routes['orders.payment_status_callback']
   }
   pubs: {
     getAllPubs: typeof routes['pubs.get_all_pubs']

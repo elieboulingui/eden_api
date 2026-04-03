@@ -15,8 +15,8 @@ export interface Registry {
       paramsTuple: [ParamValue]
       params: { orderId: ParamValue }
       query: {}
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/OrdersController').default['checkPaymentStatus']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/OrdersController').default['checkPaymentStatus']>>>
+      response: unknown
+      errorResponse: unknown
     }
   }
   'orders.show': {
@@ -27,8 +27,20 @@ export interface Registry {
       paramsTuple: [ParamValue, ParamValue]
       params: { orderId: ParamValue; userId: ParamValue }
       query: {}
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/OrdersController').default['show']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/OrdersController').default['show']>>>
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'orders.payment_status_callback': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/payment/status/:transactionId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { transactionId: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
     }
   }
   'pubs.get_all_pubs': {
