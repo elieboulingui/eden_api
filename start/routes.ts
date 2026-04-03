@@ -15,7 +15,6 @@ import MerchantDashboardController from '#controllers/merchant_dashboard_control
 router.group(() => {
 
   router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus']).as('orders.check_payment_status')
-  router.get('/orders/:orderId/:userId', [OrdersController, 'show'])
   router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus']).as('orders.payment_status_callbacks')
 
     router.get('/pubs', [PubsController, 'getAllPubs'])

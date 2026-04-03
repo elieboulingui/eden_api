@@ -12,12 +12,6 @@ const routes = {
     tokens: [{"old":"/api/orders/:orderId/payment-status","type":0,"val":"api","end":""},{"old":"/api/orders/:orderId/payment-status","type":0,"val":"orders","end":""},{"old":"/api/orders/:orderId/payment-status","type":1,"val":"orderId","end":""},{"old":"/api/orders/:orderId/payment-status","type":0,"val":"payment-status","end":""}],
     types: placeholder as Registry['orders.check_payment_status']['types'],
   },
-  'orders.show': {
-    methods: ["GET","HEAD"],
-    pattern: '/api/orders/:orderId/:userId',
-    tokens: [{"old":"/api/orders/:orderId/:userId","type":0,"val":"api","end":""},{"old":"/api/orders/:orderId/:userId","type":0,"val":"orders","end":""},{"old":"/api/orders/:orderId/:userId","type":1,"val":"orderId","end":""},{"old":"/api/orders/:orderId/:userId","type":1,"val":"userId","end":""}],
-    types: placeholder as Registry['orders.show']['types'],
-  },
   'orders.payment_status_callbacks': {
     methods: ["GET","HEAD"],
     pattern: '/api/payment/status/:transactionId',
@@ -53,6 +47,42 @@ const routes = {
     pattern: '/api/pubs/:id/toggle',
     tokens: [{"old":"/api/pubs/:id/toggle","type":0,"val":"api","end":""},{"old":"/api/pubs/:id/toggle","type":0,"val":"pubs","end":""},{"old":"/api/pubs/:id/toggle","type":1,"val":"id","end":""},{"old":"/api/pubs/:id/toggle","type":0,"val":"toggle","end":""}],
     types: placeholder as Registry['pubs.toggle_pub_status']['types'],
+  },
+  'orders.store': {
+    methods: ["POST"],
+    pattern: '/api/orders',
+    tokens: [{"old":"/api/orders","type":0,"val":"api","end":""},{"old":"/api/orders","type":0,"val":"orders","end":""}],
+    types: placeholder as Registry['orders.store']['types'],
+  },
+  'orders.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/orders/:userId',
+    tokens: [{"old":"/api/orders/:userId","type":0,"val":"api","end":""},{"old":"/api/orders/:userId","type":0,"val":"orders","end":""},{"old":"/api/orders/:userId","type":1,"val":"userId","end":""}],
+    types: placeholder as Registry['orders.index']['types'],
+  },
+  'orders.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/orders/:orderId/user/:userId',
+    tokens: [{"old":"/api/orders/:orderId/user/:userId","type":0,"val":"api","end":""},{"old":"/api/orders/:orderId/user/:userId","type":0,"val":"orders","end":""},{"old":"/api/orders/:orderId/user/:userId","type":1,"val":"orderId","end":""},{"old":"/api/orders/:orderId/user/:userId","type":0,"val":"user","end":""},{"old":"/api/orders/:orderId/user/:userId","type":1,"val":"userId","end":""}],
+    types: placeholder as Registry['orders.show']['types'],
+  },
+  'orders.cancel': {
+    methods: ["POST"],
+    pattern: '/api/orders/:orderId/cancel',
+    tokens: [{"old":"/api/orders/:orderId/cancel","type":0,"val":"api","end":""},{"old":"/api/orders/:orderId/cancel","type":0,"val":"orders","end":""},{"old":"/api/orders/:orderId/cancel","type":1,"val":"orderId","end":""},{"old":"/api/orders/:orderId/cancel","type":0,"val":"cancel","end":""}],
+    types: placeholder as Registry['orders.cancel']['types'],
+  },
+  'orders.invoice': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/orders/:orderId/invoice/:userId',
+    tokens: [{"old":"/api/orders/:orderId/invoice/:userId","type":0,"val":"api","end":""},{"old":"/api/orders/:orderId/invoice/:userId","type":0,"val":"orders","end":""},{"old":"/api/orders/:orderId/invoice/:userId","type":1,"val":"orderId","end":""},{"old":"/api/orders/:orderId/invoice/:userId","type":0,"val":"invoice","end":""},{"old":"/api/orders/:orderId/invoice/:userId","type":1,"val":"userId","end":""}],
+    types: placeholder as Registry['orders.invoice']['types'],
+  },
+  'orders.update_status': {
+    methods: ["PUT"],
+    pattern: '/api/orders/:orderId/status',
+    tokens: [{"old":"/api/orders/:orderId/status","type":0,"val":"api","end":""},{"old":"/api/orders/:orderId/status","type":0,"val":"orders","end":""},{"old":"/api/orders/:orderId/status","type":1,"val":"orderId","end":""},{"old":"/api/orders/:orderId/status","type":0,"val":"status","end":""}],
+    types: placeholder as Registry['orders.update_status']['types'],
   },
 } as const satisfies Record<string, AdonisEndpoint>
 

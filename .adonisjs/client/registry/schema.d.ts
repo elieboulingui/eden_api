@@ -19,18 +19,6 @@ export interface Registry {
       errorResponse: unknown
     }
   }
-  'orders.show': {
-    methods: ["GET","HEAD"]
-    pattern: '/api/orders/:orderId/:userId'
-    types: {
-      body: {}
-      paramsTuple: [ParamValue, ParamValue]
-      params: { orderId: ParamValue; userId: ParamValue }
-      query: {}
-      response: unknown
-      errorResponse: unknown
-    }
-  }
   'orders.payment_status_callbacks': {
     methods: ["GET","HEAD"]
     pattern: '/api/payment/status/:transactionId'
@@ -101,6 +89,78 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/pubs_controller').default['togglePubStatus']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pubs_controller').default['togglePubStatus']>>>
+    }
+  }
+  'orders.store': {
+    methods: ["POST"]
+    pattern: '/api/orders'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'orders.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/orders/:userId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { userId: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'orders.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/orders/:orderId/user/:userId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { orderId: ParamValue; userId: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'orders.cancel': {
+    methods: ["POST"]
+    pattern: '/api/orders/:orderId/cancel'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { orderId: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'orders.invoice': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/orders/:orderId/invoice/:userId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { orderId: ParamValue; userId: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'orders.update_status': {
+    methods: ["PUT"]
+    pattern: '/api/orders/:orderId/status'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { orderId: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
     }
   }
 }
