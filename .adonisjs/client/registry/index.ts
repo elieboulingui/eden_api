@@ -6,6 +6,18 @@ import type { ApiDefinition } from './tree.d.ts'
 const placeholder: any = {}
 
 const routes = {
+  'orders.check_payment_status': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/orders/:orderId/payment-status',
+    tokens: [{"old":"/api/orders/:orderId/payment-status","type":0,"val":"api","end":""},{"old":"/api/orders/:orderId/payment-status","type":0,"val":"orders","end":""},{"old":"/api/orders/:orderId/payment-status","type":1,"val":"orderId","end":""},{"old":"/api/orders/:orderId/payment-status","type":0,"val":"payment-status","end":""}],
+    types: placeholder as Registry['orders.check_payment_status']['types'],
+  },
+  'orders.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/orders/:orderId/:userId',
+    tokens: [{"old":"/api/orders/:orderId/:userId","type":0,"val":"api","end":""},{"old":"/api/orders/:orderId/:userId","type":0,"val":"orders","end":""},{"old":"/api/orders/:orderId/:userId","type":1,"val":"orderId","end":""},{"old":"/api/orders/:orderId/:userId","type":1,"val":"userId","end":""}],
+    types: placeholder as Registry['orders.show']['types'],
+  },
   'pubs.get_all_pubs': {
     methods: ["GET","HEAD"],
     pattern: '/api/pubs',

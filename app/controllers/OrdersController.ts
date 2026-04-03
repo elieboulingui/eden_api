@@ -15,6 +15,17 @@ function isValidUuid(str: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)
 }
 
+// Interface pour stocker les infos de paiement
+interface PaymentInfo {
+  reference_id: string
+  x_secret: string
+  status: string
+  amount: number
+  operator_simple: string
+  transaction_type: string
+  check_status_url: string
+}
+
 export default class OrdersController {
   async store({ request, response }: HttpContext) {
     console.log('🔵 ========== DEBUT CREATION COMMANDE ==========')
@@ -58,7 +69,7 @@ export default class OrdersController {
 
       // ========== ÉTAPE 1: APPELER L'API KYC ==========
       console.log('🔵 🌐 APPEL API KYC...')
-      const kycUrl = `https://187e-41-158-102-190.ngrok-free.app/api/mypvit/kyc/marchant?customerAccountNumber=${customerAccountNumber}`
+      const kycUrl = `https://apist.onrender.com/api/mypvit/kyc/marchant?customerAccountNumber=${customerAccountNumber}`
 
       let operator = 'non renseigné'
       let fullName = customerNameFallback || 'non renseigné'
@@ -80,8 +91,6 @@ export default class OrdersController {
       }
 
       // ========== ÉTAPE 2: RECHERCHE DE L'UTILISATEUR ==========
-      // ✅ FIX : on ne cherche en DB que si userId est un vrai UUID
-      //          sinon (guest-xxx) on passe null sans crasher PostgreSQL
       let user: User | null = null
       const isGuest = !isValidUuid(userId)
 
@@ -94,7 +103,6 @@ export default class OrdersController {
       }
 
       // ========== ÉTAPE 3: RÉCUPÉRATION DU PANIER ==========
-      // ✅ FIX : les guests n'ont pas de panier en DB → on renvoie une erreur claire
       console.log('🔵 Récupération du panier de l\'utilisateur...')
 
       if (isGuest) {
@@ -211,32 +219,120 @@ export default class OrdersController {
 
       // ========== ÉTAPE 9: APPEL API DE PAIEMENT ==========
       let paymentResult: any = null
+      let paymentInfo: PaymentInfo | null = null
       let paymentErrorMsg: string | null = null
 
       try {
+        console.log('🔵 🌐 APPEL API PAIEMENT...')
         const paymentResponse = await axios.post(
           'https://api-akiba-1.onrender.com/api/payment',
           {
             amount: total,
             customer_account_number: accountNumber,
             payment_api_key_public: "pk_1773325888803_dt8diavuh3h",
-            payment_api_key_secret:"sk_1773325888803_qt015a3cr5",
+            payment_api_key_secret: "sk_1773325888803_qt015a3cr5",
           },
           { headers: { 'Content-Type': 'application/json' } }
         )
 
         paymentResult = paymentResponse.data
-        console.log('✅ Réponse paiement:', JSON.stringify(paymentResult, null, 2))
+        console.log('✅ Réponse paiement reçue:', JSON.stringify(paymentResult, null, 2))
 
-        if (paymentResult.success) {
-          order.status = 'pending'
-          await order.save()
-          await OrderTracking.create({
-            order_id: order.id,
-            status: 'paid',
-            description: 'Paiement effectué avec succès',
-            tracked_at: DateTime.now(),
-          })
+        if (paymentResult.success && paymentResult.data) {
+          // Récupérer le x_secret et les infos de transaction
+          paymentInfo = {
+            reference_id: paymentResult.data.reference_id,
+            x_secret: paymentResult.data.x_secret,
+            status: paymentResult.data.status,
+            amount: paymentResult.data.amount,
+            operator_simple: paymentResult.data.operator_simple,
+            transaction_type: paymentResult.data.transaction_type,
+            check_status_url: paymentResult.data.check_status_url
+          }
+
+          console.log('🔑 x_secret récupéré:', paymentInfo.x_secret?.substring(0, 50) + '...')
+          console.log('🔗 URL vérification statut:', paymentInfo.check_status_url)
+
+          // ========== ÉTAPE 9.1: VÉRIFICATION DU STATUT DE LA TRANSACTION ==========
+          console.log('🔍 Vérification du statut de la transaction...')
+
+          let statusVerified = false
+          let maxRetries = 12 
+          let retryDelay = 3000 // 3 secondes
+
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            console.log(`📡 Tentative ${attempt}/${maxRetries} de vérification du statut...`)
+
+            try {
+              // Extraire le transactionId et accountOperationCode de l'URL
+              const statusUrl = paymentInfo.check_status_url
+              const urlParams = new URLSearchParams(statusUrl.split('?')[1])
+              const transactionId = urlParams.get('transactionId')
+              const accountOperationCode = urlParams.get('accountOperationCode')
+              const transactionOperation = urlParams.get('transactionOperation')
+
+              if (transactionId && accountOperationCode && transactionOperation) {
+                const statusResponse = await axios.get(
+                  `https://apist.onrender.com/api/mypvit/transaction/status`,
+                  {
+                    params: {
+                      transactionId,
+                      accountOperationCode,
+                      transactionOperation
+                    },
+                    timeout: 15000
+                  }
+                )
+
+                const statusData = statusResponse.data
+                console.log(`✅ Réponse statut tentative ${attempt}:`, JSON.stringify(statusData, null, 2))
+
+                if (statusData.success && statusData.data) {
+                  if (statusData.data.is_success) {
+                    console.log('✅ Transaction réussie !')
+                    statusVerified = true
+
+                    // Mettre à jour le statut de la commande
+                    order.status = 'paid'
+                    await order.save()
+
+                    await OrderTracking.create({
+                      order_id: order.id,
+                      status: 'paid',
+                      description: `Paiement effectué avec succès - Réf: ${paymentInfo.reference_id}`,
+                      tracked_at: DateTime.now(),
+                    })
+
+                    break
+                  } else if (statusData.data.status === 'PENDING') {
+                    console.log(`⏳ Transaction en attente (tentative ${attempt}/${maxRetries})`)
+                    if (attempt < maxRetries) {
+                      console.log(`⏰ Attente de ${retryDelay}ms avant nouvelle tentative...`)
+                      await new Promise(resolve => setTimeout(resolve, retryDelay))
+                    }
+                  } else {
+                    console.log(`⚠️ Statut transaction: ${statusData.data.status}`)
+                    break
+                  }
+                }
+              } else {
+                console.log('⚠️ Impossible d\'extraire les paramètres de l\'URL')
+                break
+              }
+            } catch (statusError: any) {
+              console.error(`❌ Erreur vérification statut (tentative ${attempt}):`, statusError.message)
+              if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, retryDelay))
+              }
+            }
+          }
+
+          if (!statusVerified) {
+            console.log('⚠️ Transaction toujours en attente après vérifications')
+            // Créer un tracking indiquant que le paiement est en attente
+              tracked_at: DateTime.now(),
+            })
+          }
         } else {
           console.log('🟡 Paiement en attente ou échoué:', paymentResult.message)
         }
@@ -261,14 +357,16 @@ export default class OrdersController {
           paymentMethod: order.payment_method,
           estimatedDelivery: order.estimated_delivery,
           itemsCount: order.items.length,
-          payment: paymentResult
-            ? {
-              success: paymentResult.success,
-              message: paymentResult.message,
-              reference_id: paymentResult.data?.reference_id,
-              status: paymentResult.data?.status,
-            }
-            : null,
+          payment: paymentInfo ? {
+            success: paymentResult?.success,
+            message: paymentResult?.message,
+            reference_id: paymentInfo.reference_id,
+            status: paymentInfo.status,
+            x_secret: paymentInfo.x_secret,
+            operator: paymentInfo.operator_simple,
+            amount: paymentInfo.amount,
+            check_status_url: paymentInfo.check_status_url
+          } : null,
           paymentError: paymentErrorMsg,
         },
       })
@@ -280,6 +378,70 @@ export default class OrdersController {
         success: false,
         message: '❌ Erreur lors de la création de la commande',
         error: error.message,
+      })
+    }
+  }
+
+  // Nouvelle méthode pour vérifier le statut d'une transaction de paiement
+  async checkPaymentStatus({ params, response }: HttpContext) {
+    try {
+      const { orderId } = params
+
+      if (!orderId) {
+        return response.status(400).json({
+          success: false,
+          message: 'orderId est requis'
+        })
+      }
+
+      const order = await Order.find(orderId)
+      if (!order) {
+        return response.status(404).json({
+          success: false,
+          message: 'Commande non trouvée'
+        })
+      }
+
+      // Chercher les trackings liés au paiement
+      const paymentTrackings = await OrderTracking.query()
+        .where('order_id', orderId)
+        .whereIn('status', ['paid', 'payment_pending', 'payment_failed'])
+        .orderBy('tracked_at', 'desc')
+        .first()
+
+      if (!paymentTrackings) {
+        return response.status(200).json({
+          success: true,
+          data: {
+            status: order.status,
+            is_paid: order.status === 'paid',
+            message: 'Paiement non encore initié ou suivi non disponible'
+          }
+        })
+      }
+
+      // Extraire la référence depuis la description
+      const refMatch = paymentTrackings.description?.match(/Réf: ([A-Z0-9]+)/)
+      const referenceId = refMatch ? refMatch[1] : null
+
+      return response.status(200).json({
+        success: true,
+        data: {
+          order_status: order.status,
+          is_paid: order.status === 'paid',
+          payment_status: paymentTrackings.status,
+          payment_description: paymentTrackings.description,
+          reference_id: referenceId,
+          tracked_at: paymentTrackings.tracked_at
+        }
+      })
+
+    } catch (error: any) {
+      console.error('Erreur checkPaymentStatus:', error.message)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la vérification du statut de paiement',
+        error: error.message
       })
     }
   }
@@ -461,6 +623,8 @@ export default class OrdersController {
       shipped: 'Votre commande a été expédiée',
       delivered: 'Votre commande a été livrée avec succès',
       paid: 'Paiement effectué avec succès',
+      payment_pending: 'Paiement en attente de confirmation',
+      payment_failed: 'Le paiement a échoué',
       cancelled: 'Votre commande a été annulée',
     }
     return descriptions[status] || `Statut mis à jour: ${status}`

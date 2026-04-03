@@ -2,6 +2,10 @@
 import type { routes } from './index.ts'
 
 export interface ApiDefinition {
+  orders: {
+    checkPaymentStatus: typeof routes['orders.check_payment_status']
+    show: typeof routes['orders.show']
+  }
   pubs: {
     getAllPubs: typeof routes['pubs.get_all_pubs']
     createPub: typeof routes['pubs.create_pub']

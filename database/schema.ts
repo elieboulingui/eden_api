@@ -161,10 +161,14 @@ export class OrderTrackingSchema extends BaseModel {
 }
 
 export class OrderSchema extends BaseModel {
-  static $columns = ['billingAddress', 'createdAt', 'customerEmail', 'customerName', 'customerPhone', 'deliveredAt', 'deliveryMethod', 'estimatedDelivery', 'id', 'notes', 'orderNumber', 'paymentMethod', 'paymentStatus', 'shippingAddress', 'shippingCost', 'status', 'subtotal', 'total', 'trackingNumber', 'updatedAt', 'userId'] as const
+  static $columns = ['adminNotes', 'billingAddress', 'couponId', 'createdAt', 'customerEmail', 'customerName', 'customerPhone', 'deliveredAt', 'deliveryMethod', 'discountAmount', 'discountCode', 'estimatedDelivery', 'id', 'ipAddress', 'notes', 'orderNumber', 'paymentAmount', 'paymentCheckStatusUrl', 'paymentCompletedAt', 'paymentCurrency', 'paymentErrorMessage', 'paymentInitiatedAt', 'paymentMethod', 'paymentOperatorSimple', 'paymentReferenceId', 'paymentRetryCount', 'paymentStatus', 'paymentTransactionId', 'paymentXSecret', 'paymentXSecretExpiresIn', 'pickedUpAt', 'pickupCode', 'pickupStoreAddress', 'pickupStoreName', 'pickupStorePhone', 'shippingAddress', 'shippingCarrier', 'shippingConfirmedAt', 'shippingCost', 'shippingEstimatedDays', 'shippingTrackingUrl', 'status', 'subtotal', 'total', 'trackingNumber', 'updatedAt', 'userAgent', 'userId'] as const
   $columns = OrderSchema.$columns
   @column()
+  declare adminNotes: string | null
+  @column()
   declare billingAddress: string | null
+  @column()
+  declare couponId: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime | null
   @column()
@@ -177,22 +181,70 @@ export class OrderSchema extends BaseModel {
   declare deliveredAt: DateTime | null
   @column()
   declare deliveryMethod: string
+  @column()
+  declare discountAmount: string | null
+  @column()
+  declare discountCode: string | null
   @column.dateTime()
   declare estimatedDelivery: DateTime | null
   @column({ isPrimary: true })
   declare id: string
   @column()
+  declare ipAddress: string | null
+  @column()
   declare notes: string | null
   @column()
   declare orderNumber: string
   @column()
+  declare paymentAmount: string | null
+  @column()
+  declare paymentCheckStatusUrl: string | null
+  @column.dateTime()
+  declare paymentCompletedAt: DateTime | null
+  @column()
+  declare paymentCurrency: string | null
+  @column()
+  declare paymentErrorMessage: string | null
+  @column.dateTime()
+  declare paymentInitiatedAt: DateTime | null
+  @column()
   declare paymentMethod: string
+  @column()
+  declare paymentOperatorSimple: string | null
+  @column()
+  declare paymentReferenceId: string | null
+  @column()
+  declare paymentRetryCount: number | null
   @column()
   declare paymentStatus: string | null
   @column()
+  declare paymentTransactionId: string | null
+  @column()
+  declare paymentXSecret: string | null
+  @column()
+  declare paymentXSecretExpiresIn: number | null
+  @column.dateTime()
+  declare pickedUpAt: DateTime | null
+  @column()
+  declare pickupCode: string | null
+  @column()
+  declare pickupStoreAddress: string | null
+  @column()
+  declare pickupStoreName: string | null
+  @column()
+  declare pickupStorePhone: string | null
+  @column()
   declare shippingAddress: string
   @column()
+  declare shippingCarrier: string | null
+  @column.dateTime()
+  declare shippingConfirmedAt: DateTime | null
+  @column()
   declare shippingCost: string | null
+  @column()
+  declare shippingEstimatedDays: number | null
+  @column()
+  declare shippingTrackingUrl: string | null
   @column()
   declare status: string | null
   @column()
@@ -203,6 +255,8 @@ export class OrderSchema extends BaseModel {
   declare trackingNumber: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+  @column()
+  declare userAgent: string | null
   @column()
   declare userId: string
 }
@@ -224,6 +278,12 @@ export class ProductSchema extends BaseModel {
   declare id: string
   @column()
   declare imageUrl: string | null
+  @column()
+  declare imageUrl: string | null
+  @column()
+  declare isNew: boolean | null
+  @column()
+  declare isOnSale: boolean | null
   @column()
   declare isNew: boolean | null
   @column()

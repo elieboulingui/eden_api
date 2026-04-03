@@ -7,6 +7,30 @@ import type { InferInput, SimpleError } from '@vinejs/vine/types'
 export type ParamValue = string | number | bigint | boolean
 
 export interface Registry {
+  'orders.check_payment_status': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/orders/:orderId/payment-status'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { orderId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/OrdersController').default['checkPaymentStatus']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/OrdersController').default['checkPaymentStatus']>>>
+    }
+  }
+  'orders.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/orders/:orderId/:userId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { orderId: ParamValue; userId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/OrdersController').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/OrdersController').default['show']>>>
+    }
+  }
   'pubs.get_all_pubs': {
     methods: ["GET","HEAD"]
     pattern: '/api/pubs'
@@ -15,8 +39,8 @@ export interface Registry {
       paramsTuple: []
       params: {}
       query: {}
-      response: unknown
-      errorResponse: unknown
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/pubs_controller').default['getAllPubs']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pubs_controller').default['getAllPubs']>>>
     }
   }
   'pubs.create_pub': {
@@ -27,8 +51,8 @@ export interface Registry {
       paramsTuple: []
       params: {}
       query: {}
-      response: unknown
-      errorResponse: unknown
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/pubs_controller').default['createPub']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pubs_controller').default['createPub']>>>
     }
   }
   'pubs.update_pub': {
@@ -39,8 +63,8 @@ export interface Registry {
       paramsTuple: [ParamValue]
       params: { id: ParamValue }
       query: {}
-      response: unknown
-      errorResponse: unknown
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/pubs_controller').default['updatePub']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pubs_controller').default['updatePub']>>>
     }
   }
   'pubs.delete_pub': {
@@ -51,8 +75,8 @@ export interface Registry {
       paramsTuple: [ParamValue]
       params: { id: ParamValue }
       query: {}
-      response: unknown
-      errorResponse: unknown
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/pubs_controller').default['deletePub']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pubs_controller').default['deletePub']>>>
     }
   }
   'pubs.toggle_pub_status': {
@@ -63,8 +87,8 @@ export interface Registry {
       paramsTuple: [ParamValue]
       params: { id: ParamValue }
       query: {}
-      response: unknown
-      errorResponse: unknown
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/pubs_controller').default['togglePubStatus']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pubs_controller').default['togglePubStatus']>>>
     }
   }
 }
