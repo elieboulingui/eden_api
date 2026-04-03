@@ -330,6 +330,10 @@ export default class OrdersController {
           if (!statusVerified) {
             console.log('⚠️ Transaction toujours en attente après vérifications')
             // Créer un tracking indiquant que le paiement est en attente
+            await OrderTracking.create({
+              order_id: order.id,
+              status: 'payment_pending',
+              description: 'Paiement en attente de confirmation',
               tracked_at: DateTime.now(),
             })
           }
