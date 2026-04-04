@@ -2,7 +2,7 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, hasMany, beforeCreate } from '@adonisjs/lucid/orm'
 import type { HasMany } from '@adonisjs/lucid/types/relations'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'node:crypto'
 import CartItem from './CartItem.js'  // Changé de Cartitem.js à CartItem.js
 
 export default class Cart extends BaseModel {
@@ -26,7 +26,7 @@ export default class Cart extends BaseModel {
   @beforeCreate()
   static async generateUuid(cart: Cart) {
     if (!cart.id) {
-      cart.id = uuidv4()
+      cart.id = randomUUID()
     }
   }
 }
