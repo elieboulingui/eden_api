@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ appName }}</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: 'Inter', system-ui, sans-serif;
+        background: #030712;
+        color: #f8fafc;
+      }
+      .layout {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .header {
+        padding: 1.5rem 2rem;
+        border-bottom: 1px solid #1f2937;
+        background: #0f172a;
+      }
+      .container {
+        flex: 1;
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+      .grid {
+        display: grid;
+        gap: 1rem;
+      }
+      .card {
+        border: 1px solid #1f2937;
+        border-radius: 1.25rem;
+        padding: 1.25rem;
+        background: #111827;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .status {
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.2em;
+        color: #a5b4fc;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <header class="header">
+        <div style="display:flex; align-items:center; justify-content:space-between; max-width:960px; margin:0 auto;">
+          <div>
+            <div style="font-size:0.75rem; letter-spacing:0.4em; text-transform:uppercase; color:#a5b4fc;">Linne</div>
+            <h1 style="margin:0; font-size:2rem;">{{ appName }}</h1>
+          </div>
+          <p style="margin:0; color:#94a3b8;">{{ message }}</p>
+        </div>
+      </header>
+      <main class="container">
+        <section class="grid">
+          @if(orders.length === 0)
+            <p>Aucune commande disponible pour le moment.</p>
+          @else
+            @each(order in orders)
+              <article class="card">
+                <div>
+                  <p class="status">{{ order.status }}</p>
+                  <p style="margin:0.2rem 0 0; font-size:1rem;">{{ order.orderNumber }}</p>
+                  <p style="margin:0; color:#94a3b8;">{{ order.customerName }}</p>
+                </div>
+                <div style="text-align:right;">
+                  <p style="margin:0; font-weight:600;">{{ order.total }}</p>
+                  <p style="margin:0; font-size:0.75rem; color:#94a3b8;">ID {{ order.id }}</p>
+                </div>
+              </article>
+            @endeach
+          @endif
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

@@ -3,6 +3,27 @@
   "compilerOptions": {
     "rootDir": "./",
     "jsx": "react",
-    "outDir": "./build"
+    "outDir": "./build",
+    "baseUrl": ".",
+    "paths": {
+      "#controllers/*": ["app/controllers/*"],
+      "#exceptions/*": ["app/exceptions/*"],
+      "#models/*": ["app/models/*"],
+      "#mails/*": ["app/mails/*"],
+      "#services/*": ["app/services/*"],
+      "#listeners/*": ["app/listeners/*"],
+      "#events/*": ["app/events/*"],
+      "#generated/*": [".adonisjs/server/*.js"],
+      "#middleware/*": ["app/middleware/*"],
+      "#transformers/*": ["app/transformers/*"],
+      "#validators/*": ["app/validators/*"],
+      "#providers/*": ["providers/*"],
+      "#policies/*": ["app/policies/*"],
+      "#abilities/*": ["app/abilities/*"],
+      "#database/*": ["database/*"],
+      "#tests/*": ["tests/*"],
+      "#start/*": ["start/*"],
+      "#config/*": ["config/*"]
+    }
   }
 }

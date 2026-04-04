@@ -14,6 +14,7 @@ export const controllers = {
   NewAccount: () => import('#controllers/new_account_controller'),
   OrderTrackings: () => import('#controllers/order_trackings_controller'),
   Orders: () => import('#controllers/OrdersController'),
+  Pages: () => import('#controllers/PagesController'),
   Products: () => import('#controllers/products_controller'),
   Profile: () => import('#controllers/profile_controller'),
   Pubs: () => import('#controllers/pubs_controller'),

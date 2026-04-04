@@ -110,6 +110,41 @@ export class FavoriteSchema extends BaseModel {
   declare userId: string
 }
 
+export class MerchantWithdrawalSchema extends BaseModel {
+  static $columns = ['accountName', 'accountNumber', 'amount', 'createdAt', 'id', 'notes', 'operator', 'paymentMethod', 'processedAt', 'processedBy', 'reference', 'status', 'transactionId', 'updatedAt', 'userId'] as const
+  $columns = MerchantWithdrawalSchema.$columns
+  @column()
+  declare accountName: string
+  @column()
+  declare accountNumber: string
+  @column()
+  declare amount: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare notes: string | null
+  @column()
+  declare operator: string | null
+  @column()
+  declare paymentMethod: string
+  @column.dateTime()
+  declare processedAt: DateTime | null
+  @column()
+  declare processedBy: string | null
+  @column()
+  declare reference: string
+  @column()
+  declare status: string | null
+  @column()
+  declare transactionId: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare userId: string
+}
+
 export class OrderItemSchema extends BaseModel {
   static $columns = ['category', 'createdAt', 'id', 'image', 'orderId', 'price', 'productDescription', 'productId', 'productName', 'quantity', 'subtotal', 'updatedAt'] as const
   $columns = OrderItemSchema.$columns
@@ -262,7 +297,26 @@ export class OrderSchema extends BaseModel {
 }
 
 export class ProductSchema extends BaseModel {
-  static $columns = ['category', 'categoryId', 'conservation', 'createdAt', 'description', 'id', 'imageUrl', 'imageUrl', 'isNew', 'isOnSale', 'isNew', 'isOnSale', 'name', 'origin', 'packaging', 'price', 'rating', 'stock', 'updatedAt', 'userId', 'weight'] as const
+  static $columns = [
+    'category',
+    'categoryId',
+    'conservation',
+    'createdAt',
+    'description',
+    'id',
+    'imageUrl',
+    'isNew',
+    'isOnSale',
+    'name',
+    'origin',
+    'packaging',
+    'price',
+    'rating',
+    'stock',
+    'updatedAt',
+    'userId',
+    'weight',
+  ] as const
   $columns = ProductSchema.$columns
   @column()
   declare category: string | null
