@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: adminmarket
+    env: node
+    branch: main
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: PORT
+        value: "10000"

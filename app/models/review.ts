@@ -2,7 +2,7 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'node:crypto'
 import User from './user.js'
 import Product from './Product.js'
 
@@ -42,7 +42,7 @@ export default class Review extends BaseModel {
   @beforeCreate()
   static async generateUuid(review: Review) {
     if (!review.id) {
-      review.id = uuidv4()
+      review.id = randomUUID()
     }
   }
 }
