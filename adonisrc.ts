@@ -5,7 +5,7 @@ import { generateRegistry } from '@tuyau/core/hooks'
 export default defineConfig({
   /*
   |--------------------------------------------------------------------------
-  | Experimental flags
+  | Experimental flags//
   |--------------------------------------------------------------------------
   |
   | The following features will be enabled by default in the next major release
