@@ -2,7 +2,7 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, hasMany, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { HasMany, BelongsTo } from '@adonisjs/lucid/types/relations'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'node:crypto'
 import User from './user.js'
 import OrderItem from './OrderItem.js'
 import OrderTracking from './order_tracking.js'
@@ -186,7 +186,7 @@ export default class Order extends BaseModel {
   @beforeCreate()
   static async generateUuid(order: Order) {
     if (!order.id) {
-      order.id = uuidv4()
+      order.id = randomUUID()
     }
     if (!order.order_number) {
       const timestamp = Date.now()
