@@ -24,6 +24,7 @@ interface PaymentInfo {
   operator_simple: string
   transaction_type: string
   check_status_url: string
+  code_url: string
 }
 
 export default class OrdersController {
@@ -42,6 +43,9 @@ export default class OrdersController {
         deliveryPrice = 2500,
         customerName: customerNameFallback,
         customerEmail: customerEmailFallback,
+        // ✅ Opérateur Mobile Money envoyé depuis le frontend (optionnel)
+        mobileOperatorCode,
+        mobileOperatorName,
       } = request.only([
         'userId',
         'customerAccountNumber',
@@ -54,9 +58,18 @@ export default class OrdersController {
         'paymentApiKeySecret',
         'customerName',
         'customerEmail',
+        'mobileOperatorCode',
+        'mobileOperatorName',
       ])
 
-      console.log('📦 Données reçues:', { userId, customerAccountNumber, deliveryMethod, deliveryPrice })
+      console.log('📦 Données reçues:', {
+        userId,
+        customerAccountNumber,
+        deliveryMethod,
+        deliveryPrice,
+        mobileOperatorCode: mobileOperatorCode || '(non fourni)',
+        mobileOperatorName: mobileOperatorName || '(non fourni)',
+      })
 
       // ========== VALIDATION ==========
       if (!userId) {
@@ -71,7 +84,7 @@ export default class OrdersController {
       console.log('🔵 🌐 APPEL API KYC...')
       const kycUrl = `https://apist.onrender.com/api/mypvit/kyc/marchant?customerAccountNumber=${customerAccountNumber}`
 
-      let operator = 'non renseigné'
+      let operator = mobileOperatorCode || 'non renseigné'
       let fullName = customerNameFallback || 'non renseigné'
       let accountNumber = customerAccountNumber
 
@@ -79,15 +92,19 @@ export default class OrdersController {
         const kycResponse = await axios.get(kycUrl, { timeout: 10000 })
         if (kycResponse.data.success && kycResponse.data.data) {
           const kycData = kycResponse.data.data
-          operator = kycData.detected_operator || kycData.operator || 'non renseigné'
+          // ✅ Si l'opérateur vient du frontend, on le garde en priorité
+          // Sinon on utilise ce que retourne le KYC
+          operator = mobileOperatorCode || kycData.detected_operator || kycData.operator || 'non renseigné'
           fullName = kycData.full_name || customerNameFallback || 'non renseigné'
           accountNumber = kycData.customer_account_number || customerAccountNumber
-          console.log('✅ KYC OK - opérateur:', operator, '| nom:', fullName)
+          console.log('✅ KYC OK - opérateur utilisé:', operator, '| nom:', fullName)
         } else {
           console.log('🟡 KYC success=false, fallback sur données frontend')
+          operator = mobileOperatorCode || 'non renseigné'
         }
       } catch (kycError: any) {
         console.log('🟡 KYC injoignable (status', kycError?.response?.status ?? 'inconnu', '), fallback sur données frontend')
+        operator = mobileOperatorCode || 'non renseigné'
       }
 
       // ========== ÉTAPE 2: RECHERCHE DE L'UTILISATEUR ==========
@@ -224,14 +241,29 @@ export default class OrdersController {
 
       try {
         console.log('🔵 🌐 APPEL API PAIEMENT...')
+
+        // ✅ Construction du body selon que l'opérateur est fourni ou non
+        const paymentBody: Record<string, any> = {
+          amount: total,
+          customer_account_number: accountNumber,
+          payment_api_key_public: "pk_1773325888803_dt8diavuh3h",
+          payment_api_key_secret: "sk_1773325888803_qt015a3cr5",
+        }
+
+        if (mobileOperatorCode) {
+          // L'utilisateur a sélectionné son pays et son opérateur depuis le frontend
+          paymentBody.operator_code = mobileOperatorCode
+          console.log(`✅ Opérateur fourni par le frontend: ${mobileOperatorCode} (${mobileOperatorName || 'nom non fourni'})`)
+        } else {
+          // Pas d'opérateur fourni : l'API payment détecte elle-même via le numéro
+          console.log('🟡 Aucun opérateur fourni, l\'API payment détectera via le numéro')
+        }
+
+        console.log('📤 Body envoyé à /api/payment:', JSON.stringify(paymentBody, null, 2))
+
         const paymentResponse = await axios.post(
-          'https://api-akiba-1.onrender.com/api/payment',
-          {
-            amount: total,
-            customer_account_number: accountNumber,
-            payment_api_key_public: "pk_1773325888803_dt8diavuh3h",
-            payment_api_key_secret: "sk_1773325888803_qt015a3cr5",
-          },
+          'https://apist.onrender.com/api/payment',
+          paymentBody,
           { headers: { 'Content-Type': 'application/json' } }
         )
 
@@ -239,89 +271,90 @@ export default class OrdersController {
         console.log('✅ Réponse paiement reçue:', JSON.stringify(paymentResult, null, 2))
 
         if (paymentResult.success && paymentResult.data) {
-          // Récupérer le x_secret et les infos de transaction
+          // Récupérer les infos de transaction
           paymentInfo = {
             reference_id: paymentResult.data.reference_id,
-            x_secret: paymentResult.data.x_secret,
+            x_secret: paymentResult.data.x_secret || 'not_provided',
             status: paymentResult.data.status,
             amount: paymentResult.data.amount,
             operator_simple: paymentResult.data.operator_simple,
             transaction_type: paymentResult.data.transaction_type,
-            check_status_url: paymentResult.data.check_status_url
+            check_status_url: paymentResult.data.check_status_url,
+            code_url: paymentResult.data.code_url || 'O2S57GKG1BQIE3RF'
           }
 
-          console.log('🔑 x_secret récupéré:', paymentInfo.x_secret?.substring(0, 50) + '...')
-          console.log('🔗 URL vérification statut:', paymentInfo.check_status_url)
+          console.log('🔑 reference_id:', paymentInfo.reference_id)
+          console.log('🔗 API vérification statut:', `https://apist.onrender.com/api/check-status/${paymentInfo.reference_id}`)
 
-          // ========== ÉTAPE 9.1: VÉRIFICATION DU STATUT DE LA TRANSACTION ==========
-          console.log('🔍 Vérification du statut de la transaction...')
+          // ========== ÉTAPE 9.1: VÉRIFICATION DU STATUT ==========
+          console.log('🔍 Vérification du statut via apist.onrender.com...')
 
           let statusVerified = false
-          let maxRetries = 12 
-          let retryDelay = 3000 // 3 secondes
+          let maxRetries = 12
+          let retryDelay = 3000
+
+          const referenceId = paymentResult.data.reference_id
 
           for (let attempt = 1; attempt <= maxRetries; attempt++) {
             console.log(`📡 Tentative ${attempt}/${maxRetries} de vérification du statut...`)
+            console.log(`📍 URL: https://apist.onrender.com/api/check-status/${referenceId}`)
 
             try {
-              // Extraire le transactionId et accountOperationCode de l'URL
-              const statusUrl = paymentInfo.check_status_url
-              const urlParams = new URLSearchParams(statusUrl.split('?')[1])
-              const transactionId = urlParams.get('transactionId')
-              const accountOperationCode = urlParams.get('accountOperationCode')
-              const transactionOperation = urlParams.get('transactionOperation')
+              const statusResponse = await axios.get(
+                `https://apist.onrender.com/api/check-status/${referenceId}`,
+                { timeout: 15000 }
+              )
 
-              if (transactionId && accountOperationCode && transactionOperation) {
-                const statusResponse = await axios.get(
-                  `https://apist.onrender.com/api/mypvit/transaction/status`,
-                  {
-                    params: {
-                      transactionId,
-                      accountOperationCode,
-                      transactionOperation
-                    },
-                    timeout: 15000
-                  }
-                )
+              const statusData = statusResponse.data
+              console.log(`✅ Réponse API statut tentative ${attempt}:`, JSON.stringify(statusData, null, 2))
 
-                const statusData = statusResponse.data
-                console.log(`✅ Réponse statut tentative ${attempt}:`, JSON.stringify(statusData, null, 2))
+              if (statusData.success && statusData.is_success === true) {
+                console.log('✅✅✅ Transaction réussie ! ✅✅✅')
+                console.log(`💰 Montant: ${statusData.amount} FCFA`)
+                console.log(`📊 Statut: ${statusData.status}`)
 
-                if (statusData.success && statusData.data) {
-                  if (statusData.data.is_success) {
-                    console.log('✅ Transaction réussie !')
-                    statusVerified = true
+                statusVerified = true
 
-                    // Mettre à jour le statut de la commande
-                    order.status = 'paid'
-                    await order.save()
+                order.status = 'paid'
+                await order.save()
 
-                    await OrderTracking.create({
-                      order_id: order.id,
-                      status: 'paid',
-                      description: `Paiement effectué avec succès - Réf: ${paymentInfo.reference_id}`,
-                      tracked_at: DateTime.now(),
-                    })
+                await OrderTracking.create({
+                  order_id: order.id,
+                  status: 'paid',
+                  description: `Paiement effectué avec succès - Réf: ${referenceId} - Montant: ${statusData.amount} FCFA`,
+                  tracked_at: DateTime.now(),
+                })
 
-                    break
-                  } else if (statusData.data.status === 'PENDING') {
-                    console.log(`⏳ Transaction en attente (tentative ${attempt}/${maxRetries})`)
-                    if (attempt < maxRetries) {
-                      console.log(`⏰ Attente de ${retryDelay}ms avant nouvelle tentative...`)
-                      await new Promise(resolve => setTimeout(resolve, retryDelay))
-                    }
-                  } else {
-                    console.log(`⚠️ Statut transaction: ${statusData.data.status}`)
-                    break
-                  }
-                }
-              } else {
-                console.log('⚠️ Impossible d\'extraire les paramètres de l\'URL')
                 break
+              } else if (statusData.success && statusData.is_pending === true) {
+                console.log(`⏳ Transaction en attente (tentative ${attempt}/${maxRetries})`)
+                if (attempt < maxRetries) {
+                  console.log(`⏰ Attente de ${retryDelay}ms avant nouvelle tentative...`)
+                  await new Promise(resolve => setTimeout(resolve, retryDelay))
+                }
+              } else if (statusData.success && statusData.is_failed === true) {
+                console.log(`❌ Transaction échouée:`, statusData)
+                await OrderTracking.create({
+                  order_id: order.id,
+                  status: 'payment_failed',
+                  description: `Paiement échoué - Réf: ${referenceId} - Statut: ${statusData.status}`,
+                  tracked_at: DateTime.now(),
+                })
+                break
+              } else {
+                console.log(`⚠️ Statut: ${statusData.status || 'inconnu'}`)
+                if (attempt < maxRetries) {
+                  await new Promise(resolve => setTimeout(resolve, retryDelay))
+                }
               }
             } catch (statusError: any) {
               console.error(`❌ Erreur vérification statut (tentative ${attempt}):`, statusError.message)
+              if (statusError.response) {
+                console.error('📡 Détails réponse erreur:', statusError.response.data)
+                console.error('📡 Status code:', statusError.response.status)
+              }
               if (attempt < maxRetries) {
+                console.log(`⏰ Nouvelle tentative dans ${retryDelay}ms...`)
                 await new Promise(resolve => setTimeout(resolve, retryDelay))
               }
             }
@@ -329,20 +362,31 @@ export default class OrdersController {
 
           if (!statusVerified) {
             console.log('⚠️ Transaction toujours en attente après vérifications')
-            // Créer un tracking indiquant que le paiement est en attente
             await OrderTracking.create({
               order_id: order.id,
               status: 'payment_pending',
-              description: 'Paiement en attente de confirmation',
+              description: `Paiement en attente de confirmation - Réf: ${referenceId} - Veuillez vérifier plus tard`,
               tracked_at: DateTime.now(),
             })
           }
         } else {
           console.log('🟡 Paiement en attente ou échoué:', paymentResult.message)
+          await OrderTracking.create({
+            order_id: order.id,
+            status: 'payment_pending',
+            description: `Paiement initié mais en attente: ${paymentResult.message || 'En cours de traitement'}`,
+            tracked_at: DateTime.now(),
+          })
         }
       } catch (paymentErr: any) {
         console.error('🟡 Erreur paiement (commande créée quand même):', paymentErr.message)
         paymentErrorMsg = paymentErr.message
+        await OrderTracking.create({
+          order_id: order.id,
+          status: 'payment_pending',
+          description: `Erreur lors de l'initiation du paiement: ${paymentErr.message}`,
+          tracked_at: DateTime.now(),
+        })
       }
 
       // ========== ÉTAPE 10: RECHARGEMENT ==========
@@ -353,6 +397,7 @@ export default class OrdersController {
         success: true,
         message: '✅ Commande créée avec succès !',
         data: {
+          orderId: order.id,
           orderNumber: order.order_number,
           total: order.total,
           status: order.status,
@@ -366,10 +411,9 @@ export default class OrdersController {
             message: paymentResult?.message,
             reference_id: paymentInfo.reference_id,
             status: paymentInfo.status,
-            x_secret: paymentInfo.x_secret,
             operator: paymentInfo.operator_simple,
             amount: paymentInfo.amount,
-            check_status_url: paymentInfo.check_status_url
+            check_status_url: `https://apist.onrender.com/api/check-status/${paymentInfo.reference_id}`
           } : null,
           paymentError: paymentErrorMsg,
         },
@@ -386,70 +430,42 @@ export default class OrdersController {
     }
   }
 
-  // Nouvelle méthode pour vérifier le statut d'une transaction de paiement
+  // Méthode pour vérifier le statut d'une transaction via notre API
   async checkPaymentStatus({ params, response }: HttpContext) {
     try {
-      const { orderId } = params
+      const { referenceId } = params
 
-      if (!orderId) {
-        return response.status(400).json({
-          success: false,
-          message: 'orderId est requis'
-        })
+      if (!referenceId) {
+        return response.status(400).json({ success: false, message: 'referenceId est requis' })
       }
 
-      const order = await Order.find(orderId)
-      if (!order) {
-        return response.status(404).json({
-          success: false,
-          message: 'Commande non trouvée'
-        })
-      }
+      console.log(`🔍 Vérification du statut via API externe pour: ${referenceId}`)
 
-      // Chercher les trackings liés au paiement
-      const paymentTrackings = await OrderTracking.query()
-        .where('order_id', orderId)
-        .whereIn('status', ['paid', 'payment_pending', 'payment_failed'])
-        .orderBy('tracked_at', 'desc')
-        .first()
+      const statusResponse = await axios.get(
+        `https://apist.onrender.com/api/check-status/${referenceId}`,
+        { timeout: 15000 }
+      )
 
-      if (!paymentTrackings) {
-        return response.status(200).json({
-          success: true,
-          data: {
-            status: order.status,
-            is_paid: order.status === 'paid',
-            message: 'Paiement non encore initié ou suivi non disponible'
-          }
-        })
-      }
-
-      // Extraire la référence depuis la description
-      const refMatch = paymentTrackings.description?.match(/Réf: ([A-Z0-9]+)/)
-      const referenceId = refMatch ? refMatch[1] : null
+      const statusData = statusResponse.data
 
       return response.status(200).json({
         success: true,
-        data: {
-          order_status: order.status,
-          is_paid: order.status === 'paid',
-          payment_status: paymentTrackings.status,
-          payment_description: paymentTrackings.description,
-          reference_id: referenceId,
-          tracked_at: paymentTrackings.tracked_at
-        }
+        message: 'Statut vérifié avec succès',
+        data: statusData
       })
 
     } catch (error: any) {
-      console.error('Erreur checkPaymentStatus:', error.message)
+      console.error('❌ Erreur vérification statut:', error.message)
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la vérification du statut de paiement',
-        error: error.message
+        message: 'Erreur lors de la vérification du statut',
+        error: error.message,
+        details: error.response?.data || null
       })
     }
   }
 
+  // Récupérer toutes les commandes d'un utilisateur
   async index({ params, response }: HttpContext) {
     try {
       const { userId } = params
@@ -468,6 +484,7 @@ export default class OrdersController {
     }
   }
 
+  // Récupérer une commande spécifique
   async show({ params, response }: HttpContext) {
     try {
       const { orderId, userId } = params
@@ -475,11 +492,21 @@ export default class OrdersController {
         return response.status(400).json({ success: false, message: 'userId et orderId sont requis' })
       }
 
-      const order = await Order.query()
-        .where('id', orderId)
-        .where('user_id', userId)
-        .preload('items')
-        .first()
+      let order: Order | null = null
+
+      if (orderId.startsWith('CMD-')) {
+        order = await Order.query()
+          .where('order_number', orderId)
+          .where('user_id', userId)
+          .preload('items')
+          .first()
+      } else {
+        order = await Order.query()
+          .where('id', orderId)
+          .where('user_id', userId)
+          .preload('items')
+          .first()
+      }
 
       if (!order) {
         return response.status(404).json({ success: false, message: 'Commande non trouvée' })
@@ -491,6 +518,7 @@ export default class OrdersController {
     }
   }
 
+  // Mettre à jour le statut d'une commande (admin)
   async updateStatus({ params, request, response }: HttpContext) {
     try {
       const { orderId } = params
@@ -498,7 +526,14 @@ export default class OrdersController {
         'status', 'trackingNumber', 'estimatedDelivery', 'location', 'description',
       ])
 
-      const order = await Order.find(orderId)
+      let order: Order | null = null
+
+      if (orderId.startsWith('CMD-')) {
+        order = await Order.findBy('order_number', orderId)
+      } else {
+        order = await Order.find(orderId)
+      }
+
       if (!order) {
         return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
@@ -523,6 +558,7 @@ export default class OrdersController {
     }
   }
 
+  // Annuler une commande
   async cancel({ params, request, response }: HttpContext) {
     try {
       const { orderId } = params
@@ -532,7 +568,20 @@ export default class OrdersController {
         return response.status(400).json({ success: false, message: 'userId est requis' })
       }
 
-      const order = await Order.query().where('id', orderId).where('user_id', userId).first()
+      let order: Order | null = null
+
+      if (orderId.startsWith('CMD-')) {
+        order = await Order.query()
+          .where('order_number', orderId)
+          .where('user_id', userId)
+          .first()
+      } else {
+        order = await Order.query()
+          .where('id', orderId)
+          .where('user_id', userId)
+          .first()
+      }
+
       if (!order) {
         return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
@@ -557,6 +606,7 @@ export default class OrdersController {
     }
   }
 
+  // Générer une facture
   async invoice({ params, response }: HttpContext) {
     try {
       const { orderId, userId } = params
@@ -564,7 +614,22 @@ export default class OrdersController {
         return response.status(400).json({ success: false, message: 'userId et orderId sont requis' })
       }
 
-      const order = await Order.query().where('id', orderId).where('user_id', userId).preload('items').first()
+      let order: Order | null = null
+
+      if (orderId.startsWith('CMD-')) {
+        order = await Order.query()
+          .where('order_number', orderId)
+          .where('user_id', userId)
+          .preload('items')
+          .first()
+      } else {
+        order = await Order.query()
+          .where('id', orderId)
+          .where('user_id', userId)
+          .preload('items')
+          .first()
+      }
+
       if (!order) {
         return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
@@ -600,6 +665,7 @@ export default class OrdersController {
     }
   }
 
+  // Récupérer le suivi d'une commande
   async getTracking({ params, response }: HttpContext) {
     try {
       const { orderId, userId } = params
@@ -607,12 +673,27 @@ export default class OrdersController {
         return response.status(400).json({ success: false, message: 'userId et orderId sont requis' })
       }
 
-      const order = await Order.query().where('id', orderId).where('user_id', userId).first()
+      let order: Order | null = null
+
+      if (orderId.startsWith('CMD-')) {
+        order = await Order.query()
+          .where('order_number', orderId)
+          .where('user_id', userId)
+          .first()
+      } else {
+        order = await Order.query()
+          .where('id', orderId)
+          .where('user_id', userId)
+          .first()
+      }
+
       if (!order) {
         return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
 
-      const tracking = await OrderTracking.query().where('order_id', orderId).orderBy('tracked_at', 'asc')
+      const tracking = await OrderTracking.query()
+        .where('order_id', order.id)
+        .orderBy('tracked_at', 'asc')
 
       return response.status(200).json({ success: true, message: 'Suivi récupéré avec succès', data: tracking })
     } catch (error: any) {
@@ -620,6 +701,7 @@ export default class OrdersController {
     }
   }
 
+  // Description des statuts
   private getStatusDescription(status: string): string {
     const descriptions: Record<string, string> = {
       pending: 'Commande confirmée et en attente de traitement',
