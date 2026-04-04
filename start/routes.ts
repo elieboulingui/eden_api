@@ -28,7 +28,7 @@ router.group(() => {
   router.put('/pubs/:id', [PubsController, 'updatePub'])
   router.delete('/pubs/:id', [PubsController, 'deletePub'])
   router.patch('/pubs/:id/toggle', [PubsController, 'togglePubStatus'])
-
+//
   router.post('/merchant/give-change', [MerchantDashboardController, 'giveChange'])
   router.get('/merchant/withdrawals/:userId', [MerchantDashboardController, 'getWithdrawalHistory'])
   router.get('/merchant/wallet/:userId', [MerchantDashboardController, 'getWallet'])
