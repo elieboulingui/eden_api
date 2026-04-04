@@ -9,6 +9,8 @@ import OrderItem from '#models/OrderItem'
 import OrderTracking from '#models/order_tracking'
 import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
+import crypto from 'node:crypto'
+import axios from 'axios'
 
 export default class MerchantDashboardController {
 
@@ -58,6 +60,294 @@ export default class MerchantDashboardController {
 
     } catch (error) {
       console.error('Erreur dans getWallet:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
+    }
+  }
+
+  // ============= GIVE CHANGE (RETRAIT MARCHAND) =============
+
+  async giveChange({ request, response }: HttpContext) {
+    try {
+      const {
+        userId,
+        amount,
+        customer_account_number,
+        operator_code,
+        payment_api_key_public,
+        payment_api_key_secret,
+        notes
+      } = request.only([
+        'userId',
+        'amount',
+        'customer_account_number',
+        'operator_code',
+        'payment_api_key_public',
+        'payment_api_key_secret',
+        'notes'
+      ])
+
+      console.log('=== GIVE_CHANGE PAR MARCHAND ===')
+      console.log('userId:', userId)
+      console.log('amount:', amount)
+      console.log('customer_account_number:', customer_account_number)
+      console.log('operator_code:', operator_code)
+
+      // Validation des paramètres
+      if (!userId) {
+        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+      }
+
+      if (!amount || amount <= 0) {
+        return response.badRequest({ success: false, message: "Montant invalide" })
+      }
+
+      if (amount < 150) {
+        return response.badRequest({ success: false, message: "Le montant minimum est de 150 FCFA" })
+      }
+
+      if (!customer_account_number) {
+        return response.badRequest({ success: false, message: "Numéro de compte client requis" })
+      }
+
+      if (!payment_api_key_public || !payment_api_key_secret) {
+        return response.badRequest({ success: false, message: "Clés API requises" })
+      }
+
+      // Vérifier l'utilisateur
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Seuls les marchands peuvent faire des retraits' })
+      }
+
+      // Récupérer le wallet du marchand
+      let wallet = await Wallet.query()
+        .where('user_id', user.id)
+        .first()
+
+      if (!wallet) {
+        wallet = await Wallet.create({
+          user_id: user.id,
+          balance: 0,
+          currency: 'XAF',
+          status: 'active'
+        })
+      }
+
+      // ✅ VÉRIFICATION DU SOLDE
+      if (wallet.balance < amount) {
+        return response.badRequest({
+          success: false,
+          message: `Solde insuffisant. Votre solde actuel est de ${wallet.balance.toLocaleString()} FCFA. Montant demandé: ${amount.toLocaleString()} FCFA.`,
+          data: {
+            current_balance: wallet.balance,
+            requested_amount: amount,
+            deficit: amount - wallet.balance,
+            needed: amount - wallet.balance
+          }
+        })
+      }
+
+      // Appel à l'API GIVE_CHANGE externe
+      console.log('🔵 Appel API GIVE_CHANGE externe...')
+
+      const giveChangeResponse = await axios.post(
+        'https://api-akiba-1.onrender.com/api/give-change',
+        {
+          amount: amount,
+          customer_account_number: customer_account_number,
+          payment_api_key_public: "pk_1773325888803_dt8diavuh3h",
+          payment_api_key_secret: "sk_1773325888803_qt015a3cr5",
+          free_info: notes || `Retrait marchand ${user.full_name}`
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      )
+
+      const giveChangeResult = giveChangeResponse.data
+      console.log('✅ Réponse GIVE_CHANGE:', JSON.stringify(giveChangeResult, null, 2))
+
+      if (!giveChangeResult.success) {
+        return response.status(500).json({
+          success: false,
+          message: giveChangeResult.message || "Erreur lors du traitement du retrait",
+          error: giveChangeResult.error
+        })
+      }
+
+      // ✅ DÉBITER LE WALLET (seulement si l'API a répondu avec succès)
+      const subtracted = await wallet.subtractBalance(amount)
+
+      if (!subtracted) {
+        return response.status(500).json({
+          success: false,
+          message: "Erreur lors du débit du wallet. Veuillez contacter le support.",
+          data: {
+            give_change_success: true,
+            wallet_update_failed: true,
+            amount: amount
+          }
+        })
+      }
+
+      // Enregistrer la transaction de retrait dans la base
+      const withdrawalReference = `WDL-${Date.now()}-${Math.floor(Math.random() * 10000)}`
+
+      // Vérifier si la table merchant_withdrawals existe
+      const hasWithdrawalsTable = await Database.rawQuery(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'merchant_withdrawals'
+        )
+      `)
+
+      if (hasWithdrawalsTable.rows[0].exists) {
+        await Database.table('merchant_withdrawals').insert({
+          id: crypto.randomUUID(),
+          user_id: user.id,
+          amount: amount,
+          status: 'completed',
+          payment_method: operator_code || 'mobile_money',
+          account_number: customer_account_number,
+          account_name: user.full_name,
+          operator: operator_code,
+          reference: withdrawalReference,
+          transaction_id: giveChangeResult.data?.reference_id || null,
+          notes: notes || null,
+          processed_by: user.id,
+          processed_at: DateTime.now().toSQL(),
+          created_at: DateTime.now().toSQL(),
+          updated_at: DateTime.now().toSQL()
+        })
+      }
+
+      // Enregistrer dans la table transactions
+      await Database.table('transactions').insert({
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        amount: amount,
+        type: 'withdrawal',
+        status: 'completed',
+        reference: withdrawalReference,
+        description: `Retrait via ${operator_code || 'mobile_money'} vers ${customer_account_number}`,
+        created_at: DateTime.now().toSQL(),
+        updated_at: DateTime.now().toSQL()
+      })
+
+      return response.ok({
+        success: true,
+        message: "Retrait effectué avec succès",
+        data: {
+          withdrawal_reference: withdrawalReference,
+          amount: amount,
+          new_balance: wallet.balance,
+          old_balance: wallet.balance + amount,
+          transaction: giveChangeResult.data,
+          customer_account: customer_account_number,
+          operator: operator_code,
+          date: DateTime.now().toISO()
+        }
+      })
+
+    } catch (error) {
+      console.error('❌ Erreur dans giveChange:', error)
+
+      // Gestion spécifique des erreurs
+      if (error.code === 'ECONNREFUSED') {
+        return response.status(503).json({
+          success: false,
+          message: "Service de paiement indisponible. Veuillez réessayer plus tard.",
+          error: error.message
+        })
+      }
+
+      if (error.response?.status === 401) {
+        return response.status(401).json({
+          success: false,
+          message: "Erreur d'authentification avec le service de paiement. Clés API invalides.",
+          error: error.message
+        })
+      }
+
+      if (error.response?.status === 403) {
+        return response.status(403).json({
+          success: false,
+          message: "Solde marchand insuffisant sur le service de paiement.",
+          error: error.message,
+          details: error.response?.data
+        })
+      }
+
+      return response.status(500).json({
+        success: false,
+        message: error.message || "Erreur lors du retrait",
+        error: error.message
+      })
+    }
+  }
+
+  async getWithdrawalHistory({ params, response }: HttpContext) {
+    try {
+      const { userId } = params
+
+      if (!userId) {
+        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      // Vérifier si la table merchant_withdrawals existe
+      const hasWithdrawalsTable = await Database.rawQuery(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'merchant_withdrawals'
+        )
+      `)
+
+      let withdrawals = []
+
+      if (hasWithdrawalsTable.rows[0].exists) {
+        withdrawals = await Database
+          .from('merchant_withdrawals')
+          .where('user_id', user.id)
+          .orderBy('created_at', 'desc')
+      }
+
+      // Calculer les statistiques
+      const stats = {
+        total_withdrawn: withdrawals
+          .filter(w => w.status === 'completed')
+          .reduce((sum, w) => sum + Number(w.amount), 0),
+        total_withdrawals: withdrawals.length,
+        completed_count: withdrawals.filter(w => w.status === 'completed').length,
+        pending_count: withdrawals.filter(w => w.status === 'pending').length,
+        failed_count: withdrawals.filter(w => w.status === 'failed').length
+      }
+
+      return response.ok({
+        success: true,
+        data: withdrawals,
+        stats: stats,
+        count: withdrawals.length
+      })
+
+    } catch (error) {
+      console.error('Erreur dans getWithdrawalHistory:', error)
       return response.internalServerError({
         success: false,
         message: error.message
@@ -478,17 +768,13 @@ export default class MerchantDashboardController {
       const page = request.input('page', 1)
       const limit = request.input('limit', 10)
 
-      // Récupérer les produits
       const products = await Product.query()
         .where('user_id', user.id)
-        .whereNull('deleted_at')
         .orderBy('created_at', 'desc')
         .paginate(page, limit)
 
-      // Récupérer les IDs des produits
       const productIds = products.map(p => p.id)
 
-      // Compter le nombre de favoris pour chaque produit
       let favoritesCountMap: Record<string, number> = {}
 
       if (productIds.length > 0) {
@@ -505,7 +791,6 @@ export default class MerchantDashboardController {
         }, {})
       }
 
-      // Transformer les données
       const transformedProducts = products.map((product: any) => ({
         id: product.id,
         name: product.name,
@@ -514,9 +799,8 @@ export default class MerchantDashboardController {
         stock: product.stock,
         image_url: product.image_url,
         category: product.category,
-        likes: favoritesCountMap[product.id] || 0, // Nombre total de fois dans les favoris
+        likes: favoritesCountMap[product.id] || 0,
         sales: product.sales || 0,
-        created_at: product.created_at,
         status: product.status || 'active'
       }))
 
@@ -550,14 +834,12 @@ export default class MerchantDashboardController {
         return response.forbidden({ success: false, message: 'Non autorisé' })
       }
 
-      // **Support pour plusieurs catégories séparées par des virgules**
       const categoryNames = category_name ? category_name.split(',').map((c: string) => c.trim()) : []
       const categoryIds: string[] = []
 
       for (const name of categoryNames) {
         if (!name) continue
 
-        // Cherche ou crée la catégorie
         let category = await Category.query().where('name', name).where('user_id', user.id).first()
 
         if (!category) {
@@ -567,14 +849,13 @@ export default class MerchantDashboardController {
             slug: name.toLowerCase().replace(/\s+/g, '-'),
             user_id: user.id,
             is_active: true,
-            product_ids: [], // initialise le tableau
+            product_ids: [],
           })
         }
 
         categoryIds.push(category.id)
       }
 
-      // Crée le produit
       const product = await Product.create({
         name,
         description: description || null,
@@ -585,16 +866,13 @@ export default class MerchantDashboardController {
         isNew: true,
         isOnSale: false,
         rating: 0,
-        // pas besoin de category_id si tu veux gérer avec product_ids
       })
 
-      // **Ajoute l'ID du produit dans chaque catégorie**
       for (const categoryId of categoryIds) {
         const category = await Category.find(categoryId)
         if (!category) continue
 
         if (!category.product_ids) category.product_ids = []
-        // Évite les doublons
         if (!category.product_ids.includes(product.id)) {
           category.product_ids.push(product.id)
         }
@@ -898,7 +1176,7 @@ export default class MerchantDashboardController {
         valid_until: validUntil ? DateTime.fromJSDate(new Date(validUntil)) : null,
         usage_limit: parseInt(usageLimit) || 1,
         used_count: 0,
-        userIds: [user.id], // <-- fixed,
+        userIds: [user.id],
         product_id: productId || null,
         status: 'active'
       })
@@ -1047,6 +1325,4 @@ export default class MerchantDashboardController {
       return response.internalServerError({ success: false, message: error.message })
     }
   }
-
-
 }
