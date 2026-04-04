@@ -2,6 +2,8 @@ import router from '@adonisjs/core/services/router'
 import PubsController from '#controllers/pubs_controller'
 import NewAccountController from '#controllers/new_account_controller'
 import SessionController from '#controllers/session_controller'
+import NewAccountViewController from '#controllers/new_account_controllers'
+import SessionViewController from '#controllers/session_controllers'
 import UsersController from '#controllers/users_controller'
 import ProductsController from '#controllers/products_controller'
 import CategoriesController from '#controllers/categories_controller'
@@ -12,22 +14,22 @@ import OrdersController from '#controllers/OrdersController'
 const CouponsController = () => import('#controllers/coupons_controller')
 const OrderTrackingController = () => import('#controllers/order_trackings_controller')
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
-import { controllers } from '#generated/controllers'
 
+// Page d'accueil (corrigez aussi cette ligne)
+router.get('/', async ({ view }) => {
+  return view.render('pages/home')
+}).as('home')
 
+// Routes d'authentification - utilisez les contrôleurs directement
+router.group(() => {
+  router.get('signup', [NewAccountViewController, 'create'])
+  router.post('signup', [NewAccountViewController, 'stores'])
 
-router.on('/').render('pages/home').as('home')
+  router.get('login', [SessionViewController, 'create']).as('session.create')
+  router.post('login', [SessionViewController, 'stores'])
+}).use(middleware.guest())
 
-router
-  .group(() => {
-    router.get('signup', [controllers.NewAccount, 'create'])
-    router.post('signup', [controllers.NewAccount, 'stores'])
-
-    router.get('login', [controllers.Session, 'creates']).as('session.create')
-    router.post('login', [controllers.Session, 'store'])
-  })
-  .use(middleware.guest())
-
+// Routes API
 router.group(() => {
   router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus']).as(
     'orders.check_payment_status'
@@ -41,7 +43,7 @@ router.group(() => {
   router.put('/pubs/:id', [PubsController, 'updatePub'])
   router.delete('/pubs/:id', [PubsController, 'deletePub'])
   router.patch('/pubs/:id/toggle', [PubsController, 'togglePubStatus'])
-  //
+
   router.post('/merchant/give-change', [MerchantDashboardController, 'giveChange'])
   router.get('/merchant/withdrawals/:userId', [MerchantDashboardController, 'getWithdrawalHistory'])
   router.get('/merchant/wallet/:userId', [MerchantDashboardController, 'getWallet'])
@@ -62,6 +64,7 @@ router.group(() => {
   router.post('/merchant/categories/:userId', [MerchantDashboardController, 'createCategory'])
   router.put('/merchant/categories/:userId/:categoryId', [MerchantDashboardController, 'updateCategory'])
   router.delete('/merchant/categories/:userId/:categoryId', [MerchantDashboardController, 'deleteCategory'])
+
   router.get('/merchant/coupons/:userId', [MerchantDashboardController, 'getCoupons'])
   router.post('/merchant/coupons/:userId', [MerchantDashboardController, 'createCoupon'])
   router.put('/merchant/coupons/:userId/:couponId', [MerchantDashboardController, 'updateCoupon'])

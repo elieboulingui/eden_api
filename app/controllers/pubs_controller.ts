@@ -29,7 +29,7 @@ export default class PubsController {
         success: true,
         data: pubs
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: error.message
@@ -54,7 +54,7 @@ export default class PubsController {
         success: true,
         data: pubs
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: error.message
@@ -91,7 +91,7 @@ export default class PubsController {
         data: pub,
         message: 'Publicité créée avec succès'
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: error.message
@@ -132,7 +132,7 @@ export default class PubsController {
         data: pub,
         message: 'Publicité mise à jour avec succès'
       })
-    } catch (error) {
+    } catch (error:any) {
       return response.internalServerError({
         success: false,
         message: error.message
@@ -153,7 +153,7 @@ export default class PubsController {
         success: true,
         message: 'Publicité supprimée avec succès'
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: error.message
@@ -175,7 +175,7 @@ export default class PubsController {
         data: pub,
         message: pub.is_active ? 'Publicité activée' : 'Publicité désactivée'
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: error.message

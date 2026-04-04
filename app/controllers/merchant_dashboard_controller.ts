@@ -58,7 +58,7 @@ export default class MerchantDashboardController {
         }
       })
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur dans getWallet:', error)
       return response.internalServerError({
         success: false,
@@ -260,7 +260,7 @@ export default class MerchantDashboardController {
         }
       })
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur dans giveChange:', error)
 
       // Gestion spécifique des erreurs
@@ -346,7 +346,7 @@ export default class MerchantDashboardController {
         count: withdrawals.length
       })
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur dans getWithdrawalHistory:', error)
       return response.internalServerError({
         success: false,
@@ -511,7 +511,7 @@ export default class MerchantDashboardController {
         count: orders.length
       })
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur dans getMerchantOrders:', error)
       return response.internalServerError({
         success: false,
@@ -596,7 +596,7 @@ export default class MerchantDashboardController {
         count: pendingOrders.length
       })
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur dans getPendingOrders:', error)
       return response.internalServerError({
         success: false,
@@ -663,7 +663,7 @@ export default class MerchantDashboardController {
         }
       })
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur dans getOrderDetails:', error)
       return response.internalServerError({
         success: false,
@@ -695,7 +695,7 @@ export default class MerchantDashboardController {
         count: orders.length,
         data: orders
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur SQL:', error)
       return response.internalServerError({
         success: false,
@@ -811,7 +811,7 @@ export default class MerchantDashboardController {
           data: transformedProducts
         }
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({ success: false, message: error.message })
     }
   }
@@ -885,7 +885,7 @@ export default class MerchantDashboardController {
         data: product,
         message: 'Produit créé et ajouté aux catégories',
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur createProduct:', error)
       return response.internalServerError({
         success: false,
@@ -951,7 +951,7 @@ export default class MerchantDashboardController {
         data: product,
         message: 'Produit mis à jour avec succès'
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur updateProduct:', error)
       return response.internalServerError({
         success: false,
@@ -980,7 +980,7 @@ export default class MerchantDashboardController {
 
       await product.delete()
       return response.ok({ success: true, message: 'Produit supprimé' })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({ success: false, message: error.message })
     }
   }
@@ -1004,7 +1004,7 @@ export default class MerchantDashboardController {
         .orderBy('name', 'asc')
 
       return response.ok({ success: true, data: categories })
-    } catch (error) {
+    } catch (error: any) {
       console.error('ERREUR getCategories:', error)
       return response.internalServerError({ success: false, message: error.message })
     }
@@ -1043,7 +1043,7 @@ export default class MerchantDashboardController {
         },
         message: 'Catégorie créée',
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('ERREUR createCategory:', error)
       return response.internalServerError({
         success: false,
@@ -1083,7 +1083,7 @@ export default class MerchantDashboardController {
         data: category,
         message: 'Catégorie mise à jour avec succès'
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur updateCategory:', error)
       return response.internalServerError({
         success: false,
@@ -1128,7 +1128,7 @@ export default class MerchantDashboardController {
         success: true,
         message: 'Catégorie supprimée avec succès'
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur deleteCategory:', error)
       return response.internalServerError({
         success: false,
@@ -1151,7 +1151,7 @@ export default class MerchantDashboardController {
         .orderBy('created_at', 'desc')
 
       return response.ok({ success: true, data: coupons })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({ success: false, message: error.message })
     }
   }
@@ -1182,7 +1182,7 @@ export default class MerchantDashboardController {
       })
 
       return response.created({ success: true, data: coupon, message: 'Code promo créé' })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({ success: false, message: error.message })
     }
   }
@@ -1223,7 +1223,7 @@ export default class MerchantDashboardController {
         data: coupon,
         message: 'Code promo mis à jour avec succès'
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur updateCoupon:', error)
       return response.internalServerError({
         success: false,
@@ -1257,7 +1257,7 @@ export default class MerchantDashboardController {
         success: true,
         message: 'Code promo supprimé avec succès'
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur deleteCoupon:', error)
       return response.internalServerError({
         success: false,
@@ -1288,7 +1288,7 @@ export default class MerchantDashboardController {
           totalRevenue: 0,
         }
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({ success: false, message: error.message })
     }
   }
@@ -1321,7 +1321,7 @@ export default class MerchantDashboardController {
       }))
 
       return response.ok({ success: true, data: ordersData })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({ success: false, message: error.message })
     }
   }

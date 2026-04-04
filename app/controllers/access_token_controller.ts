@@ -31,7 +31,7 @@ export default class AccessTokenController {
           token: token.value!.release(),
         },
       })
-    } catch (error) {
+    } catch (error:any) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la connexion',
@@ -56,7 +56,7 @@ async destroy({ auth, response }: HttpContext) {
       success: true,
       message: 'Déconnexion réussie',
     })
-  } catch (error) {
+  } catch (error:any) {
     return response.status(500).json({
       success: false,
       message: 'Erreur lors de la déconnexion',

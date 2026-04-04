@@ -50,7 +50,7 @@ export default class ReviewsController {
         message: 'Avis créé avec succès'
       })
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating review:', error)
       return response.internalServerError({
         success: false,
@@ -76,7 +76,7 @@ export default class ReviewsController {
         success: true,
         data: reviews
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: 'Erreur lors de la récupération des avis',
@@ -118,7 +118,7 @@ export default class ReviewsController {
         data: review,
         message: 'Avis mis à jour avec succès'
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: 'Erreur lors de la mise à jour de l\'avis',
@@ -156,7 +156,7 @@ export default class ReviewsController {
         success: true,
         message: 'Avis supprimé avec succès'
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: 'Erreur lors de la suppression de l\'avis',

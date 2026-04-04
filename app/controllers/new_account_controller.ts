@@ -79,7 +79,7 @@ export default class NewAccountController {
       }
 
       return response.status(201).json(responseData)
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur lors de l\'inscription:', error)
       return response.status(400).json({
         success: false,

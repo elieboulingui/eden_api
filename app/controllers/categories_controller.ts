@@ -27,7 +27,7 @@ export default class CategoriesController {
         data: formattedCategories,
         count: formattedCategories.length,
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur récupération catégories:', error)
       return response.status(500).json({
         success: false,
@@ -92,7 +92,7 @@ export default class CategoriesController {
         success: true,
         data: categoryData,
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur show category:', error)
       return response.status(404).json({
         success: false,
@@ -123,7 +123,7 @@ export default class CategoriesController {
         message: 'Catégorie créée avec succès',
         data: category,
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur store category:', error)
       return response.status(400).json({
         success: false,
@@ -156,7 +156,7 @@ export default class CategoriesController {
         message: 'Catégorie mise à jour avec succès',
         data: category,
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur update category:', error)
       return response.status(400).json({
         success: false,
@@ -176,7 +176,7 @@ export default class CategoriesController {
         success: true,
         message: 'Catégorie supprimée avec succès',
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur destroy category:', error)
       return response.status(400).json({
         success: false,
@@ -224,7 +224,7 @@ export default class CategoriesController {
         message: 'Produit créé et ajouté à la catégorie avec succès',
         data: product,
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur création produit:', error)
       return response.status(400).json({
         success: false,

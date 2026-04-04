@@ -13,7 +13,7 @@ export default class ProductsController {
         data: products,
         count: products.length
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des produits',
@@ -58,7 +58,7 @@ export default class ProductsController {
         message: 'Produit créé avec succès',
         data: product
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(400).json({
         success: false,
         message: 'Erreur lors de la création du produit',
@@ -101,7 +101,7 @@ export default class ProductsController {
         message: 'Produit mis à jour avec succès',
         data: product
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(400).json({
         success: false,
         message: 'Erreur lors de la mise à jour du produit',
@@ -136,7 +136,7 @@ export default class ProductsController {
         success: true,
         message: 'Produit supprimé avec succès'
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(400).json({
         success: false,
         message: 'Erreur lors de la suppression du produit',

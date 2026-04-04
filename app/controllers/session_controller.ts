@@ -111,7 +111,7 @@ export default class SessionController {
         user,
       })
 
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: 'Erreur update profil',

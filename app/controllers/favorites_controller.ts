@@ -39,7 +39,7 @@ export default class FavoritesController {
         message: 'Produit ajouté aux favoris',
         data: favorite
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de l\'ajout aux favoris',
@@ -78,7 +78,7 @@ export default class FavoritesController {
         success: true,
         message: 'Produit retiré des favoris'
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors du retrait des favoris',
@@ -110,7 +110,7 @@ export default class FavoritesController {
         success: true,
         data: products
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des favoris',
@@ -140,7 +140,7 @@ export default class FavoritesController {
         success: true,
         isFavorite: !!favorite
       })
-    } catch (error) {
+    } catch (error:any) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la vérification',

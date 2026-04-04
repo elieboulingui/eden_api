@@ -28,7 +28,7 @@ export default class UsersController {
         data: clients,
         count: clients.length
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur:', error)
       return response.status(500).json({
         success: false,
@@ -68,7 +68,7 @@ export default class UsersController {
         success: true,
         data: client
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération du client',

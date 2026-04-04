@@ -88,7 +88,7 @@ export default class OrderTrackingController {
         success: true,
         data: orderData
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur recherche commande:', error)
       return response.status(500).json({
         success: false,
@@ -139,7 +139,7 @@ export default class OrderTrackingController {
         message: 'Événement de suivi ajouté',
         data: tracking
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur ajout événement:', error)
       return response.status(500).json({
         success: false,
@@ -165,7 +165,7 @@ export default class OrderTrackingController {
         success: true,
         data: events
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur récupération événements:', error)
       return response.status(500).json({
         success: false,
@@ -214,7 +214,7 @@ export default class OrderTrackingController {
         message: 'Statut de la commande mis à jour',
         data: order
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur mise à jour statut:', error)
       return response.status(500).json({
         success: false,

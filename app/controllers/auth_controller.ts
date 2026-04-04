@@ -39,7 +39,7 @@ export default class ApiAuthController {
         },
         token: token.value?.release(),
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(400).json({
         success: false,
         message: 'Erreur lors de l\'inscription',
@@ -82,7 +82,7 @@ export default class ApiAuthController {
         },
         token: token.value?.release(),
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(401).json({
         success: false,
         message: 'Email ou mot de passe incorrect',

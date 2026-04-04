@@ -67,7 +67,7 @@ export default class CartController {
         data: { cart, cartItem }
       })
 
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: 'Erreur ajout panier',
@@ -108,7 +108,7 @@ export default class CartController {
         data: { id: cart.id, items: cart.items, total }
       })
 
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: 'Erreur récupération panier',
@@ -151,7 +151,7 @@ export default class CartController {
 
       return response.ok({ success: true, message: 'Quantité mise à jour' })
 
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: 'Erreur update',
@@ -183,7 +183,7 @@ export default class CartController {
 
       return response.ok({ success: true, message: 'Produit supprimé' })
 
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: 'Erreur suppression',
@@ -211,7 +211,7 @@ export default class CartController {
 
       return response.ok({ success: true, message: 'Panier vidé' })
 
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: 'Erreur clear cart',
