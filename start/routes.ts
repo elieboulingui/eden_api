@@ -24,7 +24,7 @@ router.get('/', async ({ view }) => {
 // Routes d'authentification - utilisez les contrôleurs directement
 router.group(() => {
   router.get('signup', [NewAccountViewController, 'create'])
-  router.post('signup', [NewAccountViewController, 'stores'])
+  router.post('signup', [NewAccountViewController, 'stores']).as('new_account.store')
 
   router.get('login', [SessionViewController, 'create']).as('session.create')
   router.post('login', [SessionViewController, 'stores']).as('session.store')

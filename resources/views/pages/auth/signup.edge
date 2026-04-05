@@ -10,8 +10,8 @@
     <div>
       @form({ route: 'new_account.store', method: 'POST' })
         <div>
-          @field.root({ name: 'fullName' })
-            @!field.label({ text: 'Full name' })
+          @field.root({ name: 'full_name' })
+            @!field.label({ text: 'Nom complet' })
             @!input.control()
             @!field.error()
           @end

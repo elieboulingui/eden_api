@@ -8,7 +8,7 @@ export type ScannedRoutes = {
     'new_account.create': { paramsTuple?: []; params?: {} }
     'new_account.stores': { paramsTuple?: []; params?: {} }
     'session.create': { paramsTuple?: []; params?: {} }
-    'session.stores': { paramsTuple?: []; params?: {} }
+    'session.store': { paramsTuple?: []; params?: {} }
     'dashboard.admin': { paramsTuple?: []; params?: {} }
     'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
@@ -158,7 +158,7 @@ export type ScannedRoutes = {
   }
   POST: {
     'new_account.stores': { paramsTuple?: []; params?: {} }
-    'session.stores': { paramsTuple?: []; params?: {} }
+    'session.store': { paramsTuple?: []; params?: {} }
     'pubs.create_pub': { paramsTuple?: []; params?: {} }
     'merchant_dashboard.give_change': { paramsTuple?: []; params?: {} }
     'merchant_dashboard.create_product': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
