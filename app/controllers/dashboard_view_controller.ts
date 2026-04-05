@@ -2,6 +2,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import Category from '#models/categories'
+import Coupon from '#models/coupon'
 import Product from '#models/Product'
 import User from '#models/user'
 
@@ -236,6 +237,134 @@ export default class DashboardViewController {
       followUps,
       upcomingDeliveries,
       todayLabel: startOfDay.toFormat('dd LLL yyyy'),
+    })
+  }
+
+  public async manager({ view }: HttpContext) {
+    const [
+      preparing,
+      blocked,
+      delayed,
+      shippingRegions,
+      priorityOrders,
+    ] = await Promise.all([
+      Order.query()
+        .whereIn('status', ['pending', 'processing'])
+        .count('* as total') as unknown as CountRow[],
+      Order.query()
+        .where('status', 'processing')
+        .count('* as total') as unknown as CountRow[],
+      Order.query()
+        .where('status', 'shipped')
+        .where('estimated_delivery', '<', DateTime.local().minus({ hours: 1 }).toISO())
+        .count('* as total') as unknown as CountRow[],
+      Order.query()
+        .select('shipping_carrier')
+        .selectRaw('count(*) as total')
+        .groupBy('shipping_carrier')
+        .orderBy('total', 'desc')
+        .limit(4)
+        .catch(() => [] as Array<{ shipping_carrier: string | null; total: number }>),
+      Order.query()
+        .whereIn('status', ['pending', 'processing'])
+        .orderBy('created_at', 'desc')
+        .limit(5),
+    ])
+
+    const managerStats = [
+      {
+        title: 'Commandes en cours',
+        value: formatNumber(toNumber(preparing[0]?.total)),
+        detail: 'Payées + à préparer',
+      },
+      {
+        title: 'Commandes bloquées',
+        value: formatNumber(toNumber(blocked[0]?.total)),
+        detail: 'Validation paiement interne',
+      },
+      {
+        title: 'Livraisons retardées',
+        value: formatNumber(toNumber(delayed[0]?.total)),
+        detail: 'Destination prévue dépassée',
+      },
+    ]
+
+    const regionRows = (shippingRegions as Array<{ shipping_carrier: string | null; total: number }>).map(
+      (row) => ({
+        carrier: row.shipping_carrier ?? 'Transporteur inconnu',
+        total: formatNumber(row.total),
+      })
+    )
+
+    const priorityRows = (priorityOrders as unknown as Order[]).map((order) => ({
+      number: order.order_number,
+      status: (STATUS_META[order.status] ?? DEFAULT_STATUS_META).label,
+      total: formatMoney(order.total),
+      customer: order.customer_name ?? order.customer_email ?? 'Client inconnu',
+    }))
+
+    return view.render('pages/dashboards/manager', {
+      managerStats,
+      regionRows,
+      priorityRows,
+      timestamp: DateTime.local().toFormat('dd LLL yyyy HH:mm'),
+    })
+  }
+
+  public async promotions({ view }: HttpContext) {
+    const [coupons, redemptionRows] = await Promise.all([
+      Coupon.query()
+        .where('status', 'active')
+        .orderBy('created_at', 'desc')
+        .limit(8),
+      Coupon.query()
+        .select('type')
+        .selectRaw('count(*) as total')
+        .groupBy('type')
+        .catch(() => [] as Array<{ type: string; total: number }>),
+    ])
+
+    const promoStats = [
+      {
+        title: 'Codes actifs',
+        value: formatNumber(coupons.length),
+        detail: 'À jour',
+      },
+      {
+        title: 'Usage moyen',
+        value: `${formatNumber(
+          Math.round(coupons.reduce((acc, coupon) => acc + (coupon.used_count ?? 0), 0) / Math.max(coupons.length, 1))
+        )} usages`,
+        detail: 'par code',
+      },
+      {
+        title: 'Valeur moyenne',
+        value: formatMoney(
+          Math.round(
+            coupons.reduce((acc, coupon) => acc + (coupon.discount ?? 0), 0) / Math.max(coupons.length, 1)
+          )
+        ),
+        detail: 'de réduction',
+      },
+    ]
+
+    const couponRows = coupons.map((coupon) => ({
+      code: coupon.code,
+      type: coupon.type,
+      discount: coupon.discount,
+      usage: coupon.used_count ?? 0,
+      status: coupon.status,
+    }))
+
+    const redemptionStats = (redemptionRows as Array<{ type: string; total: number }>).map((row) => ({
+      label: row.type,
+      count: formatNumber(row.total),
+    }))
+
+    return view.render('pages/dashboards/promotions', {
+      promoStats,
+      couponRows,
+      redemptionStats,
     })
   }
 }

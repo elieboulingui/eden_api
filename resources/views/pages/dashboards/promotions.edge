@@ -1,0 +1,63 @@
+@layout()
+  <section class="hero">
+    <p class="text-sm uppercase tracking-[0.3em] text-slate-400">AdminMarket Promotions</p>
+    <h1>Gestion des campagnes & codes promo</h1>
+    <p>Suivez l’utilisation des promotions, ajoutez-en et ajustez-les au fil des campagnes.</p>
+  </section>
+
+  <div class="dashboard">
+    <div class="dashboard-grid">
+      @each(stat in promoStats)
+        <article class="metric-card">
+          <p class="label">{{ stat.title }}</p>
+          <p class="value">{{ stat.value }}</p>
+          <p class="detail">{{ stat.detail }}</p>
+        </article>
+      @end
+    </div>
+
+    <section class="table-card">
+      <header>
+        <h3>Codes actifs</h3>
+        <span>Usage & type</span>
+      </header>
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Type</th>
+            <th>Réduction</th>
+            <th>Utilisations</th>
+            <th>Statut</th>
+          </tr>
+        </thead>
+        <tbody>
+          @each(coupon in couponRows)
+            <tr>
+              <td>{{ coupon.code }}</td>
+              <td>{{ coupon.type }}</td>
+              <td>{{ coupon.discount }}</td>
+              <td>{{ coupon.usage }}</td>
+              <td>{{ coupon.status }}</td>
+            </tr>
+          @else
+            <tr>
+              <td colspan="5" class="text-sm" style="text-align:center;">Aucun coupon actif.</td>
+            </tr>
+          @end
+        </tbody>
+      </table>
+    </section>
+
+    <section class="category-grid">
+      @each(item in redemptionStats)
+        <article class="category-card">
+          <h4>{{ item.label }}</h4>
+          <p class="detail">{{ item.count }} usages</p>
+        </article>
+      @else
+        <p class="text-sm text-slate-500">Pas encore de statistiques.</p>
+      @end
+    </section>
+  </div>
+@end

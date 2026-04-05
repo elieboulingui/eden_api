@@ -33,6 +33,8 @@ router.group(() => {
 router.group(() => {
   router.get('admin', [DashboardViewController, 'admin']).as('dashboard.admin')
   router.get('secretary', [DashboardViewController, 'secretary']).as('dashboard.secretary')
+  router.get('manager', [DashboardViewController, 'manager']).as('dashboard.manager')
+  router.get('promotions', [DashboardViewController, 'promotions']).as('dashboard.promotions')
 })
   .prefix('dashboards')
 

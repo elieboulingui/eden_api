@@ -1,0 +1,72 @@
+@layout()
+  <section class="hero">
+    <p class="text-sm uppercase tracking-[0.3em] text-slate-400">AdminMarket Manager</p>
+    <h1>Pilotage logistique & opérations</h1>
+    <p>Orchestrez les commandes, surveillez les anomalies et gardez le contact avec l’entrepôt.</p>
+  </section>
+
+  <div class="dashboard">
+    <div class="dashboard-grid">
+      @each(stat in managerStats)
+        <article class="metric-card">
+          <p class="label uppercase">{{ stat.title }}</p>
+          <p class="value">{{ stat.value }}</p>
+          <p class="detail">{{ stat.detail }}</p>
+        </article>
+      @end
+    </div>
+
+    <section class="table-card">
+      <header>
+        <h3>Transporteurs actifs</h3>
+        <span>Données par transporteur</span>
+      </header>
+      <table>
+        <thead>
+          <tr>
+            <th>Transporteur</th>
+            <th>Commandes</th>
+          </tr>
+        </thead>
+        <tbody>
+          @each(row in regionRows)
+            <tr>
+              <td>{{ row.carrier }}</td>
+              <td>{{ row.total }}</td>
+            </tr>
+          @else
+            <tr>
+              <td colspan="2" class="text-sm" style="text-align:center;">Aucun transporteur actif.</td>
+            </tr>
+          @end
+        </tbody>
+      </table>
+    </section>
+
+    <section class="list-card">
+      <h3>Commandes prioritaires</h3>
+      @each(order in priorityRows)
+        <div class="delivery-row">
+          <div>
+            <strong>{{ order.number }}</strong>
+            <p class="detail">{{ order.customer }}</p>
+          </div>
+          <div>
+            <p>{{ order.total }}</p>
+            <p class="detail">{{ order.status }}</p>
+          </div>
+        </div>
+      @else
+        <p class="text-sm text-slate-500">Aucune commande prioritaire.</p>
+      @end
+    </section>
+
+    <div class="dashboard-grid">
+      <article class="metric-card">
+        <p class="label">Actualisé le</p>
+        <p class="value">{{ timestamp }}</p>
+        <p class="detail">Sync temps réel</p>
+      </article>
+    </div>
+  </div>
+@end

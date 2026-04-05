@@ -439,3 +439,35 @@ button:hover {
   font-size: 1rem;
   margin-bottom: 0.15rem;
 }
+
+.action-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.action-card {
+  padding: 1.5rem;
+  border-radius: 1.3rem;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: #fff;
+  box-shadow: 0 20px 35px rgba(15, 23, 42, 0.08);
+  transition: transform 0.15s ease, border 0.15s ease;
+  text-decoration: none;
+  color: inherit;
+}
+
+.action-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(37, 99, 235, 0.4);
+}
+
+.action-card h3 {
+  margin-top: 0.5rem;
+  font-size: 1.4rem;
+}
+
+.action-card p {
+  color: var(--gray-7);
+}
