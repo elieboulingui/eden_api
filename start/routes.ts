@@ -94,8 +94,8 @@ router.group(() => {
   router.get('/users/:id', [UsersController, 'show'])
 
   router.get('/products', [ProductsController, 'index'])
-  router.get('/products/:id', [ProductsController, 'show'])
-  router.get('/produits/:id', [ProductsController, 'show'])
+  router.get('/products/:id', [ProductsController, 'show']).as('products.show')
+  router.get('/produits/:id', [ProductsController, 'show']).as('produits.show')
   router.post('/products', [ProductsController, 'store'])
   router.put('/products/:id', [ProductsController, 'update'])
   router.delete('/products/:id', [ProductsController, 'destroy'])
