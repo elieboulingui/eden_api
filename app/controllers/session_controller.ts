@@ -30,6 +30,7 @@ export default class SessionController {
           full_name: user.full_name,
           email: user.email,
           role: user.role,
+          avatar: user.avatar,
           phone: user.phone,
           address: user.address,
           created_at: user.created_at,
