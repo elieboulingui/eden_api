@@ -20,7 +20,7 @@ export default class SessionController {
   async stores({ request, auth, response, session }: HttpContext) {
     const { email, password } = request.all()
 
-    const wantsJson = request.accepts('json')
+    const wantsJson = request.accepts(['json'])
 
     try {
       const user = await User.verifyCredentials(email, password)
