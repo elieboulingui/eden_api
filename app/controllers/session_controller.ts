@@ -1,6 +1,7 @@
 import User from '#models/user'
 import type { HttpContext } from '@adonisjs/core/http'
 import jwt from 'jsonwebtoken'
+import hash from '@adonisjs/core/services/hash'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'linemarket'
 
@@ -100,6 +101,7 @@ export default class SessionController {
         'full_name',
         'phone',
         'address',
+        'avatar',
       ])
 
       user.merge(data)
@@ -115,6 +117,64 @@ export default class SessionController {
       return response.internalServerError({
         success: false,
         message: 'Erreur update profil',
+        error: error.message,
+      })
+    }
+  }
+
+  /**
+   * 🔐 Modifier le mot de passe
+   */
+  async changePassword({ request, response }: HttpContext) {
+    try {
+      const user = await this.getUserFromToken(request)
+
+      if (!user) {
+        return response.unauthorized({
+          success: false,
+          message: 'Non authentifié',
+        })
+      }
+
+      const { current_password, new_password, new_password_confirmation } = request.only([
+        'current_password',
+        'new_password',
+        'new_password_confirmation',
+      ])
+
+      if (!current_password || !new_password) {
+        return response.badRequest({
+          success: false,
+          message: 'Les champs current_password et new_password sont obligatoires',
+        })
+      }
+
+      if (new_password_confirmation && new_password !== new_password_confirmation) {
+        return response.badRequest({
+          success: false,
+          message: 'La confirmation du nouveau mot de passe ne correspond pas',
+        })
+      }
+
+      const isVerified = await hash.verify(user.password, current_password)
+      if (!isVerified) {
+        return response.badRequest({
+          success: false,
+          message: 'Mot de passe actuel incorrect',
+        })
+      }
+
+      user.password = await hash.make(new_password)
+      await user.save()
+
+      return response.ok({
+        success: true,
+        message: 'Mot de passe mis à jour',
+      })
+    } catch (error: any) {
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors du changement de mot de passe',
         error: error.message,
       })
     }

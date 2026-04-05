@@ -106,6 +106,7 @@ router.group(() => {
   router.post('/login', [SessionController, 'store']).as('session.login')
   router.post('/api/login', [SessionController, 'store']).as('session.api.login')
   router.put('/profile/update', [SessionController, 'update'])
+  router.put('/profile/password', [SessionController, 'changePassword'])
   router.post('/client/logout', [SessionController, 'destroy'])
 
   router.get('/users', [UsersController, 'index'])
