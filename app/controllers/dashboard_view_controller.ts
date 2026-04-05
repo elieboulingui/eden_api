@@ -5,7 +5,6 @@ import Category from '#models/categories'
 import Coupon from '#models/coupon'
 import Product from '#models/Product'
 import User from '#models/user'
-import Database from '@ioc:Adonis/Lucid/Database'
 
 const STATUS_META: Record<
   string,
@@ -261,7 +260,7 @@ export default class DashboardViewController {
         .count('* as total') as unknown as CountRow[],
       Order.query()
         .select('shipping_carrier')
-        .select(Database.rawQuery('count(*) as total'))
+        .count('id as total')
         .groupBy('shipping_carrier')
         .orderBy('total', 'desc')
         .limit(4)
@@ -320,7 +319,7 @@ export default class DashboardViewController {
         .limit(8),
       Coupon.query()
         .select('type')
-        .select(Database.rawQuery('count(*) as total'))
+        .count('id as total')
         .groupBy('type')
         .catch(() => [] as Array<{ type: string; total: number }>),
     ])
