@@ -46,6 +46,9 @@ export default class Coupon extends BaseModel {
   @column()
   declare status: 'active' | 'expired' | 'disabled'
 
+  @column()
+  declare user_id: string  // ← Nouvelle colonne
+
   // Nouveau : tableau d'UUID pour stocker les utilisateurs ayant utilisé le coupon
   @column()
   declare userIds: string[]

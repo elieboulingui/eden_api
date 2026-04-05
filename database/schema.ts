@@ -7,19 +7,469 @@
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
 
-export class UserSchema extends BaseModel {
-  static $columns = ['createdAt', 'email', 'fullName', 'id', 'password', 'updatedAt'] as const
-  $columns = UserSchema.$columns
+export class CartItemSchema extends BaseModel {
+  static $columns = ['cartId', 'createdAt', 'id', 'productId', 'quantity', 'updatedAt'] as const
+  $columns = CartItemSchema.$columns
+  @column()
+  declare cartId: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare productId: string
+  @column()
+  declare quantity: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class CartSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'updatedAt', 'userId'] as const
+  $columns = CartSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string
+}
+
+export class CategorySchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'name', 'productIds', 'slug', 'updatedAt', 'userId'] as const
+  $columns = CategorySchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare name: string
+  @column()
+  declare productIds: any
+  @column()
+  declare slug: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string
+}
+
+export class CouponSchema extends BaseModel {
+  static $columns = ['code', 'createdAt', 'description', 'discount', 'id', 'maximumDiscountAmount', 'minimumOrderAmount', 'productId', 'status', 'type', 'updatedAt', 'usageLimit', 'usedCount', 'userId', 'userIds', 'validFrom', 'validUntil'] as const
+  $columns = CouponSchema.$columns
+  @column()
+  declare code: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare description: string | null
+  @column()
+  declare discount: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare maximumDiscountAmount: string | null
+  @column()
+  declare minimumOrderAmount: string | null
+  @column()
+  declare productId: string | null
+  @column()
+  declare status: string | null
+  @column()
+  declare type: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare usageLimit: number | null
+  @column()
+  declare usedCount: number | null
+  @column()
+  declare userId: string
+  @column()
+  declare userIds: any | null
+  @column.dateTime()
+  declare validFrom: DateTime | null
+  @column.dateTime()
+  declare validUntil: DateTime | null
+}
+
+export class FavoriteSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'productId', 'updatedAt', 'userId'] as const
+  $columns = FavoriteSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare productId: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string
+}
+
+export class MerchantWithdrawalSchema extends BaseModel {
+  static $columns = ['accountName', 'accountNumber', 'amount', 'createdAt', 'id', 'notes', 'operator', 'paymentMethod', 'processedAt', 'processedBy', 'reference', 'status', 'transactionId', 'updatedAt', 'userId'] as const
+  $columns = MerchantWithdrawalSchema.$columns
+  @column()
+  declare accountName: string
+  @column()
+  declare accountNumber: string
+  @column()
+  declare amount: string
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare notes: string | null
+  @column()
+  declare operator: string | null
+  @column()
+  declare paymentMethod: string
+  @column.dateTime()
+  declare processedAt: DateTime | null
+  @column()
+  declare processedBy: string | null
+  @column()
+  declare reference: string
+  @column()
+  declare status: string | null
+  @column()
+  declare transactionId: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare userId: string
+}
+
+export class OrderItemSchema extends BaseModel {
+  static $columns = ['category', 'createdAt', 'id', 'image', 'orderId', 'price', 'productDescription', 'productId', 'productName', 'quantity', 'subtotal', 'updatedAt'] as const
+  $columns = OrderItemSchema.$columns
+  @column()
+  declare category: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare image: string | null
+  @column()
+  declare orderId: string
+  @column()
+  declare price: string
+  @column()
+  declare productDescription: string | null
+  @column()
+  declare productId: string | null
+  @column()
+  declare productName: string
+  @column()
+  declare quantity: number
+  @column()
+  declare subtotal: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class OrderTrackingSchema extends BaseModel {
+  static $columns = ['createdAt', 'description', 'id', 'location', 'orderId', 'status', 'trackedAt', 'updatedAt'] as const
+  $columns = OrderTrackingSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare description: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare location: string | null
+  @column()
+  declare orderId: string
+  @column()
+  declare status: string
+  @column.dateTime()
+  declare trackedAt: DateTime | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class OrderSchema extends BaseModel {
+  static $columns = ['adminNotes', 'billingAddress', 'couponId', 'createdAt', 'customerEmail', 'customerName', 'customerPhone', 'deliveredAt', 'deliveryMethod', 'discountAmount', 'discountCode', 'estimatedDelivery', 'id', 'ipAddress', 'notes', 'orderNumber', 'paymentAmount', 'paymentCheckStatusUrl', 'paymentCompletedAt', 'paymentCurrency', 'paymentErrorMessage', 'paymentInitiatedAt', 'paymentMethod', 'paymentOperatorSimple', 'paymentReferenceId', 'paymentRetryCount', 'paymentStatus', 'paymentTransactionId', 'paymentXSecret', 'paymentXSecretExpiresIn', 'pickedUpAt', 'pickupCode', 'pickupStoreAddress', 'pickupStoreName', 'pickupStorePhone', 'shippingAddress', 'shippingCarrier', 'shippingConfirmedAt', 'shippingCost', 'shippingEstimatedDays', 'shippingTrackingUrl', 'status', 'subtotal', 'total', 'trackingNumber', 'updatedAt', 'userAgent', 'userId'] as const
+  $columns = OrderSchema.$columns
+  @column()
+  declare adminNotes: string | null
+  @column()
+  declare billingAddress: string | null
+  @column()
+  declare couponId: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare customerEmail: string
+  @column()
+  declare customerName: string
+  @column()
+  declare customerPhone: string | null
+  @column.dateTime()
+  declare deliveredAt: DateTime | null
+  @column()
+  declare deliveryMethod: string
+  @column()
+  declare discountAmount: string | null
+  @column()
+  declare discountCode: string | null
+  @column.dateTime()
+  declare estimatedDelivery: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare ipAddress: string | null
+  @column()
+  declare notes: string | null
+  @column()
+  declare orderNumber: string
+  @column()
+  declare paymentAmount: string | null
+  @column()
+  declare paymentCheckStatusUrl: string | null
+  @column.dateTime()
+  declare paymentCompletedAt: DateTime | null
+  @column()
+  declare paymentCurrency: string | null
+  @column()
+  declare paymentErrorMessage: string | null
+  @column.dateTime()
+  declare paymentInitiatedAt: DateTime | null
+  @column()
+  declare paymentMethod: string
+  @column()
+  declare paymentOperatorSimple: string | null
+  @column()
+  declare paymentReferenceId: string | null
+  @column()
+  declare paymentRetryCount: number | null
+  @column()
+  declare paymentStatus: string | null
+  @column()
+  declare paymentTransactionId: string | null
+  @column()
+  declare paymentXSecret: string | null
+  @column()
+  declare paymentXSecretExpiresIn: number | null
+  @column.dateTime()
+  declare pickedUpAt: DateTime | null
+  @column()
+  declare pickupCode: string | null
+  @column()
+  declare pickupStoreAddress: string | null
+  @column()
+  declare pickupStoreName: string | null
+  @column()
+  declare pickupStorePhone: string | null
+  @column()
+  declare shippingAddress: string
+  @column()
+  declare shippingCarrier: string | null
+  @column.dateTime()
+  declare shippingConfirmedAt: DateTime | null
+  @column()
+  declare shippingCost: string | null
+  @column()
+  declare shippingEstimatedDays: number | null
+  @column()
+  declare shippingTrackingUrl: string | null
+  @column()
+  declare status: string | null
+  @column()
+  declare subtotal: string
+  @column()
+  declare total: string
+  @column()
+  declare trackingNumber: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userAgent: string | null
+  @column()
+  declare userId: string
+}
+
+export class ProductSchema extends BaseModel {
+  static $columns = ['category', 'categoryId', 'conservation', 'createdAt', 'description', 'id', 'imageUrl', 'imageUrl', 'isNew', 'isOnSale', 'isNew', 'isOnSale', 'name', 'origin', 'packaging', 'price', 'rating', 'stock', 'updatedAt', 'userId', 'weight'] as const
+  $columns = ProductSchema.$columns
+  @column()
+  declare category: string | null
+  @column()
+  declare categoryId: string | null
+  @column()
+  declare conservation: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare description: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare imageUrl: string | null
+  @column()
+  declare imageUrl: string | null
+  @column()
+  declare isNew: boolean | null
+  @column()
+  declare isOnSale: boolean | null
+  @column()
+  declare isNew: boolean | null
+  @column()
+  declare isOnSale: boolean | null
+  @column()
+  declare name: string
+  @column()
+  declare origin: string | null
+  @column()
+  declare packaging: string | null
+  @column()
+  declare price: string
+  @column()
+  declare rating: number
+  @column()
+  declare stock: number | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string
+  @column()
+  declare weight: string | null
+}
+
+export class PubSchema extends BaseModel {
+  static $columns = ['createdAt', 'deletedAt', 'description', 'displayDuration', 'endDate', 'id', 'imageUrl', 'isActive', 'merchantId', 'name', 'priority', 'startDate', 'targetUrl', 'updatedAt'] as const
+  $columns = PubSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column.dateTime()
+  declare deletedAt: DateTime | null
+  @column()
+  declare description: string
+  @column()
+  declare displayDuration: number
+  @column.dateTime()
+  declare endDate: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare imageUrl: string
+  @column()
+  declare isActive: boolean | null
+  @column()
+  declare merchantId: string | null
+  @column()
+  declare name: string
+  @column()
+  declare priority: number | null
+  @column.dateTime()
+  declare startDate: DateTime | null
+  @column()
+  declare targetUrl: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class ReviewSchema extends BaseModel {
+  static $columns = ['comment', 'createdAt', 'id', 'merchantId', 'productId', 'rating', 'updatedAt', 'userId'] as const
+  $columns = ReviewSchema.$columns
+  @column()
+  declare comment: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare merchantId: string | null
+  @column()
+  declare productId: string
+  @column()
+  declare rating: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string
+}
+
+export class TransactionSchema extends BaseModel {
+  static $columns = ['amount', 'balanceAfter', 'balanceBefore', 'completedAt', 'createdAt', 'description', 'id', 'metadata', 'reference', 'status', 'type', 'updatedAt', 'userId', 'walletId'] as const
+  $columns = TransactionSchema.$columns
+  @column()
+  declare amount: string
+  @column()
+  declare balanceAfter: string
+  @column()
+  declare balanceBefore: string
+  @column.dateTime()
+  declare completedAt: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare description: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare metadata: any | null
+  @column()
+  declare reference: string
+  @column()
+  declare status: string | null
+  @column()
+  declare type: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string | null
+  @column()
+  declare walletId: string | null
+}
+
+export class UserSchema extends BaseModel {
+  static $columns = ['address', 'avatar', 'createdAt', 'email', 'fullName', 'id', 'password', 'phone', 'role', 'updatedAt'] as const
+  $columns = UserSchema.$columns
+  @column()
+  declare address: string | null
+  @column()
+  declare avatar: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
   @column()
   declare email: string
   @column()
   declare fullName: string | null
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
   @column({ serializeAs: null })
   declare password: string
+  @column()
+  declare phone: string | null
+  @column()
+  declare role: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+}
+
+export class WalletSchema extends BaseModel {
+  static $columns = ['balance', 'createdAt', 'currency', 'id', 'status', 'updatedAt', 'userId'] as const
+  $columns = WalletSchema.$columns
+  @column()
+  declare balance: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare currency: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare status: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string | null
 }
