@@ -5,6 +5,7 @@ import Category from '#models/categories'
 import Coupon from '#models/coupon'
 import Product from '#models/Product'
 import User from '#models/user'
+import Database from '@ioc:Adonis/Lucid/Database'
 
 const STATUS_META: Record<
   string,
@@ -260,7 +261,7 @@ export default class DashboardViewController {
         .count('* as total') as unknown as CountRow[],
       Order.query()
         .select('shipping_carrier')
-        .selectRaw('count(*) as total')
+        .select(Database.rawQuery('count(*) as total'))
         .groupBy('shipping_carrier')
         .orderBy('total', 'desc')
         .limit(4)
@@ -319,7 +320,7 @@ export default class DashboardViewController {
         .limit(8),
       Coupon.query()
         .select('type')
-        .selectRaw('count(*) as total')
+        .select(Database.rawQuery('count(*) as total'))
         .groupBy('type')
         .catch(() => [] as Array<{ type: string; total: number }>),
     ])
@@ -333,7 +334,9 @@ export default class DashboardViewController {
       {
         title: 'Usage moyen',
         value: `${formatNumber(
-          Math.round(coupons.reduce((acc, coupon) => acc + (coupon.used_count ?? 0), 0) / Math.max(coupons.length, 1))
+      Math.round(
+        coupons.reduce((acc: number, coupon: Coupon) => acc + (coupon.used_count ?? 0), 0) / Math.max(coupons.length, 1)
+      )
         )} usages`,
         detail: 'par code',
       },
@@ -341,7 +344,7 @@ export default class DashboardViewController {
         title: 'Valeur moyenne',
         value: formatMoney(
           Math.round(
-            coupons.reduce((acc, coupon) => acc + (coupon.discount ?? 0), 0) / Math.max(coupons.length, 1)
+          coupons.reduce((acc: number, coupon: Coupon) => acc + (coupon.discount ?? 0), 0) / Math.max(coupons.length, 1)
           )
         ),
         detail: 'de réduction',
