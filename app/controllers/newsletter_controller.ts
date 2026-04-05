@@ -1,11 +1,17 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import NewsletterSubscriber from '#models/newsletter_subscriber'
-import { newsletterSubscriptionSchema } from '#validators/newsletter_subscription'
+import {
+  newsletterSubscriptionSchema,
+  newsletterSubscriptionMessages,
+} from '#validators/newsletter_subscription'
 
 export default class NewsletterController {
   public async store({ request, response }: HttpContext) {
     try {
-      const payload = await request.validate({ schema: newsletterSubscriptionSchema })
+      const payload = await request.validate({
+        schema: newsletterSubscriptionSchema,
+        messages: newsletterSubscriptionMessages,
+      })
       const subscriber = await NewsletterSubscriber.create(payload)
       return response.created({
         success: true,
