@@ -207,7 +207,7 @@ export default class MerchantDashboardController {
       // Vérifier si la table merchant_withdrawals existe
       const hasWithdrawalsTable = await Database.rawQuery(`
         SELECT EXISTS (
-          SELECT FROM information_schema.tables 
+          SELECT FROM information_schema.tables
           WHERE table_name = 'merchant_withdrawals'
         )
       `)
@@ -314,7 +314,7 @@ export default class MerchantDashboardController {
       // Vérifier si la table merchant_withdrawals existe
       const hasWithdrawalsTable = await Database.rawQuery(`
         SELECT EXISTS (
-          SELECT FROM information_schema.tables 
+          SELECT FROM information_schema.tables
           WHERE table_name = 'merchant_withdrawals'
         )
       `)
@@ -1156,36 +1156,47 @@ export default class MerchantDashboardController {
     }
   }
 
+
   async createCoupon({ params, request, response }: HttpContext) {
-    try {
-      const { userId } = params
-      const { code, discount, type, validUntil, usageLimit, productId } = request.only([
-        'code', 'discount', 'type', 'validUntil', 'usageLimit', 'productId'
-      ])
+  try {
+    const { userId } = params
+    const { code, discount, type, validUntil, usageLimit, productId } = request.only([
+      'code', 'discount', 'type', 'validUntil', 'usageLimit', 'productId'
+    ])
 
-      const user = await User.findBy('id', userId)
+    const user = await User.findBy('id', userId)
 
-      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-        return response.forbidden({ success: false, message: 'Non autorisé' })
-      }
-
-      const coupon = await Coupon.create({
-        code: code.toUpperCase(),
-        discount: parseFloat(discount),
-        type,
-        valid_until: validUntil ? DateTime.fromJSDate(new Date(validUntil)) : null,
-        usage_limit: parseInt(usageLimit) || 1,
-        used_count: 0,
-        userIds: [user.id],
-        product_id: productId || null,
-        status: 'active'
-      })
-
-      return response.created({ success: true, data: coupon, message: 'Code promo créé' })
-    } catch (error: any) {
-      return response.internalServerError({ success: false, message: error.message })
+    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+      return response.forbidden({ success: false, message: 'Non autorisé' })
     }
+
+    // ✅ CORRECTION : Utiliser user_id au lieu de userIds
+    const coupon = await Coupon.create({
+      code: code.toUpperCase(),
+      discount: parseFloat(discount),
+      type: type,
+      valid_until: validUntil ? DateTime.fromJSDate(new Date(validUntil)) : null,
+      usage_limit: usageLimit ? parseInt(usageLimit) : null,
+      used_count: 0,
+      user_id: user.id,  // ✅ CHANGÉ: userIds → user_id
+      // userIds: [user.id],  // ❌ À SUPPRIMER ou garder si la colonne existe
+      product_id: productId || null,
+      status: 'active'
+    })
+
+    return response.created({
+      success: true,
+      data: coupon,
+      message: 'Code promo créé'
+    })
+  } catch (error: any) {
+    console.error('Erreur createCoupon:', error)
+    return response.internalServerError({
+      success: false,
+      message: error.message
+    })
   }
+}
 
   async updateCoupon({ params, request, response }: HttpContext) {
     try {

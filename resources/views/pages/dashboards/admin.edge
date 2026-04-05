@@ -1,114 +1,110 @@
-﻿@layout()
-  <section class="space-y-3">
-    <p class="text-xs uppercase tracking-[0.3em] text-slate-400">AdminMarket · back office</p>
-    <h1 class="text-4xl font-bold text-slate-900 sm:text-5xl">Tableau de bord administrateur</h1>
-    <p class="max-w-3xl text-base text-slate-500">
+@layout()
+  <section class="hero">
+    <p class="text-sm uppercase tracking-[0.3em] text-slate-400">AdminMarket · back office</p>
+    <h1>Tableau de bord administrateur</h1>
+    <p>
       Suivez la santé globale de la plateforme : utilisateurs, marchands, volume de commandes et tendances produits.
     </p>
   </section>
 
-  <section class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    @each(stat in adminStats)
-      <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div class="text-xs uppercase tracking-[0.3em] text-slate-400">{{ stat.title }}</div>
-        <div class="mt-3 flex items-baseline justify-between gap-4">
-          <p class="text-3xl font-semibold text-slate-900">{{ stat.display }}</p>
-        </div>
-        <p class="mt-2 text-sm text-slate-500">{{ stat.detail }}</p>
-      </article>
-    @else
-      <p class="text-sm text-slate-500">Aucune donnée de performance disponible.</p>
-    @end
-  </section>
-
-  <section class="mt-10 grid gap-6 lg:grid-cols-2">
-    <article class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm uppercase tracking-[0.3em] text-slate-400">Commandes</p>
-          <h2 class="text-lg font-semibold text-slate-900">Répartition par statut</h2>
-        </div>
-        <p class="text-sm text-slate-500">{{ totalOrders ?? '0' }} commandes</p>
-      </div>
-      <div class="mt-6 space-y-5">
-        @each(segment in statusBreakdown)
-          <div>
-            <div class="flex items-center justify-between">
-              <p class="text-sm font-semibold text-slate-900">{{ segment.name }}</p>
-              <span class="text-xs font-medium text-slate-500">{{ segment.value }} commandes</span>
-            </div>
-            <div class="mt-2 h-2 w-full rounded-full bg-slate-100">
-              <div class="h-2 rounded-full {{ segment.barClass }}" style="width: {{ segment.percent }}%"></div>
-            </div>
-          </div>
-        @else
-          <p class="text-sm text-slate-500">Aucune commande enregistrée.</p>
-        @end
-      </div>
-    </article>
-
-    <article class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm uppercase tracking-[0.3em] text-slate-400">Flux récent</p>
-          <h2 class="text-lg font-semibold text-slate-900">Dernières commandes</h2>
-        </div>
-        <span class="text-xs text-slate-500">mise à jour en continu</span>
-      </div>
-      <div class="mt-6 space-y-4">
-        <table class="w-full text-left text-sm text-slate-500">
-          <thead>
-            <tr>
-              <th class="pb-2 font-semibold text-slate-800">Commande</th>
-              <th class="pb-2 font-semibold text-slate-800">Client</th>
-              <th class="pb-2 font-semibold text-slate-800">Montant</th>
-              <th class="pb-2 font-semibold text-slate-800">Statut</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            @each(order in recentOrders)
-              <tr>
-                <td class="py-3 font-semibold text-slate-900">{{ order.number }}</td>
-                <td class="py-3">{{ order.customer }}</td>
-                <td class="py-3">{{ order.total }}</td>
-                <td class="py-3">
-                  <span class="text-xs font-semibold uppercase tracking-[0.3em] {{ order.statusTone }}">
-                    {{ order.statusLabel }}
-                  </span>
-                </td>
-              </tr>
-            @else
-              <tr>
-                <td colspan="4" class="py-3 text-sm text-slate-500">Pas encore de commandes.</td>
-              </tr>
-            @end
-          </tbody>
-        </table>
-      </div>
-    </article>
-  </section>
-
-  <section class="mt-10 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <p class="text-sm uppercase tracking-[0.3em] text-slate-400">Catalogue</p>
-        <h2 class="text-lg font-semibold text-slate-900">Catégories stratégiques</h2>
-      </div>
-      <p class="text-sm text-slate-500">Top par nombre de produits</p>
+  <div class="dashboard">
+    <div class="dashboard-hero">
+      <p class="text-sm uppercase tracking-[0.3em] text-slate-400">Vue d’ensemble</p>
     </div>
-    <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+    <div class="dashboard-grid">
+      @each(stat in adminStats)
+        <article class="metric-card">
+          <p class="label">{{ stat.title }}</p>
+          <p class="value">{{ stat.display }}</p>
+          <p class="detail">{{ stat.detail }}</p>
+        </article>
+      @else
+        <p class="text-sm text-slate-500">Aucune donnée de performance disponible.</p>
+      @end
+    </div>
+
+    <section class="table-card">
+      <header>
+        <h3>Répartition par statut</h3>
+        <span>{{ totalOrders ?? '0' }} commandes suivies</span>
+      </header>
+      <table>
+        <thead>
+          <tr>
+            <th>Statut</th>
+            <th>Commandes</th>
+            <th>Progression</th>
+          </tr>
+        </thead>
+        <tbody>
+          @each(segment in statusBreakdown)
+            <tr>
+              <td>
+                <span class="status-pill"><span>{{ segment.name }}</span></span>
+              </td>
+              <td>{{ segment.value }}</td>
+              <td>
+                <div class="status-bar">
+                  <div class="progress" style="width: {{ segment.percent }}%"></div>
+                </div>
+              </td>
+            </tr>
+          @else
+            <tr>
+              <td colspan="3" class="text-sm" style="padding: 1rem; text-align: center;">
+                Aucune commande enregistrée.
+              </td>
+            </tr>
+          @end
+        </tbody>
+      </table>
+    </section>
+
+    <section class="table-card">
+      <header>
+        <h3>Dernières commandes</h3>
+        <span>flux récent</span>
+      </header>
+      <table>
+        <thead>
+          <tr>
+            <th>Commande</th>
+            <th>Client</th>
+            <th>Montant</th>
+            <th>Statut</th>
+          </tr>
+        </thead>
+        <tbody>
+          @each(order in recentOrders)
+            <tr>
+              <td>{{ order.number }}</td>
+              <td>{{ order.customer }}</td>
+              <td>{{ order.total }}</td>
+              <td>
+                <span class="status-pill"><span>{{ order.statusLabel }}</span></span>
+              </td>
+            </tr>
+          @else
+            <tr>
+              <td colspan="4" class="text-sm" style="text-align: center;">Pas encore de commandes.</td>
+            </tr>
+          @end
+        </tbody>
+      </table>
+    </section>
+
+    <section class="category-grid">
       @each(category in topCategories)
-        <article class="space-y-2 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-          <div class="flex items-center justify-between">
-            <p class="text-base font-semibold text-slate-900">{{ category.name }}</p>
-            <span class="text-xs font-semibold uppercase {{ category.statusTone }}">{{ category.statusLabel }}</span>
-          </div>
-          <p class="text-sm text-slate-500">{{ category.description }}</p>
-          <p class="text-sm font-semibold text-slate-900">{{ category.products }} produits</p>
+        <article class="category-card">
+          <h4>{{ category.name }}</h4>
+          <p>{{ category.description }}</p>
+          <p class="badge">{{ category.statusLabel }}</p>
+          <p class="text-sm" style="font-weight: 600;">{{ category.products }} produits</p>
         </article>
       @else
         <p class="text-sm text-slate-500">Aucune catégorie encore disponible.</p>
       @end
-    </div>
-  </section>
+    </section>
+  </div>
 @end
