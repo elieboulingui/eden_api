@@ -20,12 +20,33 @@ export default class SessionController {
   async stores({ request, auth, response, session }: HttpContext) {
     const { email, password } = request.all()
 
+    const wantsJson = request.accepts('json')
+
     try {
       const user = await User.verifyCredentials(email, password)
       await auth.use('web').login(user)
+      if (wantsJson) {
+        return response.ok({
+          success: true,
+          message: 'Connexion réussie',
+          user: {
+            id: user.id,
+            full_name: user.full_name,
+            email: user.email,
+          },
+        })
+      }
+
       return response.redirect().toRoute('home')
     } catch (error) {
       session.flash('error', 'Identifiants invalides')
+      if (wantsJson) {
+        return response.unauthorized({
+          success: false,
+          message: 'Identifiants invalides',
+        })
+      }
+
       return response.redirect().back()
     }
   }
