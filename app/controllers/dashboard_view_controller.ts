@@ -1,0 +1,222 @@
+﻿import { DateTime } from 'luxon'
+import type { HttpContext } from '@adonisjs/core/http'
+import Order from '#models/Order'
+import Category from '#models/categories'
+import Product from '#models/Product'
+import User from '#models/user'
+
+const STATUS_META: Record<
+  string,
+  { label: string; barClass: string; toneClass: string }
+> = {
+  pending: { label: 'En attente', barClass: 'bg-amber-500', toneClass: 'text-amber-600' },
+  processing: { label: 'En préparation', barClass: 'bg-sky-500', toneClass: 'text-sky-600' },
+  shipped: { label: 'Expédiées', barClass: 'bg-cyan-500', toneClass: 'text-cyan-600' },
+  delivered: { label: 'Livrées', barClass: 'bg-emerald-500', toneClass: 'text-emerald-600' },
+  cancelled: { label: 'Annulées', barClass: 'bg-rose-500', toneClass: 'text-rose-600' },
+  pending_payment: { label: 'Paiement en attente', barClass: 'bg-amber-700', toneClass: 'text-amber-700' },
+  paid: { label: 'Paiement validé', barClass: 'bg-lime-500', toneClass: 'text-lime-600' },
+  payment_failed: { label: 'Paiement refusé', barClass: 'bg-rose-600', toneClass: 'text-rose-600' },
+}
+
+const DEFAULT_STATUS_META = { label: 'Statut', barClass: 'bg-slate-500', toneClass: 'text-slate-500' }
+
+const numberFormatter = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
+
+const formatNumber = (value: number) => numberFormatter.format(Math.round(value ?? 0))
+
+const formatMoney = (value: number) => `${numberFormatter.format(Math.round(value ?? 0))} FCFA`
+
+const toNumber = (value: number | string | bigint | null | undefined) => Number(value ?? 0)
+
+const shortAddress = (value: string | null | undefined) => {
+  if (!value) {
+    return 'Adresse inconnue'
+  }
+  return value.split(',')[0]
+}
+
+export default class DashboardViewController {
+  public async admin({ view }: HttpContext) {
+    const [totalUsersRows, merchantRows, totalOrdersRows, totalRevenueRows, productsRows] = await Promise.all([
+      User.query().count('* as total'),
+      User.query().whereIn('role', ['marchant', 'merchant']).count('* as total'),
+      Order.query().count('* as total'),
+      Order.query().sum('total as revenue'),
+      Product.query().count('* as total'),
+    ])
+
+    const totalUsers = toNumber(totalUsersRows[0]?.total)
+    const activeMerchants = toNumber(merchantRows[0]?.total)
+    const totalOrders = toNumber(totalOrdersRows[0]?.total)
+    const totalRevenue = toNumber(totalRevenueRows[0]?.revenue)
+    const totalProducts = toNumber(productsRows[0]?.total)
+
+    const adminStats = [
+      {
+        title: 'Utilisateurs inscrits',
+        display: formatNumber(totalUsers),
+        detail: 'Tous les rôles confondus',
+      },
+      {
+        title: 'Marchands actifs',
+        display: formatNumber(activeMerchants),
+        detail: 'Boutiques vérifiées',
+      },
+      {
+        title: 'Commandes suivies',
+        display: formatNumber(totalOrders),
+        detail: 'Données historiques',
+      },
+      {
+        title: 'Chiffre d’affaires',
+        display: formatMoney(totalRevenue),
+        detail: 'Toutes les devises converties en FCFA',
+      },
+      {
+        title: 'Produits référencés',
+        display: formatNumber(totalProducts),
+        detail: 'Offre catalogue',
+      },
+    ]
+
+    const statusRows = await Order.query()
+      .select('status')
+      .count('* as total')
+      .groupBy('status')
+
+    const statusBreakdown = statusRows.map((row) => {
+      const meta = STATUS_META[row.status] ?? DEFAULT_STATUS_META
+      const count = toNumber(row.total)
+      const percent = totalOrders ? Math.min(100, Math.round((count / totalOrders) * 100)) : 0
+      return {
+        name: meta.label,
+        value: count,
+        percent,
+        barClass: meta.barClass,
+      }
+    })
+
+    const recentOrdersRaw = await Order.query().orderBy('created_at', 'desc').limit(6)
+    const recentOrders = recentOrdersRaw.map((order) => {
+      const meta = STATUS_META[order.status] ?? DEFAULT_STATUS_META
+      return {
+        number: order.order_number,
+        customer: order.customer_name ?? order.customer_email ?? 'Client inconnu',
+        total: formatMoney(order.total),
+        statusLabel: meta.label,
+        statusTone: meta.toneClass,
+        createdAt: order.created_at?.toFormat('dd LLL yyyy') ?? 'Date inconnue',
+        eta: order.estimated_delivery?.toFormat('dd LLL yyyy') ?? 'À planifier',
+      }
+    })
+
+    const categoryCounts = await Product.query()
+      .select('category_id')
+      .count('* as total')
+      .whereNotNull('category_id')
+      .groupBy('category_id')
+      .orderBy('total', 'desc')
+      .limit(4)
+
+    const topCategories = await Promise.all(
+      categoryCounts.map(async (row) => {
+        const category = row.category_id ? await Category.find(row.category_id) : null
+
+        return {
+          name: category?.name ?? 'Catégorie non référencée',
+          description: category?.description ?? 'sans description spécifique',
+          products: formatNumber(toNumber(row.total)),
+          statusTone: category?.is_active ? 'text-emerald-600' : 'text-slate-500',
+          statusLabel: category?.is_active ? 'Active' : 'En pause',
+        }
+      })
+    )
+
+    return view.render('pages/dashboards/admin', {
+      adminStats,
+      statusBreakdown,
+      recentOrders,
+      topCategories,
+      totalOrders,
+    })
+  }
+
+  public async secretary({ view }: HttpContext) {
+    const now = DateTime.local()
+    const startOfDay = now.startOf('day')
+    const endOfDay = startOfDay.plus({ days: 1 })
+
+    const [packagingRows, paymentRows, dailyDeliveryRows] = await Promise.all([
+      Order.query()
+        .whereIn('status', ['pending', 'processing'])
+        .count('* as total'),
+      Order.query()
+        .whereIn('status', ['pending_payment', 'payment_failed'])
+        .count('* as total'),
+      Order.query()
+        .whereNotNull('estimated_delivery')
+        .where('estimated_delivery', '>=', startOfDay.toISO({ includeOffset: false }))
+        .where('estimated_delivery', '<', endOfDay.toISO({ includeOffset: false }))
+        .count('* as total'),
+    ])
+
+    const queueStats = [
+      {
+        title: 'Commandes à préparer',
+        value: formatNumber(toNumber(packagingRows[0]?.total)),
+        detail: 'Pending + en préparation',
+      },
+      {
+        title: 'Livraisons prévues aujourd’hui',
+        value: formatNumber(toNumber(dailyDeliveryRows[0]?.total)),
+        detail: `Planifiées pour le ${startOfDay.toFormat('dd LLL yyyy')}`,
+      },
+      {
+        title: 'Paiements à relancer',
+        value: formatNumber(toNumber(paymentRows[0]?.total)),
+        detail: 'Reliquat ou échec',
+      },
+    ]
+
+    const followUpOrders = await Order.query()
+      .whereIn('status', ['pending', 'pending_payment'])
+      .orderBy('created_at', 'desc')
+      .limit(6)
+
+    const followUps = followUpOrders.map((order) => {
+      const meta = STATUS_META[order.status] ?? DEFAULT_STATUS_META
+      return {
+        number: order.order_number,
+        customer: order.customer_name ?? order.customer_email ?? 'Client inconnu',
+        statusLabel: meta.label,
+        statusTone: meta.toneClass,
+        due: order.estimated_delivery?.toFormat('dd LLL') ?? 'Pas de date',
+        remark: order.admin_notes ?? 'Vérifier le paiement ou la disponibilité',
+        total: formatMoney(order.total),
+      }
+    })
+
+    const upcomingDeliveriesRaw = await Order.query()
+      .whereNotNull('estimated_delivery')
+      .whereNotNull('shipping_carrier')
+      .where('status', '!=', 'cancelled')
+      .orderBy('estimated_delivery', 'asc')
+      .limit(4)
+
+    const upcomingDeliveries = upcomingDeliveriesRaw.map((order) => ({
+      number: order.order_number,
+      carrier: order.shipping_carrier ?? 'Transport non précisé',
+      eta: order.estimated_delivery?.toFormat('dd LLL HH:mm') ?? 'À confirmer',
+      status: (STATUS_META[order.status] ?? DEFAULT_STATUS_META).label,
+      destination: shortAddress(order.shipping_address),
+    }))
+
+    return view.render('pages/dashboards/secretary', {
+      queueStats,
+      followUps,
+      upcomingDeliveries,
+      todayLabel: startOfDay.toFormat('dd LLL yyyy'),
+    })
+  }
+}

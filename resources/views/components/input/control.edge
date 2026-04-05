@@ -3,10 +3,31 @@
   ? $context.oldValue || $props.get('value') || ''
   : $props.get('value') || ''
 )
-@let(classes = [])
+@let(userClass = $props.get('class'))
+@let(baseClasses = [
+  'block',
+  'w-full',
+  'rounded-xl',
+  'border',
+  'border-slate-200',
+  'bg-white',
+  'px-3',
+  'py-3',
+  'text-sm',
+  'text-slate-900',
+  'transition',
+  'duration-150',
+  'placeholder:text-slate-400',
+  'focus:border-slate-900',
+  'focus:outline-none',
+  'focus:ring-2',
+  'focus:ring-slate-900/10',
+  $context.hasErrors ? 'border-rose-500 text-rose-600 focus:ring-rose-500/30' : '',
+].filter(Boolean))
+@let(classes = userClass ? [...baseClasses, userClass] : baseClasses)
 
 <input {{ $props
-  .except(['value'])
+  .except(['value', 'class'])
   .merge({
     name: $context.name,
     id: $context.id,

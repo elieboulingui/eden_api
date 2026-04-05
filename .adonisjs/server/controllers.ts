@@ -9,6 +9,7 @@ export const controllers = {
   Cart: () => import('#controllers/CartController'),
   Categories: () => import('#controllers/categories_controller'),
   Coupons: () => import('#controllers/coupons_controller'),
+  DashboardView: () => import('#controllers/dashboard_view_controller'),
   Favorites: () => import('#controllers/favorites_controller'),
   MerchantDashboard: () => import('#controllers/merchant_dashboard_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),

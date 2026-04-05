@@ -3,17 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>
-      AdonisJS - A fully featured web framework for Node.js
-    </title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <title>AdminMarket</title>
+    <link rel="stylesheet" href="/css/app.css" />
     @stack('dumper')
   </head>
-  <body>
-    @include('partials/header')
-    <main>
-      @include('partials/flash_alerts')
-      {{{ await $slots.main() }}}
-    </main>
+  <body class="flex min-h-screen flex-col bg-slate-50 text-slate-900 antialiased">
+    <div class="flex min-h-screen flex-1 flex-col">
+      @include('partials/header')
+      <main class="flex-1">
+        <div class="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+          @include('partials/flash_alerts')
+          {{{ await $slots.main() }}}
+        </div>
+      </main>
+    </div>
   </body>
 </html>

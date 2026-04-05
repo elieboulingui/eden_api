@@ -11,6 +11,7 @@ import CartController from '#controllers/CartController'
 import { middleware } from '#start/kernel'
 import FavoritesController from '#controllers/favorites_controller'
 import OrdersController from '#controllers/OrdersController'
+import DashboardViewController from '#controllers/dashboard_view_controller'
 const CouponsController = () => import('#controllers/coupons_controller')
 const OrderTrackingController = () => import('#controllers/order_trackings_controller')
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
@@ -28,6 +29,13 @@ router.group(() => {
   router.get('login', [SessionViewController, 'create']).as('session.create')
   router.post('login', [SessionViewController, 'stores'])
 }).use(middleware.guest())
+
+router.group(() => {
+  router.get('admin', [DashboardViewController, 'admin']).as('dashboard.admin')
+  router.get('secretary', [DashboardViewController, 'secretary']).as('dashboard.secretary')
+})
+  .prefix('dashboards')
+
 
 // Routes API
 router.group(() => {

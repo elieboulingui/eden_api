@@ -9,6 +9,8 @@ export type ScannedRoutes = {
     'new_account.stores': { paramsTuple?: []; params?: {} }
     'session.create': { paramsTuple?: []; params?: {} }
     'session.stores': { paramsTuple?: []; params?: {} }
+    'dashboard.admin': { paramsTuple?: []; params?: {} }
+    'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
     'pubs.get_all_pubs': { paramsTuple?: []; params?: {} }
@@ -83,6 +85,8 @@ export type ScannedRoutes = {
     'home': { paramsTuple?: []; params?: {} }
     'new_account.create': { paramsTuple?: []; params?: {} }
     'session.create': { paramsTuple?: []; params?: {} }
+    'dashboard.admin': { paramsTuple?: []; params?: {} }
+    'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
     'pubs.get_all_pubs': { paramsTuple?: []; params?: {} }
@@ -117,6 +121,8 @@ export type ScannedRoutes = {
     'home': { paramsTuple?: []; params?: {} }
     'new_account.create': { paramsTuple?: []; params?: {} }
     'session.create': { paramsTuple?: []; params?: {} }
+    'dashboard.admin': { paramsTuple?: []; params?: {} }
+    'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
     'pubs.get_all_pubs': { paramsTuple?: []; params?: {} }
