@@ -1,12 +1,25 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import NewsletterSubscriber from '#models/newsletter_subscriber'
-import { newsletterSubscriptionSchema } from '#validators/newsletter_subscription'
 
 export default class NewsletterController {
   public async store({ request, response }: HttpContext) {
     try {
-      const payload = await newsletterSubscriptionSchema.parseAsync(request.all())
-      const { email } = payload as { email: string }
+      const email = request.input('email')?.toString().trim().toLowerCase()
+
+      if (!email) {
+        return response.badRequest({
+          success: false,
+          message: 'L’adresse email est requise',
+        })
+      }
+
+      const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/
+      if (!emailRegex.test(email)) {
+        return response.badRequest({
+          success: false,
+          message: 'Veuillez fournir une adresse email valide',
+        })
+      }
 
       const existing = await NewsletterSubscriber.findBy('email', email)
       if (existing) {
