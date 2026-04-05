@@ -1176,7 +1176,7 @@ export default class MerchantDashboardController {
       discount: parseFloat(discount),
       type: type,
       valid_until: validUntil ? DateTime.fromJSDate(new Date(validUntil)) : null,
-      usage_limit: usageLimit ? parseInt(usageLimit) : null,
+      usage_limit: usageLimit ? parseInt(usageLimit) : undefined,
       used_count: 0,
       user_id: user.id,  // ✅ CHANGÉ: userIds → user_id
       // userIds: [user.id],  // ❌ À SUPPRIMER ou garder si la colonne existe
