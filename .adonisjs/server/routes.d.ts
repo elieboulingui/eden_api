@@ -94,6 +94,7 @@ export type ScannedRoutes = {
     'order_tracking.get_tracking_events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'order_tracking.add_tracking_event': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'order_tracking.update_order_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'newsletter.subscribe': { paramsTuple?: []; params?: {} }
   }
   GET: {
     'home': { paramsTuple?: []; params?: {} }
@@ -211,6 +212,7 @@ export type ScannedRoutes = {
     'orders.cancel': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'order_tracking.search': { paramsTuple?: []; params?: {} }
     'order_tracking.add_tracking_event': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'newsletter.subscribe': { paramsTuple?: []; params?: {} }
   }
   PUT: {
     'promotions.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }

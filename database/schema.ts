@@ -145,6 +145,17 @@ export class MerchantWithdrawalSchema extends BaseModel {
   declare userId: string
 }
 
+export class NewsletterSubscriberSchema extends BaseModel {
+  static $columns = ['createdAt', 'email', 'id'] as const
+  $columns = NewsletterSubscriberSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare email: string
+  @column({ isPrimary: true })
+  declare id: string
+}
+
 export class OrderItemSchema extends BaseModel {
   static $columns = ['category', 'createdAt', 'id', 'image', 'orderId', 'price', 'productDescription', 'productId', 'productName', 'quantity', 'subtotal', 'updatedAt'] as const
   $columns = OrderItemSchema.$columns
@@ -313,6 +324,12 @@ export class ProductSchema extends BaseModel {
   declare id: string
   @column()
   declare imageUrl: string | null
+  @column()
+  declare imageUrl: string | null
+  @column()
+  declare isNew: boolean | null
+  @column()
+  declare isOnSale: boolean | null
   @column()
   declare isNew: boolean | null
   @column()
