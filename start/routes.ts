@@ -85,6 +85,8 @@ router.group(() => {
 
   router.post('/client/register', [NewAccountController, 'store'])
   router.post('/client/login', [SessionController, 'store']).as('session.client.store')
+  router.post('/login', [SessionController, 'store']).as('session.login')
+  router.post('/api/login', [SessionController, 'store'])
   router.put('/profile/update', [SessionController, 'update'])
   router.post('/client/logout', [SessionController, 'destroy'])
 
@@ -93,6 +95,7 @@ router.group(() => {
 
   router.get('/products', [ProductsController, 'index'])
   router.get('/products/:id', [ProductsController, 'show'])
+  router.get('/produits/:id', [ProductsController, 'show'])
   router.post('/products', [ProductsController, 'store'])
   router.put('/products/:id', [ProductsController, 'update'])
   router.delete('/products/:id', [ProductsController, 'destroy'])
