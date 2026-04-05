@@ -41,21 +41,25 @@ const shortAddress = (value: string | null | undefined) => {
 export default class DashboardViewController {
   public async admin({ view }: HttpContext) {
     const [
-      totalUsers,
-      activeMerchants,
-      totalOrders,
+      totalUsersRows,
+      merchantRows,
+      totalOrdersRows,
       totalRevenueRows,
-      totalProducts,
+      productsRows,
       latestUsers,
     ] = await Promise.all([
-      User.query().getCount(),
-      User.query().whereIn('role', ['marchant', 'merchant']).getCount(),
-      Order.query().getCount(),
+      User.query().count('* as total') as unknown as CountRow[],
+      User.query().whereIn('role', ['marchant', 'merchant']).count('* as total') as unknown as CountRow[],
+      Order.query().count('* as total') as unknown as CountRow[],
       Order.query().sum('total as revenue') as unknown as Array<{ revenue: number }>,
-      Product.query().getCount(),
-      User.query().orderBy('created_at', 'desc').limit(6),
+      Product.query().count('* as total') as unknown as CountRow[],
+      User.query().orderBy('created_at', 'desc').limit(6) as unknown as User[],
     ])
 
+    const totalUsers = toNumber(totalUsersRows[0]?.total)
+    const activeMerchants = toNumber(merchantRows[0]?.total)
+    const totalOrders = toNumber(totalOrdersRows[0]?.total)
+    const totalProducts = toNumber(productsRows[0]?.total)
     const totalRevenue = toNumber(totalRevenueRows[0]?.revenue)
 
     const adminStats = [
