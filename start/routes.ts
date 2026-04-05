@@ -117,6 +117,7 @@ router.group(() => {
   router.get('/favorites/check', [FavoritesController, 'check'])
 
   router.post('/orders', [OrdersController, 'store'])
+  router.get('/orders/all', [OrdersController, 'allOrders'])
   router.get('/orders/:userId', [OrdersController, 'index'])
   router.get('/orders/:orderId/user/:userId', [OrdersController, 'show'])
   router.post('/orders/:orderId/cancel', [OrdersController, 'cancel'])

@@ -28,6 +28,18 @@ interface PaymentInfo {
 }
 
 export default class OrdersController {
+  public async allOrders({ response }: HttpContext) {
+    const orders = await Order.query()
+      .preload('items')
+      .preload('tracking')
+      .orderBy('created_at', 'desc')
+
+    return response.ok({
+      success: true,
+      data: orders,
+    })
+  }
+
   async store({ request, response }: HttpContext) {
     console.log('🔵 ========== DEBUT CREATION COMMANDE ==========')
 
