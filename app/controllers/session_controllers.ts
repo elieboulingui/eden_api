@@ -17,12 +17,17 @@ export default class SessionController {
   /**
    * Authenticate user credentials and create a new session
    */
-  async stores({ request, auth, response }: HttpContext) {
+  async stores({ request, auth, response, session }: HttpContext) {
     const { email, password } = request.all()
-    const user = await User.verifyCredentials(email, password)
 
-    await auth.use('web').login(user)
-    response.redirect().toRoute('home')
+    try {
+      const user = await User.verifyCredentials(email, password)
+      await auth.use('web').login(user)
+      return response.redirect().toRoute('home')
+    } catch (error) {
+      session.flash('error', 'Identifiants invalides')
+      return response.redirect().back()
+    }
   }
 
   /**
