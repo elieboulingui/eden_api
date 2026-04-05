@@ -18,8 +18,14 @@ export default class NewAccountController {
   /**
    * Create a new user account and authenticate the user
    */
-  async stores({ request, response, auth }: HttpContext) {
+  async stores({ request, response, auth, session }: HttpContext) {
     const payload = await request.validateUsing(signupValidator)
+    const existingUser = await User.findBy('email', payload.email)
+    if (existingUser) {
+      session.flash('error', 'Cet email est déjà utilisé')
+      return response.redirect().back()
+    }
+
     const user = await User.create({ ...payload })
 
     await auth.use('web').login(user)
