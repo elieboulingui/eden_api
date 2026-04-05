@@ -86,7 +86,7 @@ router.group(() => {
   router.post('/client/register', [NewAccountController, 'store'])
   router.post('/client/login', [SessionController, 'store']).as('session.client.store')
   router.post('/login', [SessionController, 'store']).as('session.login')
-  router.post('/api/login', [SessionController, 'store'])
+  router.post('/api/login', [SessionController, 'store']).as('session.api.login')
   router.put('/profile/update', [SessionController, 'update'])
   router.post('/client/logout', [SessionController, 'destroy'])
 
