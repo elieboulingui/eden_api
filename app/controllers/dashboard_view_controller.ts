@@ -46,14 +46,16 @@ export default class DashboardViewController {
       totalOrdersRows,
       totalRevenueRows,
       productsRows,
+      latestUsers,
     ] = await Promise.all([
       User.query().count('* as total') as unknown as CountRow[],
       User.query()
-        .whereIn('role', ['marchant', 'merchant',"client","marchand"])
+        .whereIn('role', ['marchant', 'merchant'])
         .count('* as total') as unknown as CountRow[],
       Order.query().count('* as total') as unknown as CountRow[],
       Order.query().sum('total as revenue') as unknown as Array<{ revenue: number }>,
       Product.query().count('* as total') as unknown as CountRow[],
+      User.query().orderBy('created_at', 'desc').limit(6),
     ])
 
     const totalUsers = toNumber(totalUsersRows[0]?.total)
@@ -143,12 +145,21 @@ export default class DashboardViewController {
       })
     )
 
+    const latestUserRows = latestUsers.map((user) => ({
+      id: user.id,
+      name: user.full_name ?? user.email,
+      email: user.email,
+      role: user.role,
+      createdAt: user.created_at?.toFormat('dd LLL yyyy') ?? 'Date inconnue',
+    }))
+
     return view.render('pages/dashboards/admin', {
       adminStats,
       statusBreakdown,
       recentOrders,
       topCategories,
       totalOrders,
+      latestUsers: latestUserRows,
     })
   }
 

@@ -106,5 +106,36 @@
         <p class="text-sm text-slate-500">Aucune catégorie encore disponible.</p>
       @end
     </section>
+
+    <section class="table-card">
+      <header>
+        <h3>Derniers utilisateurs inscrits</h3>
+        <span>inscriptions récentes</span>
+      </header>
+      <table>
+        <thead>
+          <tr>
+            <th>Nom</th>
+            <th>Email</th>
+            <th>Rôle</th>
+            <th>Inscrit le</th>
+          </tr>
+        </thead>
+        <tbody>
+          @each(user in latestUsers)
+            <tr>
+              <td>{{ user.name }}</td>
+              <td>{{ user.email }}</td>
+              <td>{{ user.role }}</td>
+              <td>{{ user.createdAt }}</td>
+            </tr>
+          @else
+            <tr>
+              <td colspan="4" class="text-sm" style="text-align: center;">Aucun utilisateur enregistré.</td>
+            </tr>
+          @end
+        </tbody>
+      </table>
+    </section>
   </div>
 @end
