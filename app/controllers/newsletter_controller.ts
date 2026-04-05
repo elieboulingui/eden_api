@@ -4,20 +4,12 @@ import NewsletterSubscriber from '#models/newsletter_subscriber'
 export default class NewsletterController {
   public async store({ request, response }: HttpContext) {
     try {
-      const email = request.input('email')?.toString().trim().toLowerCase()
+      const email = request.input('email')?.toString().trim()
 
       if (!email) {
         return response.badRequest({
           success: false,
           message: 'L’adresse email est requise',
-        })
-      }
-
-      const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/
-      if (!emailRegex.test(email)) {
-        return response.badRequest({
-          success: false,
-          message: 'Veuillez fournir une adresse email valide',
         })
       }
 
