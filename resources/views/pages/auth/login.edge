@@ -8,7 +8,7 @@
     </div>
 
     <div>
-      @form({ route: 'session.client.store', method: 'POST' })
+      <form id="client-login-form" method="POST" action="/api/client/login">
         <div>
           @field.root({ name: 'email' })
             @!field.label({ text: 'Email' })
@@ -28,7 +28,49 @@
         <div>
           @!button({ text: 'Login', type: 'submit' })
         </div>
-      @end
+      </form>
+      <p id="login-error" class="text-sm text-rose-500 mt-3" hidden></p>
     </div>
   </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('client-login-form')
+      const errorEl = document.getElementById('login-error')
+      if (!form || !errorEl) return
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        errorEl.hidden = true
+
+        const formData = new FormData(form)
+        let response
+
+        try {
+          response = await fetch(form.action, {
+            method: form.method,
+            headers: {
+              Accept: 'application/json',
+            },
+            body: formData,
+          })
+        } catch (error) {
+          errorEl.textContent = 'Erreur réseau'
+          errorEl.hidden = false
+          return
+        }
+
+        const payload = await response.json().catch(() => ({}))
+
+        if (!response.ok || !payload.success) {
+          errorEl.textContent = payload.message || 'Identifiants invalides'
+          errorEl.hidden = false
+          return
+        }
+
+        window.location.href = payload.redirect || '/'
+      })
+    })
+  </script>
 @end

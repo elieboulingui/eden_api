@@ -23,12 +23,16 @@ router.get('/', async ({ view }) => {
 
 // Routes d'authentification - utilisez les contrôleurs directement
 router.group(() => {
-  router.get('signup', [NewAccountViewController, 'create'])
-  router.post('signup', [NewAccountViewController, 'stores'])
+  router.get('signup', [NewAccountViewController, 'create']).as('new_account.create')
+  router.post('signup', [NewAccountViewController, 'stores']).as('new_account.web.store')
 
   router.get('login', [SessionViewController, 'create']).as('session.create')
   router.post('login', [SessionViewController, 'stores']).as('session.store')
 }).use(middleware.guest())
+
+router.post('logout', [SessionViewController, 'destroy'])
+  .as('session.web.destroy')
+  .middleware([middleware.auth()])
 
 router.group(() => {
   router.get('admin', [DashboardViewController, 'admin']).as('dashboard.admin')
@@ -85,7 +89,7 @@ router.group(() => {
   router.post('/coupons/verify', [CouponsController, 'verify'])
   router.get('/coupons/:id', [CouponsController, 'show'])
 
-  router.post('/client/register', [NewAccountController, 'store'])
+  router.post('/client/register', [NewAccountController, 'store']).as('new_account.store')
   router.post('/client/login', [SessionController, 'store']).as('session.client.store')
   router.post('/login', [SessionController, 'store']).as('session.login')
   router.post('/api/login', [SessionController, 'store']).as('session.api.login')

@@ -6,9 +6,10 @@ export type ScannedRoutes = {
   ALL: {
     'home': { paramsTuple?: []; params?: {} }
     'new_account.create': { paramsTuple?: []; params?: {} }
-    'new_account.stores': { paramsTuple?: []; params?: {} }
+    'new_account.web.store': { paramsTuple?: []; params?: {} }
     'session.create': { paramsTuple?: []; params?: {} }
     'session.store': { paramsTuple?: []; params?: {} }
+    'session.web.destroy': { paramsTuple?: []; params?: {} }
     'dashboard.admin': { paramsTuple?: []; params?: {} }
     'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'dashboard.manager': { paramsTuple?: []; params?: {} }
@@ -168,8 +169,9 @@ export type ScannedRoutes = {
     'order_tracking.get_tracking_events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
   }
   POST: {
-    'new_account.stores': { paramsTuple?: []; params?: {} }
+    'new_account.web.store': { paramsTuple?: []; params?: {} }
     'session.store': { paramsTuple?: []; params?: {} }
+    'session.web.destroy': { paramsTuple?: []; params?: {} }
     'pubs.create_pub': { paramsTuple?: []; params?: {} }
     'merchant_dashboard.give_change': { paramsTuple?: []; params?: {} }
     'merchant_dashboard.create_product': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
