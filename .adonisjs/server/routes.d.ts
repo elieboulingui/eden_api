@@ -16,6 +16,13 @@ export type ScannedRoutes = {
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
+    'promotions.index': { paramsTuple?: []; params?: {} }
+    'promotions.banners': { paramsTuple?: []; params?: {} }
+    'promotions.flash_sales': { paramsTuple?: []; params?: {} }
+    'promotions.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'promotions.store': { paramsTuple?: []; params?: {} }
+    'promotions.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'promotions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.get_all_pubs': { paramsTuple?: []; params?: {} }
     'pubs.create_pub': { paramsTuple?: []; params?: {} }
     'pubs.update_pub': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -98,6 +105,10 @@ export type ScannedRoutes = {
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
+    'promotions.index': { paramsTuple?: []; params?: {} }
+    'promotions.banners': { paramsTuple?: []; params?: {} }
+    'promotions.flash_sales': { paramsTuple?: []; params?: {} }
+    'promotions.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.get_all_pubs': { paramsTuple?: []; params?: {} }
     'merchant_dashboard.get_withdrawal_history': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_wallet': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
@@ -138,6 +149,10 @@ export type ScannedRoutes = {
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
+    'promotions.index': { paramsTuple?: []; params?: {} }
+    'promotions.banners': { paramsTuple?: []; params?: {} }
+    'promotions.flash_sales': { paramsTuple?: []; params?: {} }
+    'promotions.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.get_all_pubs': { paramsTuple?: []; params?: {} }
     'merchant_dashboard.get_withdrawal_history': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_wallet': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
@@ -172,6 +187,7 @@ export type ScannedRoutes = {
     'new_account.web.store': { paramsTuple?: []; params?: {} }
     'session.store': { paramsTuple?: []; params?: {} }
     'session.web.destroy': { paramsTuple?: []; params?: {} }
+    'promotions.store': { paramsTuple?: []; params?: {} }
     'pubs.create_pub': { paramsTuple?: []; params?: {} }
     'merchant_dashboard.give_change': { paramsTuple?: []; params?: {} }
     'merchant_dashboard.create_product': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
@@ -197,6 +213,7 @@ export type ScannedRoutes = {
     'order_tracking.add_tracking_event': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
   }
   PUT: {
+    'promotions.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.update_pub': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'merchant_dashboard.update_product': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
     'merchant_dashboard.update_category': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
@@ -209,6 +226,7 @@ export type ScannedRoutes = {
     'order_tracking.update_order_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
   }
   DELETE: {
+    'promotions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.delete_pub': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'merchant_dashboard.delete_product': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
     'merchant_dashboard.delete_category': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }

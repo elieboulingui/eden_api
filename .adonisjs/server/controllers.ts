@@ -23,4 +23,5 @@ export const controllers = {
   Session: () => import('#controllers/session_controller'),
   SessionControllers: () => import('#controllers/session_controllers'),
   Users: () => import('#controllers/users_controller'),
+  Promotions: () => import('#controllers/promotions_controller'),
 }

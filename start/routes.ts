@@ -1,4 +1,5 @@
 import router from '@adonisjs/core/services/router'
+import PromotionsController from '#controllers/promotions_controller'
 import PubsController from '#controllers/pubs_controller'
 import NewAccountController from '#controllers/new_account_controller'
 import SessionController from '#controllers/session_controller'
@@ -51,6 +52,16 @@ router.group(() => {
   router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus']).as(
     'orders.payment_status_callbacks'
   )
+
+    router.get('/promo', [PromotionsController, 'index']).as('promotions.index')
+    router.get('/banners', [PromotionsController, 'banners']).as('promotions.banners')
+    router.get('/flash-sales', [PromotionsController, 'flashSales']).as('promotions.flash_sales')
+    router.get('/promo/:id', [PromotionsController, 'show']).as('promotions.show')
+
+    router.post('/promo', [PromotionsController, 'store']).as('promotions.store')
+    router.put('/promo/:id', [PromotionsController, 'update']).as('promotions.update')
+    router.delete('/promo/:id', [PromotionsController, 'destroy']).as('promotions.destroy')
+
 
   router.get('/pubs', [PubsController, 'getAllPubs'])
   router.post('/pubs', [PubsController, 'createPub'])

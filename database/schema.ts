@@ -314,6 +314,12 @@ export class ProductSchema extends BaseModel {
   @column()
   declare imageUrl: string | null
   @column()
+  declare imageUrl: string | null
+  @column()
+  declare isNew: boolean | null
+  @column()
+  declare isOnSale: boolean | null
+  @column()
   declare isNew: boolean | null
   @column()
   declare isOnSale: boolean | null
@@ -335,6 +341,49 @@ export class ProductSchema extends BaseModel {
   declare userId: string
   @column()
   declare weight: string | null
+}
+
+export class PromotionSchema extends BaseModel {
+  static $columns = ['bannerImage', 'buttonText', 'category', 'createdAt', 'description', 'discountAmount', 'discountPercentage', 'endDate', 'id', 'imageUrl', 'link', 'minOrderAmount', 'priority', 'productIds', 'startDate', 'status', 'title', 'type', 'updatedAt'] as const
+  $columns = PromotionSchema.$columns
+  @column()
+  declare bannerImage: string | null
+  @column()
+  declare buttonText: string | null
+  @column()
+  declare category: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare description: string | null
+  @column()
+  declare discountAmount: number | null
+  @column()
+  declare discountPercentage: number | null
+  @column.date()
+  declare endDate: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare imageUrl: string | null
+  @column()
+  declare link: string | null
+  @column()
+  declare minOrderAmount: number | null
+  @column()
+  declare priority: number | null
+  @column()
+  declare productIds: string | null
+  @column.date()
+  declare startDate: DateTime | null
+  @column()
+  declare status: string | null
+  @column()
+  declare title: string
+  @column()
+  declare type: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
 }
 
 export class PubSchema extends BaseModel {
