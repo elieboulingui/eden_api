@@ -49,7 +49,7 @@ export default class DashboardViewController {
     ] = await Promise.all([
       User.query().count('* as total') as unknown as CountRow[],
       User.query()
-        .whereIn('role', ['marchant', 'merchant'])
+        .whereIn('role', ['marchant', 'merchant',"client","marchand"])
         .count('* as total') as unknown as CountRow[],
       Order.query().count('* as total') as unknown as CountRow[],
       Order.query().sum('total as revenue') as unknown as Array<{ revenue: number }>,

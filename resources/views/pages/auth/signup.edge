@@ -1,51 +1,50 @@
 @layout()
-  <div class="mx-auto flex w-full max-w-lg flex-col gap-8 rounded-3xl border border-slate-200 bg-white/90 px-8 py-10 shadow-lg shadow-slate-900/5 backdrop-blur-sm">
-    <div class="space-y-2">
-      <p class="text-sm uppercase tracking-[0.35em] text-slate-400">Create account</p>
-      <h1 class="text-3xl font-bold text-slate-900">Create your AdminMarket account</h1>
-      <p class="text-sm text-slate-500">Enter your details below to create your account.</p>
+  <div class="form-container">
+    <div>
+      <h1> Signup </h1>
+      <p>
+        Enter your details below to create your account
+      </p>
     </div>
 
-    @form({ route: 'new_account.store', method: 'POST', class: 'space-y-5' })
-      <div class="space-y-2">
-        @field.root({ name: 'fullName' })
-          @!field.label({ text: 'Full name', class: 'text-sm font-semibold text-slate-700' })
-          @!input.control({ class: 'text-sm text-slate-900' })
-          @!field.error()
-        @end
-      </div>
+    <div>
+      @form({ route: 'new_account.store', method: 'POST' })
+        <div>
+          @field.root({ name: 'fullName' })
+            @!field.label({ text: 'Full name' })
+            @!input.control()
+            @!field.error()
+          @end
+        </div>
 
-      <div class="space-y-2">
-        @field.root({ name: 'email' })
-          @!field.label({ text: 'Email', class: 'text-sm font-semibold text-slate-700' })
-          @!input.control({ type: 'email', autocomplete: 'email', class: 'text-sm text-slate-900' })
-          @!field.error()
-        @end
-      </div>
+        <div>
+          @field.root({ name: 'email' })
+            @!field.label({ text: 'Email' })
+            @!input.control({ type: 'email', autocomplete: 'email' })
+            @!field.error()
+          @end
+        </div>
 
-      <div class="space-y-2">
-        @field.root({ name: 'password' })
-          @!field.label({ text: 'Password', class: 'text-sm font-semibold text-slate-700' })
-          @!input.control({ type: 'password', autocomplete: 'new-password', class: 'text-sm text-slate-900' })
-          @!field.error()
-        @end
-      </div>
+        <div>
+          @field.root({ name: 'password' })
+            @!field.label({ text: 'Password' })
+            @!input.control({ type: 'password', autocomplete: 'new-password' })
+            @!field.error()
+          @end
+        </div>
 
-      <div class="space-y-2">
-        @field.root({ name: 'passwordConfirmation' })
-          @!field.label({ text: 'Confirm password', class: 'text-sm font-semibold text-slate-700' })
-          @!input.control({ type: 'password', autocomplete: 'new-password', class: 'text-sm text-slate-900' })
-          @!field.error()
-        @end
-      </div>
+        <div>
+          @field.root({ name: 'passwordConfirmation' })
+            @!field.label({ text: 'Confirm password' })
+            @!input.control({ type: 'password', autocomplete: 'new-password' })
+            @!field.error()
+          @end
+        </div>
 
-      <div>
-        @!button({
-          text: 'Sign up',
-          type: 'submit',
-          class: 'w-full uppercase tracking-[0.3em]'
-        })
-      </div>
-    @end
+        <div>
+          @!button({ text: 'Sign up', type: 'submit' })
+        </div>
+      @end
+    </div>
   </div>
 @end

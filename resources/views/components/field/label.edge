@@ -1,15 +1,9 @@
 @let(labelTextFromSlot = await $slots.main())
 @let(labelText = labelTextFromSlot.trim() ? labelTextFromSlot : $props.get('text'))
-@let(userClass = $props.get('class'))
-@let(classes = [
-  'text-sm',
-  'font-semibold',
-  'text-slate-700',
-  userClass,
-].filter(Boolean))
+@let(classes = [])
 
 <label {{ $props
-  .except(['text', 'class'])
+  .except(['text'])
   .merge({
     for: $context.id,
     class: classes,

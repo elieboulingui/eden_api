@@ -1,33 +1,7 @@
 @let(buttonTextFromSlot = await $slots.main())
 @let(buttonText = buttonTextFromSlot.trim() ? buttonTextFromSlot : $props.get('text') ?? '')
-@let(userClass = $props.get('class'))
-@let(classes = [
-  'inline-flex',
-  'w-full',
-  'items-center',
-  'justify-center',
-  'rounded-xl',
-  'border',
-  'border-transparent',
-  'bg-slate-900',
-  'px-4',
-  'py-2.5',
-  'text-xs',
-  'font-semibold',
-  'uppercase',
-  'tracking-[0.3em]',
-  'text-white',
-  'shadow-sm',
-  'transition-colors',
-  'duration-150',
-  'hover:bg-slate-800',
-  'focus-visible:outline',
-  'focus-visible:outline-2',
-  'focus-visible:outline-offset-2',
-  'focus-visible:outline-slate-900',
-  userClass,
-].filter(Boolean))
+@let(classes = [])
 
 <button {{
-  $props.except(['text', 'class']).merge({ class: classes }).toAttrs()
+  $props.except(['text']).merge({ class: classes }).toAttrs()
 }}>{{{ buttonText }}}</button>

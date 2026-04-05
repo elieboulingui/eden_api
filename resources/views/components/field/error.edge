@@ -1,11 +1,7 @@
-@let(userClass = $props.get('class'))
-@let(classes = ['text-sm', 'text-rose-600', 'mt-1', userClass].filter(Boolean))
+@let(classes = [])
 
 @if($context.hasErrors)
-  <div {{ $props
-    .except(['class'])
-    .merge({ id: `${$context.id}-error`, class: classes })
-    .toAttrs() }}>
+  <div {{ $props.merge({ id: `${$context.id}-error`, class: classes }).toAttrs() }}>
     @each(message in $context.errors)
       <span>{{ message }}</span>
     @end

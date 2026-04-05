@@ -1,24 +1,6 @@
 @let(variant = $props.get('variant') || 'default')
 @inject({ variant, autoDismiss: $props.get('autoDismiss') })
-@let(baseClasses = [
-  'w-full',
-  'max-w-3xl',
-  'rounded-2xl',
-  'border',
-  'px-5',
-  'py-3',
-  'text-sm',
-  'font-semibold',
-  'shadow-lg',
-  'shadow-slate-900/10',
-  'backdrop-blur-sm',
-])
-@let(variantClasses = variant === 'destructive'
-  ? ['border-rose-200', 'bg-rose-50', 'text-rose-700']
-  : variant === 'success'
-    ? ['border-emerald-200', 'bg-emerald-50', 'text-emerald-700']
-    : ['border-slate-200', 'bg-white', 'text-slate-900'])
-@let(classes = [...baseClasses, ...variantClasses])
+@let(classes = ['alert', `alert-${variant}`])
 
 <div {{ $props
   .except(['variant', 'autoDismiss'])
@@ -27,7 +9,7 @@
     class: classes,
     'x-data': 'alert',
     'x-show': 'isVisible',
-    'x-cloak': true,
+    'x-cloak': true
   })
   .toAttrs()
 }}> {{{ await $slots.main() }}} </div>
