@@ -27,7 +27,7 @@ router.group(() => {
   router.post('signup', [NewAccountViewController, 'stores'])
 
   router.get('login', [SessionViewController, 'create']).as('session.create')
-  router.post('login', [SessionViewController, 'stores'])
+  router.post('login', [SessionViewController, 'stores']).as('session.store')
 }).use(middleware.guest())
 
 router.group(() => {
