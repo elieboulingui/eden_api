@@ -1,3 +1,4 @@
+import { DateTime } from 'luxon'
 import { BaseModel, beforeCreate, column } from '@adonisjs/lucid/orm'
 import crypto from 'node:crypto'
 
@@ -11,7 +12,7 @@ export default class NewsletterSubscriber extends BaseModel {
   declare email: string
 
   @column.dateTime({ autoCreate: true })
-  declare created_at: Date
+  declare created_at: DateTime
 
   @beforeCreate()
   static ensureUuid(subscriber: NewsletterSubscriber) {
