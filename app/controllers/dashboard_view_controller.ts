@@ -29,6 +29,8 @@ const formatMoney = (value: number) => `${numberFormatter.format(Math.round(valu
 
 const toNumber = (value: number | string | bigint | null | undefined) => Number(value ?? 0)
 
+type CountRow = { total: number }
+
 const shortAddress = (value: string | null | undefined) => {
   if (!value) {
     return 'Adresse inconnue'
@@ -38,12 +40,20 @@ const shortAddress = (value: string | null | undefined) => {
 
 export default class DashboardViewController {
   public async admin({ view }: HttpContext) {
-    const [totalUsersRows, merchantRows, totalOrdersRows, totalRevenueRows, productsRows] = await Promise.all([
-      User.query().count('* as total'),
-      User.query().whereIn('role', ['marchant', 'merchant']).count('* as total'),
-      Order.query().count('* as total'),
-      Order.query().sum('total as revenue'),
-      Product.query().count('* as total'),
+    const [
+      totalUsersRows,
+      merchantRows,
+      totalOrdersRows,
+      totalRevenueRows,
+      productsRows,
+    ] = await Promise.all([
+      User.query().count('* as total') as unknown as CountRow[],
+      User.query()
+        .whereIn('role', ['marchant', 'merchant'])
+        .count('* as total') as unknown as CountRow[],
+      Order.query().count('* as total') as unknown as CountRow[],
+      Order.query().sum('total as revenue') as unknown as Array<{ revenue: number }>,
+      Product.query().count('* as total') as unknown as CountRow[],
     ])
 
     const totalUsers = toNumber(totalUsersRows[0]?.total)
@@ -80,10 +90,10 @@ export default class DashboardViewController {
       },
     ]
 
-    const statusRows = await Order.query()
+    const statusRows = (await Order.query()
       .select('status')
       .count('* as total')
-      .groupBy('status')
+      .groupBy('status')) as unknown as Array<{ status: string; total: number }>
 
     const statusBreakdown = statusRows.map((row) => {
       const meta = STATUS_META[row.status] ?? DEFAULT_STATUS_META
@@ -111,13 +121,13 @@ export default class DashboardViewController {
       }
     })
 
-    const categoryCounts = await Product.query()
+    const categoryCounts = (await Product.query()
       .select('category_id')
       .count('* as total')
       .whereNotNull('category_id')
       .groupBy('category_id')
       .orderBy('total', 'desc')
-      .limit(4)
+      .limit(4)) as unknown as Array<{ category_id: string | null; total: number }>
 
     const topCategories = await Promise.all(
       categoryCounts.map(async (row) => {
@@ -150,15 +160,15 @@ export default class DashboardViewController {
     const [packagingRows, paymentRows, dailyDeliveryRows] = await Promise.all([
       Order.query()
         .whereIn('status', ['pending', 'processing'])
-        .count('* as total'),
+        .count('* as total') as unknown as CountRow[],
       Order.query()
         .whereIn('status', ['pending_payment', 'payment_failed'])
-        .count('* as total'),
+        .count('* as total') as unknown as CountRow[],
       Order.query()
         .whereNotNull('estimated_delivery')
         .where('estimated_delivery', '>=', startOfDay.toISO({ includeOffset: false }))
         .where('estimated_delivery', '<', endOfDay.toISO({ includeOffset: false }))
-        .count('* as total'),
+        .count('* as total') as unknown as CountRow[],
     ])
 
     const queueStats = [
