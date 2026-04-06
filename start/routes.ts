@@ -14,6 +14,7 @@ import FavoritesController from '#controllers/favorites_controller'
 import OrdersController from '#controllers/OrdersController'
 import DashboardViewController from '#controllers/dashboard_view_controller'
 import NewsletterController from '#controllers/newsletter_controller'
+import PushSubscriptionsController from '#controllers/push_subscriptions_controller'
 const CouponsController = () => import('#controllers/coupons_controller')
 const OrderTrackingController = () => import('#controllers/order_trackings_controller')
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
@@ -151,4 +152,7 @@ router.group(() => {
   router.post('/tracking/:orderId/event', [OrderTrackingController, 'addTrackingEvent'])
   router.put('/tracking/:orderId/status', [OrderTrackingController, 'updateOrderStatus'])
   router.post('/newsletter/subscribe', [NewsletterController, 'store']).as('newsletter.subscribe')
+  router.get('/push-subscriptions', [PushSubscriptionsController, 'index'])
+  router.post('/push-subscriptions', [PushSubscriptionsController, 'store'])
+  router.delete('/push-subscriptions/:id', [PushSubscriptionsController, 'destroy'])
 }).prefix('/api')

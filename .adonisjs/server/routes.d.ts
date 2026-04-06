@@ -96,6 +96,9 @@ export type ScannedRoutes = {
     'order_tracking.add_tracking_event': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'order_tracking.update_order_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'newsletter.subscribe': { paramsTuple?: []; params?: {} }
+    'push_subscriptions.index': { paramsTuple?: []; params?: {} }
+    'push_subscriptions.store': { paramsTuple?: []; params?: {} }
+    'push_subscriptions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   GET: {
     'home': { paramsTuple?: []; params?: {} }
@@ -140,6 +143,7 @@ export type ScannedRoutes = {
     'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
     'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
     'order_tracking.get_tracking_events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'push_subscriptions.index': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
     'home': { paramsTuple?: []; params?: {} }
@@ -184,6 +188,7 @@ export type ScannedRoutes = {
     'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
     'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
     'order_tracking.get_tracking_events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'push_subscriptions.index': { paramsTuple?: []; params?: {} }
   }
   POST: {
     'new_account.web.store': { paramsTuple?: []; params?: {} }
@@ -214,6 +219,7 @@ export type ScannedRoutes = {
     'order_tracking.search': { paramsTuple?: []; params?: {} }
     'order_tracking.add_tracking_event': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'newsletter.subscribe': { paramsTuple?: []; params?: {} }
+    'push_subscriptions.store': { paramsTuple?: []; params?: {} }
   }
   PUT: {
     'promotions.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -239,6 +245,7 @@ export type ScannedRoutes = {
     'categories.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'cart.delete_item': { paramsTuple: [ParamValue]; params: {'itemId': ParamValue} }
     'cart.clear': { paramsTuple?: []; params?: {} }
+    'push_subscriptions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   PATCH: {
     'pubs.toggle_pub_status': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }

@@ -325,6 +325,12 @@ export class ProductSchema extends BaseModel {
   @column()
   declare imageUrl: string | null
   @column()
+  declare imageUrl: string | null
+  @column()
+  declare isNew: boolean | null
+  @column()
+  declare isOnSale: boolean | null
+  @column()
   declare isNew: boolean | null
   @column()
   declare isOnSale: boolean | null
@@ -422,6 +428,35 @@ export class PubSchema extends BaseModel {
   declare targetUrl: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+}
+
+export class PushSubscriptionSchema extends BaseModel {
+  static $columns = ['auth', 'browser', 'createdAt', 'deviceId', 'deviceName', 'endpoint', 'id', 'isActive', 'os', 'p256Dh', 'swVersion', 'updatedAt'] as const
+  $columns = PushSubscriptionSchema.$columns
+  @column()
+  declare auth: string
+  @column()
+  declare browser: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare deviceId: string | null
+  @column()
+  declare deviceName: string | null
+  @column()
+  declare endpoint: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isActive: boolean
+  @column()
+  declare os: string | null
+  @column()
+  declare p256Dh: string
+  @column()
+  declare swVersion: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
 }
 
 export class ReviewSchema extends BaseModel {
