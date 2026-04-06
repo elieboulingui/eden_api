@@ -21,9 +21,9 @@ export const controllers = {
   Profile: () => import('#controllers/profile_controller'),
   Promotions: () => import('#controllers/promotions_controller'),
   Pubs: () => import('#controllers/pubs_controller'),
+  PushSubscriptions: () => import('#controllers/push_subscriptions_controller'),
   Reviews: () => import('#controllers/reviews_controller'),
   Session: () => import('#controllers/session_controller'),
   SessionControllers: () => import('#controllers/session_controllers'),
   Users: () => import('#controllers/users_controller'),
-  PushSubscriptions: () => import('#controllers/push_subscriptions_controller'),
 }

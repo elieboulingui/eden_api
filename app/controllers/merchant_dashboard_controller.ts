@@ -768,8 +768,10 @@ export default class MerchantDashboardController {
       const page = request.input('page', 1)
       const limit = request.input('limit', 10)
 
+      // Charger les produits avec leur catégorie (preload)
       const products = await Product.query()
         .where('user_id', user.id)
+        .preload('category')   // ← Ajouter cette ligne
         .orderBy('created_at', 'desc')
         .paginate(page, limit)
 
@@ -798,7 +800,7 @@ export default class MerchantDashboardController {
         price: product.price,
         stock: product.stock,
         image_url: product.image_url,
-        category: product.category,
+        category: product.category?.name || 'Sans catégorie',  // ← Utiliser le nom de la catégorie
         likes: favoritesCountMap[product.id] || 0,
         sales: product.sales || 0,
         status: product.status || 'active'
