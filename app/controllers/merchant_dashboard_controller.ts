@@ -850,19 +850,22 @@ export default class MerchantDashboardController {
         return response.forbidden({ success: false, message: 'Non autorisé' })
       }
 
+      // Séparer les noms de catégories
       const categoryNames = category_name ? category_name.split(',').map((c: string) => c.trim()) : []
       const categoryIds: string[] = []
 
-      for (const name of categoryNames) {
-        if (!name) continue
+      for (const catName of categoryNames) {
+        if (!catName) continue
 
-        let category = await Category.query().where('name', name).where('user_id', user.id).first()
+        // Chercher la catégorie existante
+        let category = await Category.query().where('name', catName).where('user_id', user.id).first()
 
+        // Créer la catégorie si elle n'existe pas
         if (!category) {
           category = await Category.create({
-            name,
+            name: catName,
             image_url: image_url || null,
-            slug: name.toLowerCase().replace(/\s+/g, '-'),
+            slug: catName.toLowerCase().replace(/\s+/g, '-'),
             user_id: user.id,
             is_active: true,
             product_ids: [],
@@ -872,6 +875,7 @@ export default class MerchantDashboardController {
         categoryIds.push(category.id)
       }
 
+      // Créer le produit
       const product = await Product.create({
         name,
         description: description || null,
@@ -884,16 +888,12 @@ export default class MerchantDashboardController {
         rating: 0,
       })
 
+      // Ajouter le produit à toutes les catégories correspondantes
       for (const categoryId of categoryIds) {
         const category = await Category.find(categoryId)
         if (!category) continue
 
-        if (!category.product_ids) category.product_ids = []
-        if (!category.product_ids.includes(product.id)) {
-          category.product_ids.push(product.id)
-        }
-
-        await category.save()
+        await category.addProduct(product.id) // utilise la méthode du modèle Category
       }
 
       return response.created({
