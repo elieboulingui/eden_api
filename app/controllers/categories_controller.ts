@@ -45,85 +45,58 @@ export default class CategoriesController {
       console.log('=== DÉBUT REQUÊTE ===')
       console.log('Param name:', params.name)
 
-      // 1. Récupérer la catégorie avec requête brute
-      const categoryRaw = await Database
-        .from('categories')
+      // 1. Récupérer la catégorie par son nom
+      const category = await Category.query()
         .where('name', params.name)
+        .where('is_active', true)
         .first()
 
-      console.log('Catégorie trouvée?', categoryRaw ? 'Oui' : 'Non')
+      console.log('Catégorie trouvée?', category ? 'Oui' : 'Non')
 
-      if (!categoryRaw) {
+      if (!category) {
         return response.status(404).json({
           success: false,
           message: 'Catégorie non trouvée',
         })
       }
 
-      console.log('Catégorie brute:', JSON.stringify(categoryRaw, null, 2))
-      console.log('Type de product_ids:', typeof categoryRaw.product_ids)
-      console.log('Valeur de product_ids:', categoryRaw.product_ids)
+      console.log('Catégorie:', {
+        id: category.id,
+        name: category.name,
+        product_count: category.product_count,
+      })
 
-      // 2. Parser les product_ids
-      let productIds: string[] = []
+      // 2. Récupérer TOUS les produits qui ont cette category_id
+      //    C'est la méthode la plus fiable !
+      const products = await Product.query()
+        .where('category_id', category.id)
+        .where('stock', '>', 0)
+        .orderBy('created_at', 'desc')
 
-      if (categoryRaw.product_ids) {
-        // Si c'est une string JSON
-        if (typeof categoryRaw.product_ids === 'string') {
-          try {
-            const parsed = JSON.parse(categoryRaw.product_ids)
-            productIds = Array.isArray(parsed) ? parsed : []
-            console.log('JSON parsé avec succès:', productIds)
-          } catch (parseError) {
-            console.error('Erreur de parsing JSON:', parseError)
+      console.log(`✅ ${products.length} produits trouvés avec category_id = ${category.id}`)
 
-            // Essayer de parser comme CSV si contient des virgules
-            if (categoryRaw.product_ids.includes(',')) {
-              productIds = categoryRaw.product_ids.split(',').map((id: string) => id.trim())
-              console.log('CSV parsé:', productIds)
-            }
-          }
-        }
-        // Si c'est déjà un tableau
-        else if (Array.isArray(categoryRaw.product_ids)) {
-          productIds = categoryRaw.product_ids
-          console.log('Déjà un tableau:', productIds)
-        }
-      }
+      // 3. Vérifier que tous les produits ont la même catégorie
+      const uniqueCategoryIds = [...new Set(products.map(p => p.category_id))]
 
-      console.log('Product IDs finaux:', productIds)
-      console.log('Nombre de product IDs:', productIds.length)
-
-      // 3. Récupérer les produits
-      let products: any[] = []
-
-      if (productIds.length > 0) {
-        try {
-          products = await Product.query()
-            .whereIn('id', productIds)
-            .where('stock', '>', 0)
-            .limit(12)
-
-          console.log('Produits trouvés:', products.length)
-        } catch (productError) {
-          console.error('Erreur récupération produits:', productError)
-        }
+      if (uniqueCategoryIds.length === 1) {
+        console.log(`✅ Tous les ${products.length} produits ont la même catégorie: ${category.name}`)
+      } else {
+        console.warn(`⚠️ Attention: Les produits ont des catégories différentes:`, uniqueCategoryIds)
       }
 
       // 4. Formater la réponse
       const categoryData = {
-        id: categoryRaw.id,
-        name: categoryRaw.name,
-        slug: categoryRaw.slug,
-        image_url: categoryRaw.image_url,
-        icon_name: categoryRaw.icon_name,
-        description: categoryRaw.description,
-        product_count: categoryRaw.product_count,
-        sort_order: categoryRaw.sort_order,
-        is_active: categoryRaw.is_active,
-        product_ids: productIds,
-        created_at: categoryRaw.created_at,
-        updated_at: categoryRaw.updated_at,
+        id: category.id,
+        name: category.name,
+        slug: category.slug,
+        image_url: category.image_url,
+        icon_name: category.icon_name,
+        description: category.description,
+        product_count: products.length,  // Utiliser le nombre réel de produits
+        sort_order: category.sort_order,
+        is_active: category.is_active,
+        created_at: category.created_at,
+        updated_at: category.updated_at,
         products: products.map((product) => ({
           id: product.id,
           name: product.name,
@@ -131,6 +104,7 @@ export default class CategoriesController {
           description: product.description,
           stock: product.stock,
           image_url: product.image_url,
+          created_at: product.created_at,
         })),
       }
 
@@ -142,7 +116,7 @@ export default class CategoriesController {
       })
 
     } catch (error: any) {
-      console.error('=== ERREUR CATASTROPHIQUE ===')
+      console.error('=== ERREUR ===')
       console.error('Message:', error.message)
       console.error('Stack:', error.stack)
 
