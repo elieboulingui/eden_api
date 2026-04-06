@@ -887,7 +887,6 @@ export default class MerchantDashboardController {
         isNew: true,
         isOnSale: false,
         rating: 0,
-        reviews_count: 0,
       })
 
       // ✅ Ajouter le produit à la catégorie SANS écraser les anciens
