@@ -28,14 +28,10 @@ export default class Category extends BaseModel {
   @column()
   declare parent_id: string | null
 
-  @column()
-  declare product_count: number
 
   @column()
   declare is_active: boolean
 
-  @column()
-  declare sort_order: number
 
   @column()
   declare user_id: string
@@ -80,21 +76,6 @@ export default class Category extends BaseModel {
     }
     if (!category.product_ids) {
       category.product_ids = []
-    }
-    if (!category.product_count) {
-      category.product_count = 0
-    }
-  }
-
-  /**
-   * Ajoute un produit à la catégorie sans écraser les autres produits
-   */
-  async addProduct(productId: string) {
-    if (!this.product_ids) this.product_ids = []
-    if (!this.product_ids.includes(productId)) {
-      this.product_ids.push(productId)
-      this.product_count = this.product_ids.length
-      await this.save()
     }
   }
 }

@@ -850,21 +850,20 @@ export default class MerchantDashboardController {
         return response.forbidden({ success: false, message: 'Non autorisé' })
       }
 
-      // Séparer les noms de catégories
-      const categoryNames = category_name ? category_name.split(',').map((c: string) => c.trim()) : []
-      const categoryIds: string[] = []
+      let categoryId = null
 
-      for (const catName of categoryNames) {
-        if (!catName) continue
+      // Gérer la catégorie
+      if (category_name && category_name.trim() !== '') {
+        const catName = category_name.trim()
 
-        // Chercher la catégorie existante
-        let category = await Category.query().where('name', catName).where('user_id', user.id).first()
+        let category = await Category.query()
+          .where('name', catName)
+          .where('user_id', user.id)
+          .first()
 
-        // Créer la catégorie si elle n'existe pas
         if (!category) {
           category = await Category.create({
             name: catName,
-            image_url: image_url || null,
             slug: catName.toLowerCase().replace(/\s+/g, '-'),
             user_id: user.id,
             is_active: true,
@@ -872,7 +871,7 @@ export default class MerchantDashboardController {
           })
         }
 
-        categoryIds.push(category.id)
+        categoryId = category.id
       }
 
       // Créer le produit
@@ -883,24 +882,51 @@ export default class MerchantDashboardController {
         stock: parseInt(stock),
         image_url: image_url || null,
         user_id: user.id,
+        category_id: categoryId,
         isNew: true,
         isOnSale: false,
         rating: 0,
       })
 
-      // Ajouter le produit à toutes les catégories correspondantes
-      for (const categoryId of categoryIds) {
+      // ✅ Ajouter le produit à la catégorie SANS écraser les anciens
+      if (categoryId) {
         const category = await Category.find(categoryId)
-        if (!category) continue
+        if (category) {
+          // Récupérer les IDs existants (NE PAS réinitialiser)
+          let existingProductIds = category.product_ids || []
 
-        await category.addProduct(product.id) // utilise la méthode du modèle Category
+          // Vérifier si c'est un tableau
+          if (!Array.isArray(existingProductIds)) {
+            existingProductIds = []
+          }
+
+          // Ajouter le nouveau ID s'il n'existe pas déjà
+          if (!existingProductIds.includes(product.id)) {
+            existingProductIds.push(product.id)
+            category.product_ids = existingProductIds  // ← Garde les anciens + ajoute le nouveau
+            category.product_count = existingProductIds.length
+            await category.save()
+
+            console.log(`✅ Produit ${product.id} ajouté à la catégorie ${category.name}`)
+            console.log(`📦 Anciens IDs: ${category.product_ids.join(', ')}`)
+          } else {
+            console.log(`⚠️ Le produit ${product.id} existe déjà dans la catégorie`)
+          }
+        }
       }
 
       return response.created({
         success: true,
-        data: product,
-        message: 'Produit créé et ajouté aux catégories',
+        data: {
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          stock: product.stock,
+          category_id: product.category_id,
+        },
+        message: `Produit "${name}" créé et ajouté à la catégorie "${category_name}"`,
       })
+
     } catch (error: any) {
       console.error('Erreur createProduct:', error)
       return response.internalServerError({
@@ -947,7 +973,6 @@ export default class MerchantDashboardController {
             name: category_name,
             slug: category_name.toLowerCase().replace(/\s+/g, '-'),
             user_id: user.id,
-            is_active: true
           })
           categoryId = newCategory.id
         }

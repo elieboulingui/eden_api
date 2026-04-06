@@ -27,9 +27,6 @@ export default class Product extends BaseModel {
   @column()
   declare rating: number
 
-  @column({ columnName: 'reviews_count' })
-  declare reviews_count: number
-
   @column()
   declare user_id: string
 
@@ -78,9 +75,4 @@ export default class Product extends BaseModel {
     foreignKey: 'user_id',
   })
   declare user: BelongsTo<typeof User>
-
-  @hasMany(() => Review, {
-    foreignKey: 'product_id',
-  })
-  declare reviews: HasMany<typeof Review>
 }
