@@ -50,7 +50,6 @@ export default class Category extends BaseModel {
   })
   declare subCategories: HasMany<typeof Category>
 
-  // Tableau de product IDs
   @column({
     serializeAs: 'product_ids',
     consume: (value: string | null) => {
@@ -73,12 +72,23 @@ export default class Category extends BaseModel {
 
   @beforeCreate()
   static async generateUuid(category: Category) {
-    if (!category.id) category.id = crypto.randomUUID()
-    if (!category.slug && category.name) category.slug = category.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-    if (!category.product_ids) category.product_ids = []
+    if (!category.id) {
+      category.id = crypto.randomUUID()
+    }
+    if (!category.slug && category.name) {
+      category.slug = category.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    }
+    if (!category.product_ids) {
+      category.product_ids = []
+    }
+    if (!category.product_count) {
+      category.product_count = 0
+    }
   }
 
-  // Ajouter un produit sans écraser le tableau
+  /**
+   * Ajoute un produit à la catégorie sans écraser les autres produits
+   */
   async addProduct(productId: string) {
     if (!this.product_ids) this.product_ids = []
     if (!this.product_ids.includes(productId)) {
