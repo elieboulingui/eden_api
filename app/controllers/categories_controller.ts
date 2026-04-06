@@ -1,6 +1,8 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Category from '#models/categories'
 import Product from '#models/Product'
+// En haut du fichier
+import Database from '@adonisjs/lucid/services/db'
 
 export default class CategoriesController {
 
@@ -40,31 +42,88 @@ export default class CategoriesController {
   // 🔹 Détails d'une catégorie
   async show({ params, response }: HttpContext) {
     try {
-      const category = await Category.query()
-        .where('name', params.name)
-        .firstOrFail()
+      console.log('=== DÉBUT REQUÊTE ===')
+      console.log('Param name:', params.name)
 
-      let products: any[] = []
-      if (category.product_ids && category.product_ids.length > 0) {
-        products = await Product.query()
-          .whereIn('id', category.product_ids)
-          .where('stock', '>', 0)
-          .limit(12)
+      // 1. Récupérer la catégorie avec requête brute
+      const categoryRaw = await Database
+        .from('categories')
+        .where('name', params.name)
+        .first()
+
+      console.log('Catégorie trouvée?', categoryRaw ? 'Oui' : 'Non')
+
+      if (!categoryRaw) {
+        return response.status(404).json({
+          success: false,
+          message: 'Catégorie non trouvée',
+        })
       }
 
+      console.log('Catégorie brute:', JSON.stringify(categoryRaw, null, 2))
+      console.log('Type de product_ids:', typeof categoryRaw.product_ids)
+      console.log('Valeur de product_ids:', categoryRaw.product_ids)
+
+      // 2. Parser les product_ids
+      let productIds: string[] = []
+
+      if (categoryRaw.product_ids) {
+        // Si c'est une string JSON
+        if (typeof categoryRaw.product_ids === 'string') {
+          try {
+            const parsed = JSON.parse(categoryRaw.product_ids)
+            productIds = Array.isArray(parsed) ? parsed : []
+            console.log('JSON parsé avec succès:', productIds)
+          } catch (parseError) {
+            console.error('Erreur de parsing JSON:', parseError)
+
+            // Essayer de parser comme CSV si contient des virgules
+            if (categoryRaw.product_ids.includes(',')) {
+              productIds = categoryRaw.product_ids.split(',').map((id: string) => id.trim())
+              console.log('CSV parsé:', productIds)
+            }
+          }
+        }
+        // Si c'est déjà un tableau
+        else if (Array.isArray(categoryRaw.product_ids)) {
+          productIds = categoryRaw.product_ids
+          console.log('Déjà un tableau:', productIds)
+        }
+      }
+
+      console.log('Product IDs finaux:', productIds)
+      console.log('Nombre de product IDs:', productIds.length)
+
+      // 3. Récupérer les produits
+      let products: any[] = []
+
+      if (productIds.length > 0) {
+        try {
+          products = await Product.query()
+            .whereIn('id', productIds)
+            .where('stock', '>', 0)
+            .limit(12)
+
+          console.log('Produits trouvés:', products.length)
+        } catch (productError) {
+          console.error('Erreur récupération produits:', productError)
+        }
+      }
+
+      // 4. Formater la réponse
       const categoryData = {
-        id: category.id,
-        name: category.name,
-        slug: category.slug,
-        image_url: category.image_url,
-        icon_name: category.icon_name,
-        description: category.description,
-        product_count: category.product_count,
-        sort_order: category.sort_order,
-        is_active: category.is_active,
-        product_ids: category.product_ids,
-        created_at: category.created_at,
-        updated_at: category.updated_at,
+        id: categoryRaw.id,
+        name: categoryRaw.name,
+        slug: categoryRaw.slug,
+        image_url: categoryRaw.image_url,
+        icon_name: categoryRaw.icon_name,
+        description: categoryRaw.description,
+        product_count: categoryRaw.product_count,
+        sort_order: categoryRaw.sort_order,
+        is_active: categoryRaw.is_active,
+        product_ids: productIds,
+        created_at: categoryRaw.created_at,
+        updated_at: categoryRaw.updated_at,
         products: products.map((product) => ({
           id: product.id,
           name: product.name,
@@ -75,34 +134,42 @@ export default class CategoriesController {
         })),
       }
 
+      console.log('=== FIN REQUÊTE SUCCÈS ===')
+
       return response.status(200).json({
         success: true,
         data: categoryData,
       })
+
     } catch (error: any) {
-      console.error('Erreur show category:', error)
-      return response.status(404).json({
+      console.error('=== ERREUR CATASTROPHIQUE ===')
+      console.error('Message:', error.message)
+      console.error('Stack:', error.stack)
+
+      return response.status(500).json({
         success: false,
-        message: 'Catégorie non trouvée',
+        message: 'Erreur interne du serveur',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined,
       })
     }
   }
+
 
   // 🔹 Créer une nouvelle catégorie
   async store({ request, response }: HttpContext) {
     try {
       const data = request.only([
-        'name', 
-        'slug', 
-        'description', 
-        'sort_order', 
-        'is_active', 
-        'user_id', 
-        'parent_id', 
-        'image_url', 
+        'name',
+        'slug',
+        'description',
+        'sort_order',
+        'is_active',
+        'user_id',
+        'parent_id',
+        'image_url',
         'icon_name'
       ])
-      
+
       const category = await Category.create(data)
 
       return response.status(201).json({
@@ -125,16 +192,16 @@ export default class CategoriesController {
     try {
       const category = await Category.findOrFail(params.id)
       const data = request.only([
-        'name', 
-        'slug', 
-        'description', 
-        'sort_order', 
-        'is_active', 
-        'parent_id', 
-        'image_url', 
+        'name',
+        'slug',
+        'description',
+        'sort_order',
+        'is_active',
+        'parent_id',
+        'image_url',
         'icon_name'
       ])
-      
+
       category.merge(data)
       await category.save()
 
