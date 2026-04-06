@@ -33,7 +33,8 @@ export default class Product extends BaseModel {
   @column({ columnName: 'reviews_count' })
   declare reviewsCount: number
 
-  @column()
+  // ✅ FIX IMPORTANT ICI
+  @column({ columnName: 'user_id' })
   declare userId: string
 
   @column({ columnName: 'category_id' })
@@ -60,10 +61,10 @@ export default class Product extends BaseModel {
   @column()
   declare isOnSale: boolean
 
-  @column.dateTime({ autoCreate: true })
+  @column.dateTime({ autoCreate: true, columnName: 'created_at' })
   declare createdAt: DateTime
 
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  @column.dateTime({ autoCreate: true, autoUpdate: true, columnName: 'updated_at' })
   declare updatedAt: DateTime
 
   @beforeCreate()
@@ -85,7 +86,6 @@ export default class Product extends BaseModel {
   })
   declare reviews: HasMany<typeof Review>
 
-  // ✅ RELATION CATEGORY (propre)
   @belongsTo(() => Category, {
     foreignKey: 'category_id',
   })
