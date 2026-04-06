@@ -82,4 +82,19 @@ export default class Category extends BaseModel {
       category.product_ids = []
     }
   }
+
+  /**
+   * Ajouter un produit à la catégorie sans écraser les existants
+   */
+  async addProduct(productId: string) {
+    if (!this.product_ids) {
+      this.product_ids = []
+    }
+
+    if (!this.product_ids.includes(productId)) {
+      this.product_ids.push(productId)
+    }
+
+    await this.save()
+  }
 }
