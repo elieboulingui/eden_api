@@ -42,12 +42,10 @@ export default class CategoriesController {
     try {
       const category = await Category.query()
         .where('slug', params.slug)
-        .where('is_active', true)
         .firstOrFail()
 
       const subCategories = await Category.query()
         .where('parent_id', category.id)
-        .where('is_active', true)
         .orderBy('sort_order', 'asc')
 
       let products: any[] = []
