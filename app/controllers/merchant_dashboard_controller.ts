@@ -868,6 +868,7 @@ export default class MerchantDashboardController {
             user_id: user.id,
             is_active: true,
             product_ids: [],
+            product_count: 0,
           })
         }
 
@@ -886,29 +887,37 @@ export default class MerchantDashboardController {
         isNew: true,
         isOnSale: false,
         rating: 0,
+        reviews_count: 0,
       })
 
       // ✅ Ajouter le produit à la catégorie SANS écraser les anciens
       if (categoryId) {
+        // Recharger la catégorie pour être sûr d'avoir les données les plus récentes
         const category = await Category.find(categoryId)
         if (category) {
-          // Récupérer les IDs existants (NE PAS réinitialiser)
+          // Récupérer les IDs existants
           let existingProductIds = category.product_ids || []
 
-          // Vérifier si c'est un tableau
+          // S'assurer que c'est un tableau
           if (!Array.isArray(existingProductIds)) {
             existingProductIds = []
           }
 
+          console.log('📦 IDs existants avant ajout:', existingProductIds)
+
           // Ajouter le nouveau ID s'il n'existe pas déjà
           if (!existingProductIds.includes(product.id)) {
             existingProductIds.push(product.id)
-            category.product_ids = existingProductIds  // ← Garde les anciens + ajoute le nouveau
+
+            // Mettre à jour la catégorie
+            category.product_ids = existingProductIds
             category.product_count = existingProductIds.length
+
             await category.save()
 
             console.log(`✅ Produit ${product.id} ajouté à la catégorie ${category.name}`)
-            console.log(`📦 Anciens IDs: ${category.product_ids.join(', ')}`)
+            console.log(`📦 IDs après ajout: ${category.product_ids.join(', ')}`)
+            console.log(`📊 Nombre total de produits: ${category.product_count}`)
           } else {
             console.log(`⚠️ Le produit ${product.id} existe déjà dans la catégorie`)
           }
@@ -923,6 +932,7 @@ export default class MerchantDashboardController {
           price: product.price,
           stock: product.stock,
           category_id: product.category_id,
+          category_name: category_name,
         },
         message: `Produit "${name}" créé et ajouté à la catégorie "${category_name}"`,
       })
@@ -935,7 +945,6 @@ export default class MerchantDashboardController {
       })
     }
   }
-
   async updateProduct({ params, request, response }: HttpContext) {
     try {
       const { userId, productId } = params
