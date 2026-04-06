@@ -759,23 +759,30 @@ export default class MerchantDashboardController {
   async getProducts({ params, request, response }: HttpContext) {
     try {
       const { userId } = params
+
       const user = await User.findBy('id', userId)
 
       if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-        return response.ok({ success: true, data: { data: [], meta: { total: 0 } } })
+        return response.ok({
+          success: true,
+          data: { data: [], meta: { total: 0 } }
+        })
       }
 
       const page = request.input('page', 1)
       const limit = request.input('limit', 10)
 
-      // Charger les produits avec leur catégorie (preload)
+      // ✅ FIX RELATION
       const products = await Product.query()
         .where('user_id', user.id)
-        .preload('category')   // ← Ajouter cette ligne
+        .preload('categoryRelation')   // ✅ ICI
         .orderBy('created_at', 'desc')
         .paginate(page, limit)
 
-      const productIds = products.map(p => p.id)
+      // ⚠️ IMPORTANT
+      const productArray = products.all()
+
+      const productIds = productArray.map(p => p.id)
 
       let favoritesCountMap: Record<string, number> = {}
 
@@ -793,14 +800,18 @@ export default class MerchantDashboardController {
         }, {})
       }
 
-      const transformedProducts = products.map((product: any) => ({
+      // ✅ TRANSFORMATION PROPRE
+      const transformedProducts = productArray.map((product: any) => ({
         id: product.id,
         name: product.name,
         description: product.description,
         price: product.price,
         stock: product.stock,
         image_url: product.image_url,
-        category: product.category?.name || 'Sans catégorie',  // ← Utiliser le nom de la catégorie
+
+        // ✅ FIX CATEGORY
+        category: product.categoryRelation?.name || 'Sans catégorie',
+
         likes: favoritesCountMap[product.id] || 0,
         sales: product.sales || 0,
         status: product.status || 'active'
@@ -809,12 +820,16 @@ export default class MerchantDashboardController {
       return response.ok({
         success: true,
         data: {
-          ...products,
+          meta: products.getMeta(), // ✅ important
           data: transformedProducts
         }
       })
+
     } catch (error: any) {
-      return response.internalServerError({ success: false, message: error.message })
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
     }
   }
 

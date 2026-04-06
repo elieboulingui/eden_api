@@ -1,11 +1,13 @@
 // app/models/Product.ts
+
 import { DateTime } from 'luxon'
 import { BaseModel, column, beforeCreate, belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import crypto from 'node:crypto'
+
 import User from './user.js'
 import Review from './review.js'
-import Category from './categories.js'  // ✅ IMPORTANT : Importer le modèle Category
+import Category from './categories.js'
 
 export default class Product extends BaseModel {
   static table = 'products'
@@ -29,19 +31,16 @@ export default class Product extends BaseModel {
   declare rating: number
 
   @column({ columnName: 'reviews_count' })
-  declare reviews_count: number
+  declare reviewsCount: number
 
   @column()
-  declare user_id: string
+  declare userId: string
 
   @column({ columnName: 'category_id' })
-  declare category_id: string | null
+  declare categoryId: string | null
 
   @column({ columnName: 'image_url' })
-  declare image_url: string | null
-
-  @column()
-  declare category: string | null
+  declare imageUrl: string | null
 
   @column()
   declare origin: string | null
@@ -62,10 +61,10 @@ export default class Product extends BaseModel {
   declare isOnSale: boolean
 
   @column.dateTime({ autoCreate: true })
-  declare created_at: DateTime
+  declare createdAt: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updated_at: DateTime
+  declare updatedAt: DateTime
 
   @beforeCreate()
   static assignUuid(product: Product) {
@@ -74,7 +73,8 @@ export default class Product extends BaseModel {
     }
   }
 
-  // Relations
+  // 🔗 RELATIONS
+
   @belongsTo(() => User, {
     foreignKey: 'user_id',
   })
@@ -85,9 +85,9 @@ export default class Product extends BaseModel {
   })
   declare reviews: HasMany<typeof Review>
 
-  // ✅ AJOUTER CETTE RELATION
+  // ✅ RELATION CATEGORY (propre)
   @belongsTo(() => Category, {
-    foreignKey: 'category_id',  // La colonne dans la table products
+    foreignKey: 'category_id',
   })
-  declare categoryRelation: BelongsTo<typeof Category>  // Nom différent pour éviter conflit avec la colonne 'category'
+  declare category: BelongsTo<typeof Category>
 }
