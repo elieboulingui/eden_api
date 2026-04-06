@@ -772,14 +772,12 @@ export default class MerchantDashboardController {
       const page = request.input('page', 1)
       const limit = request.input('limit', 10)
 
-      // ✅ FIX RELATION
+      // ❌ SUPPRIMÉ preload (pas de relation)
       const products = await Product.query()
         .where('user_id', user.id)
-        .preload('categoryRelation')   // ✅ ICI
         .orderBy('created_at', 'desc')
         .paginate(page, limit)
 
-      // ⚠️ IMPORTANT
       const productArray = products.all()
 
       const productIds = productArray.map(p => p.id)
@@ -800,17 +798,18 @@ export default class MerchantDashboardController {
         }, {})
       }
 
-      // ✅ TRANSFORMATION PROPRE
       const transformedProducts = productArray.map((product: any) => ({
         id: product.id,
         name: product.name,
         description: product.description,
         price: product.price,
         stock: product.stock,
+
+        // ✅ OK car ton modèle est en snake_case
         image_url: product.image_url,
 
-        // ✅ FIX CATEGORY
-        category: product.categoryRelation?.name || 'Sans catégorie',
+        // ⚠️ ici c’est une colonne simple, pas une relation
+        category: product.category || 'Sans catégorie',
 
         likes: favoritesCountMap[product.id] || 0,
         sales: product.sales || 0,
@@ -820,7 +819,7 @@ export default class MerchantDashboardController {
       return response.ok({
         success: true,
         data: {
-          meta: products.getMeta(), // ✅ important
+          meta: products.getMeta(),
           data: transformedProducts
         }
       })
