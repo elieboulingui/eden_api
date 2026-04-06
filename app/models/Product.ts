@@ -5,12 +5,13 @@ import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import crypto from 'node:crypto'
 import User from './user.js'
 import Review from './review.js'
+import Category from './categories.js'  // ✅ IMPORTANT : Importer le modèle Category
 
 export default class Product extends BaseModel {
   static table = 'products'
 
   @column({ isPrimary: true })
-  declare id: string  // UUID
+  declare id: string
 
   @column()
   declare name: string
@@ -34,10 +35,10 @@ export default class Product extends BaseModel {
   declare user_id: string
 
   @column({ columnName: 'category_id' })
-  declare category_id: string | null  // Correspond à la DB
+  declare category_id: string | null
 
   @column({ columnName: 'image_url' })
-  declare image_url: string | null  // Assure que l'image soit stockée
+  declare image_url: string | null
 
   @column()
   declare category: string | null
@@ -83,4 +84,10 @@ export default class Product extends BaseModel {
     foreignKey: 'product_id',
   })
   declare reviews: HasMany<typeof Review>
+
+  // ✅ AJOUTER CETTE RELATION
+  @belongsTo(() => Category, {
+    foreignKey: 'category_id',  // La colonne dans la table products
+  })
+  declare categoryRelation: BelongsTo<typeof Category>  // Nom différent pour éviter conflit avec la colonne 'category'
 }
