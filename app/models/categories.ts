@@ -1,3 +1,4 @@
+// app/models/Category.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, hasMany, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
@@ -28,10 +29,14 @@ export default class Category extends BaseModel {
   @column()
   declare parent_id: string | null
 
+  @column()
+  declare product_count: number  // ✅ Ajouté
+
+  @column()
+  declare sort_order: number  // ✅ Existe déjà
 
   @column()
   declare is_active: boolean
-
 
   @column()
   declare user_id: string
@@ -77,5 +82,31 @@ export default class Category extends BaseModel {
     if (!category.product_ids) {
       category.product_ids = []
     }
+    if (category.product_count === undefined) {
+      category.product_count = 0
+    }
+    if (category.sort_order === undefined) {
+      category.sort_order = 0
+    }
+  }
+
+  async addProduct(productId: string) {
+    if (!this.product_ids) {
+      this.product_ids = []
+    }
+    if (!this.product_ids.includes(productId)) {
+      this.product_ids.push(productId)
+      this.product_count = this.product_ids.length
+      await this.save()
+    }
+    return this
+  }
+
+  async removeProduct(productId: string) {
+    if (!this.product_ids) return this
+    this.product_ids = this.product_ids.filter(id => id !== productId)
+    this.product_count = this.product_ids.length
+    await this.save()
+    return this
   }
 }

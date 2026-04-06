@@ -38,7 +38,7 @@ export class CartSchema extends BaseModel {
 }
 
 export class CategorySchema extends BaseModel {
-  static $columns = ['createdAt', 'iconName', 'id', 'imageUrl', 'isActive', 'name', 'parentId', 'productIds', 'slug', 'sortOrder', 'updatedAt', 'userId'] as const
+  static $columns = ['createdAt', 'iconName', 'id', 'imageUrl', 'isActive', 'name', 'parentId', 'productCount', 'productIds', 'slug', 'sortOrder', 'updatedAt', 'userId'] as const
   $columns = CategorySchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime | null
@@ -54,6 +54,8 @@ export class CategorySchema extends BaseModel {
   declare name: string
   @column()
   declare parentId: string | null
+  @column()
+  declare productCount: number | null
   @column()
   declare productIds: any
   @column()

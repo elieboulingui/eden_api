@@ -1,10 +1,9 @@
 // app/models/Product.ts
 import { DateTime } from 'luxon'
-import { BaseModel, column, beforeCreate, belongsTo, hasMany } from '@adonisjs/lucid/orm'
-import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
+import { BaseModel, column, beforeCreate, belongsTo } from '@adonisjs/lucid/orm'
+import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import crypto from 'node:crypto'
 import User from './user.js'
-import Review from './review.js'
 
 export default class Product extends BaseModel {
   static table = 'products'

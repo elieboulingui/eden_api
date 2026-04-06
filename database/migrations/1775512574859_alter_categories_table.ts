@@ -1,4 +1,4 @@
-// database/migrations/xxx_add_is_active_to_categories.ts
+// database/migrations/xxx_add_product_count_to_categories.ts
 import { BaseSchema } from '@adonisjs/lucid/schema'
 
 export default class extends BaseSchema {
@@ -6,13 +6,14 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.alterTable(this.tableName, (table) => {
-      table.boolean('is_active').defaultTo(true)
+      // Ajouter seulement product_count (sort_order existe déjà)
+      table.integer('product_count').defaultTo(0)
     })
   }
 
   async down() {
     this.schema.alterTable(this.tableName, (table) => {
-      table.dropColumn('is_active')
+      table.dropColumn('product_count')
     })
   }
 }
