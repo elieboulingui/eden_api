@@ -2,7 +2,6 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Category from '#models/categories'
 import Product from '#models/Product'
 // En haut du fichier
-import Database from '@adonisjs/lucid/services/db'
 
 export default class CategoriesController {
 
