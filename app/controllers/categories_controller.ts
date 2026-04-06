@@ -41,7 +41,7 @@ export default class CategoriesController {
   async show({ params, response }: HttpContext) {
     try {
       const category = await Category.query()
-        .where('slug', params.slug)
+        .where('name', params.name)
         .firstOrFail()
 
       const subCategories = await Category.query()

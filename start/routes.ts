@@ -120,7 +120,7 @@ router.group(() => {
   router.delete('/products/:id', [ProductsController, 'destroy'])
 
   router.get('/categories', [CategoriesController, 'index'])
-  router.get('/categories/:slug', [CategoriesController, 'show'])
+  router.get('/categories/:name', [CategoriesController, 'show'])
   router.post('/categories', [CategoriesController, 'store'])
   router.put('/categories/:id', [CategoriesController, 'update'])
   router.delete('/categories/:id', [CategoriesController, 'destroy'])
