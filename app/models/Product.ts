@@ -1,19 +1,16 @@
 // app/models/Product.ts
-
 import { DateTime } from 'luxon'
 import { BaseModel, column, beforeCreate, belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import crypto from 'node:crypto'
-
 import User from './user.js'
 import Review from './review.js'
-import Category from './categories.js'
 
 export default class Product extends BaseModel {
   static table = 'products'
 
   @column({ isPrimary: true })
-  declare id: string
+  declare id: string  // UUID
 
   @column()
   declare name: string
@@ -31,17 +28,19 @@ export default class Product extends BaseModel {
   declare rating: number
 
   @column({ columnName: 'reviews_count' })
-  declare reviewsCount: number
+  declare reviews_count: number
 
-  // ✅ FIX IMPORTANT ICI
-  @column({ columnName: 'user_id' })
-  declare userId: string
+  @column()
+  declare user_id: string
 
   @column({ columnName: 'category_id' })
-  declare categoryId: string | null
+  declare category_id: string | null  // Correspond à la DB
 
   @column({ columnName: 'image_url' })
-  declare imageUrl: string | null
+  declare image_url: string | null  // Assure que l'image soit stockée
+
+  @column()
+  declare category: string | null
 
   @column()
   declare origin: string | null
@@ -61,11 +60,11 @@ export default class Product extends BaseModel {
   @column()
   declare isOnSale: boolean
 
-  @column.dateTime({ autoCreate: true, columnName: 'created_at' })
-  declare createdAt: DateTime
+  @column.dateTime({ autoCreate: true })
+  declare created_at: DateTime
 
-  @column.dateTime({ autoCreate: true, autoUpdate: true, columnName: 'updated_at' })
-  declare updatedAt: DateTime
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updated_at: DateTime
 
   @beforeCreate()
   static assignUuid(product: Product) {
@@ -74,8 +73,7 @@ export default class Product extends BaseModel {
     }
   }
 
-  // 🔗 RELATIONS
-
+  // Relations
   @belongsTo(() => User, {
     foreignKey: 'user_id',
   })
@@ -85,9 +83,4 @@ export default class Product extends BaseModel {
     foreignKey: 'product_id',
   })
   declare reviews: HasMany<typeof Review>
-
-  @belongsTo(() => Category, {
-    foreignKey: 'category_id',
-  })
-  declare category: BelongsTo<typeof Category>
 }
