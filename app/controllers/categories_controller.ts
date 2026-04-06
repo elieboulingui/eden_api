@@ -44,10 +44,6 @@ export default class CategoriesController {
         .where('name', params.name)
         .firstOrFail()
 
-      const subCategories = await Category.query()
-        .where('parent_id', category.id)
-        .orderBy('sort_order', 'asc')
-
       let products: any[] = []
       if (category.product_ids && category.product_ids.length > 0) {
         products = await Product.query()
@@ -69,13 +65,6 @@ export default class CategoriesController {
         product_ids: category.product_ids,
         created_at: category.created_at,
         updated_at: category.updated_at,
-        subCategories: subCategories.map((sub) => ({
-          id: sub.id,
-          name: sub.name,
-          slug: sub.slug,
-          image_url: sub.image_url,
-          product_count: sub.product_count,
-        })),
         products: products.map((product) => ({
           id: product.id,
           name: product.name,
