@@ -98,7 +98,8 @@ router.group(() => {
   router.get('/categories/:name', [CategoriesController, 'show']).as('categories.show')
   router.post('/categories', [CategoriesController, 'store']).as('categories.store')
   router.put('/categories/:id', [CategoriesController, 'update']).as('categories.update')
-  router.delete('/categories/:id', [CategoriesController, '111destroy']).as('categories.destroy')
+  // ✅ CORRECTION: "destroy" au lieu de "111destroy"
+  router.delete('/categories/:id', [CategoriesController, 'destroy']).as('categories.destroy')
   router.post('/categories/:id/products', [CategoriesController, 'createProduct']).as('categories.products.create')
 
   // ----------------------------------------------------------
@@ -136,7 +137,7 @@ router.group(() => {
   router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice']).as('orders.invoice')
   router.put('/orders/:orderId/status', [OrdersController, 'updateStatus']).as('orders.status.update')
 
-  // ✅ CORRECTION: Donner des noms différents aux deux routes
+  // Routes avec le même contrôleur - noms différents
   router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus'])
     .as('orders.payment-status')
   router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus'])
