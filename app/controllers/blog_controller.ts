@@ -1,8 +1,6 @@
 // app/controllers/blog_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import BlogPost from '#models/blog_post'
-// ❌ Supprimer l'import non utilisé
-// import User from '#models/user'
 import { DateTime } from 'luxon'
 
 export default class BlogController {
@@ -248,11 +246,11 @@ export default class BlogController {
         })
       }
 
-      const post = await BlogPost.create({
+      // ✅ CORRECTION: Préparer les données avec des undefined au lieu de null
+      const postData: Partial<BlogPost> = {
         title,
         excerpt,
         content,
-        image_url: image_url || undefined,  // ✅ Correction: null -> undefined
         category,
         author_name: user.full_name,
         author_id: user.id,
@@ -261,8 +259,19 @@ export default class BlogController {
         meta_title: meta_title || title,
         meta_description: meta_description || excerpt.substring(0, 160),
         tags: tags || [],
-        published_at: status === 'published' ? DateTime.now() : undefined  // ✅ Correction: null -> undefined
-      })
+      }
+
+      // ✅ Ajouter image_url seulement si défini
+      if (image_url) {
+        postData.image_url = image_url
+      }
+
+      // ✅ Ajouter published_at seulement si status est 'published'
+      if (status === 'published') {
+        postData.published_at = DateTime.now()
+      }
+
+      const post = await BlogPost.create(postData)
 
       return response.created({
         success: true,
@@ -353,11 +362,18 @@ export default class BlogController {
       if (title) post.title = title
       if (excerpt) post.excerpt = excerpt
       if (content) post.content = content
-      if (image_url !== undefined) post.image_url = image_url || undefined  // ✅ Correction
+      // ✅ CORRECTION: Gérer image_url correctement
+      if (image_url !== undefined) {
+        post.image_url = image_url || undefined
+      }
       if (category) post.category = category
       if (read_time) post.read_time = read_time
-      if (meta_title !== undefined) post.meta_title = meta_title || undefined  // ✅ Correction
-      if (meta_description !== undefined) post.meta_description = meta_description || undefined  // ✅ Correction
+      if (meta_title !== undefined) {
+        post.meta_title = meta_title || undefined
+      }
+      if (meta_description !== undefined) {
+        post.meta_description = meta_description || undefined
+      }
       if (tags) post.tags = tags
 
       // Gérer le changement de statut
