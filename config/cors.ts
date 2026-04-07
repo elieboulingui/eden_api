@@ -14,13 +14,11 @@ const corsConfig = defineConfig({
   enabled: true,
 
   /**
-   * Liste explicite des origines autorisées.
-   * En développement : autorise localhost
-   * En production : autorise uniquement le domaine Vercel
+   * In development, allow every origin to simplify local front/backend setup.
+   * In production, keep an explicit allowlist (empty by default, so no
+   * cross-origin browser access is allowed until configured).
    */
-  origin: app.inDev
-    ? ['http://localhost:3333', 'http://localhost:3000', 'http://127.0.0.1:3333']
-    : ['https://paradis-alimentaires.vercel.app/'],
+  origin: app.inDev ? true : [],
 
   /**
    * HTTP methods accepted for cross-origin requests.
