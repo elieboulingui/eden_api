@@ -1,3 +1,4 @@
+// app/controllers/merchant_dashboard_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import Product from '#models/Product'
@@ -357,8 +358,6 @@ export default class MerchantDashboardController {
 
   // ============= COMMANDES MARCHAND =============
 
-  // app/controllers/merchant_dashboard_controller.ts
-
   async getMerchantOrders({ params, response }: HttpContext) {
     try {
       const { userId } = params
@@ -375,7 +374,7 @@ export default class MerchantDashboardController {
         return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
       }
 
-      // ✅ Récupérer TOUS les produits du marchand (y compris leur catégorie si besoin)
+      // ✅ Récupérer TOUS les produits du marchand
       const merchantProducts = await Product.query()
         .where('user_id', user.id)
         .select('id', 'name', 'price', 'image_url')
@@ -412,7 +411,7 @@ export default class MerchantDashboardController {
             })
             .orderBy('created_at', 'desc')
         })
-        .preload('product')  // ✅ Précharger le produit pour avoir ses infos
+        .preload('product')
 
       console.log(`🛒 OrderItems trouvés: ${orderItems.length}`)
 
@@ -515,7 +514,6 @@ export default class MerchantDashboardController {
       const stats = {
         totalOrders: ordersWithMerchantItems.length,
         totalRevenue: ordersWithMerchantItems.reduce((sum, order) => {
-          // Calculer le revenu seulement pour les items du marchand
           const merchantRevenue = order.items.reduce((itemSum: number, item: any) => itemSum + item.subtotal, 0)
           return sum + merchantRevenue
         }, 0),
@@ -622,91 +620,6 @@ export default class MerchantDashboardController {
 
         const orderData = ordersMap.get(order.id)
         orderData.items_count++
-      }
-
-      const pendingOrders = Array.from(ordersMap.values())
-      pendingOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-
-      return response.ok({
-        success: true,
-        data: pendingOrders,
-        count: pendingOrders.length
-      })
-
-    } catch (error: any) {
-      console.error('Erreur dans getPendingOrders:', error)
-      return response.internalServerError({
-        success: false,
-        message: error.message
-      })
-    }
-  }
-
-  async getPendingOrders({ params, response }: HttpContext) {
-    try {
-      const { userId } = params
-
-      if (!userId) {
-        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
-      }
-
-      const user = await User.findBy('id', userId)
-
-      if (!user) {
-        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
-      }
-
-      const merchantProducts = await Product.query()
-        .where('user_id', user.id)
-        .whereNull('deleted_at')
-        .select('id')
-
-      const productIds = merchantProducts.map(p => p.id)
-
-      if (productIds.length === 0) {
-        return response.ok({
-          success: true,
-          data: [],
-          count: 0
-        })
-      }
-
-      const orderItems = await OrderItem.query()
-        .whereIn('product_id', productIds)
-        .preload('order', (orderQuery) => {
-          orderQuery
-            .where('status', 'pending')
-            .preload('user', (userQuery) => {
-              userQuery.select('id', 'full_name', 'email')
-            })
-        })
-
-      const ordersMap = new Map()
-
-      for (const item of orderItems) {
-        const order = item.order
-        if (order && order.status === 'pending' && !ordersMap.has(order.id)) {
-          ordersMap.set(order.id, {
-            id: order.id,
-            order_number: order.order_number,
-            status: order.status,
-            total: order.total,
-            customer_name: order.customer_name,
-            customer_email: order.customer_email,
-            customer_phone: order.customer_phone,
-            created_at: order.created_at,
-            items_count: 0,
-            user: order.user ? {
-              full_name: order.user.full_name,
-              email: order.user.email
-            } : null
-          })
-        }
-
-        if (ordersMap.has(order.id)) {
-          const orderData = ordersMap.get(order.id)
-          orderData.items_count++
-        }
       }
 
       const pendingOrders = Array.from(ordersMap.values())
@@ -924,8 +837,6 @@ export default class MerchantDashboardController {
     })
   }
 
-  // app/controllers/merchant_dashboard_controller.ts
-
   async getProducts({ params, request, response }: HttpContext) {
     try {
       const { userId } = params
@@ -945,7 +856,7 @@ export default class MerchantDashboardController {
       // ✅ CHARGER LA RELATION categoryRelation
       const products = await Product.query()
         .where('user_id', user.id)
-        .preload('categoryRelation')  // ✅ Charger la catégorie
+        .preload('categoryRelation')
         .orderBy('created_at', 'desc')
         .paginate(page, limit)
 
@@ -970,13 +881,11 @@ export default class MerchantDashboardController {
       }
 
       const transformedProducts = productArray.map((product: any) => {
-        // ✅ Récupérer le nom de la catégorie depuis la relation
         let categoryName = 'Sans catégorie'
 
         if (product.categoryRelation) {
           categoryName = product.categoryRelation.name
         } else if (product.category) {
-          // Fallback sur l'ancienne colonne textuelle
           categoryName = product.category
         }
 
@@ -987,7 +896,7 @@ export default class MerchantDashboardController {
           price: product.price,
           stock: product.stock,
           image_url: product.image_url,
-          category: categoryName,  // ✅ Nom de la catégorie
+          category: categoryName,
           category_id: product.category_id,
           likes: favoritesCountMap[product.id] || 0,
           sales: product.sales || 0,
@@ -1072,24 +981,19 @@ export default class MerchantDashboardController {
 
       // ✅ Ajouter le produit à la catégorie SANS écraser les anciens
       if (categoryId) {
-        // Recharger la catégorie pour être sûr d'avoir les données les plus récentes
         const category = await Category.find(categoryId)
         if (category) {
-          // Récupérer les IDs existants
           let existingProductIds = category.product_ids || []
 
-          // S'assurer que c'est un tableau
           if (!Array.isArray(existingProductIds)) {
             existingProductIds = []
           }
 
           console.log('📦 IDs existants avant ajout:', existingProductIds)
 
-          // Ajouter le nouveau ID s'il n'existe pas déjà
           if (!existingProductIds.includes(product.id)) {
             existingProductIds.push(product.id)
 
-            // Mettre à jour la catégorie
             category.product_ids = existingProductIds
             category.product_count = existingProductIds.length
 
@@ -1125,6 +1029,7 @@ export default class MerchantDashboardController {
       })
     }
   }
+
   async updateProduct({ params, request, response }: HttpContext) {
     try {
       const { userId, productId } = params
@@ -1386,47 +1291,44 @@ export default class MerchantDashboardController {
     }
   }
 
-
   async createCoupon({ params, request, response }: HttpContext) {
-  try {
-    const { userId } = params
-    const { code, discount, type, validUntil, usageLimit, productId } = request.only([
-      'code', 'discount', 'type', 'validUntil', 'usageLimit', 'productId'
-    ])
+    try {
+      const { userId } = params
+      const { code, discount, type, validUntil, usageLimit, productId } = request.only([
+        'code', 'discount', 'type', 'validUntil', 'usageLimit', 'productId'
+      ])
 
-    const user = await User.findBy('id', userId)
+      const user = await User.findBy('id', userId)
 
-    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-      return response.forbidden({ success: false, message: 'Non autorisé' })
+      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+        return response.forbidden({ success: false, message: 'Non autorisé' })
+      }
+
+      const coupon = await Coupon.create({
+        code: code.toUpperCase(),
+        discount: parseFloat(discount),
+        type: type,
+        valid_until: validUntil ? DateTime.fromJSDate(new Date(validUntil)) : null,
+        usage_limit: usageLimit ? parseInt(usageLimit) : undefined,
+        used_count: 0,
+        user_id: user.id,
+        product_id: productId || null,
+        status: 'active'
+      })
+
+      return response.created({
+        success: true,
+        data: coupon,
+        message: 'Code promo créé'
+      })
+    } catch (error: any) {
+      console.error('Erreur createCoupon:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
     }
-
-    // ✅ CORRECTION : Utiliser user_id au lieu de userIds
-    const coupon = await Coupon.create({
-      code: code.toUpperCase(),
-      discount: parseFloat(discount),
-      type: type,
-      valid_until: validUntil ? DateTime.fromJSDate(new Date(validUntil)) : null,
-      usage_limit: usageLimit ? parseInt(usageLimit) : undefined,
-      used_count: 0,
-      user_id: user.id,  // ✅ CHANGÉ: userIds → user_id
-      // userIds: [user.id],  // ❌ À SUPPRIMER ou garder si la colonne existe
-      product_id: productId || null,
-      status: 'active'
-    })
-
-    return response.created({
-      success: true,
-      data: coupon,
-      message: 'Code promo créé'
-    })
-  } catch (error: any) {
-    console.error('Erreur createCoupon:', error)
-    return response.internalServerError({
-      success: false,
-      message: error.message
-    })
   }
-}
 
   async updateCoupon({ params, request, response }: HttpContext) {
     try {
