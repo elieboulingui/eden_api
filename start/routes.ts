@@ -70,7 +70,7 @@ router.group(() => {
   router.post('/api/login', [SessionController, 'store']).as('session.api.login')
   router.post('/client/logout', [SessionController, 'destroy'])
 
-  // ✅ ROUTES PROFIL (conservées)
+  // ✅ ROUTES PROFIL
   router.put('/profile/update', [SessionController, 'update'])
   router.put('/profile/password', [SessionController, 'changePassword'])
 
@@ -135,7 +135,8 @@ router.group(() => {
   router.post('/orders/:orderId/cancel', [OrdersController, 'cancel'])
   router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice'])
   router.put('/orders/:orderId/status', [OrdersController, 'updateStatus'])
-  router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatu'])
+  // ✅ CORRECTION: checkPaymentStatus (avec un 's' à la fin)
+  router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus'])
   router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus'])
 
   // ----------------------------------------------------------
@@ -190,7 +191,10 @@ router.group(() => {
   // MARCHAND (MERCHANT)
   // ----------------------------------------------------------
   router.post('/merchant/give-change', [MerchantDashboardController, 'giveChange'])
-  router.get('/merchant/withdrawals/:userId', [MerchantDashboardController, 'getWithdrawalHistory'])
+    router.get('/merchant/withdrawals/:userId', [
+      MerchantDashboardController,
+      'getWithdrawalHistory',
+    ])
   router.get('/merchant/wallet/:userId', [MerchantDashboardController, 'getWallet'])
   router.get('/merchant/dashboard/:userId', [MerchantDashboardController, 'dashboard'])
   router.get('/merchant/stats/:userId', [MerchantDashboardController, 'getStats'])

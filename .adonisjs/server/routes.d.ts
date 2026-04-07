@@ -14,8 +14,57 @@ export type ScannedRoutes = {
     'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'dashboard.manager': { paramsTuple?: []; params?: {} }
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
-    'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
+    'new_account.store': { paramsTuple?: []; params?: {} }
+    'session.client.store': { paramsTuple?: []; params?: {} }
+    'session.login': { paramsTuple?: []; params?: {} }
+    'session.api.login': { paramsTuple?: []; params?: {} }
+    'session.destroy': { paramsTuple?: []; params?: {} }
+    'session.update': { paramsTuple?: []; params?: {} }
+    'session.change_password': { paramsTuple?: []; params?: {} }
+    'blog.index': { paramsTuple?: []; params?: {} }
+    'blog.featured': { paramsTuple?: []; params?: {} }
+    'blog.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
+    'products.index': { paramsTuple?: []; params?: {} }
+    'products.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'produits.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'products.store': { paramsTuple?: []; params?: {} }
+    'products.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'products.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'categories.index': { paramsTuple?: []; params?: {} }
+    'categories.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
+    'categories.store': { paramsTuple?: []; params?: {} }
+    'categories.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'categories.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'categories.create_product': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'users.index': { paramsTuple?: []; params?: {} }
+    'users.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'cart.get_cart': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'cart.show': { paramsTuple?: []; params?: {} }
+    'cart.add': { paramsTuple?: []; params?: {} }
+    'cart.update': { paramsTuple?: []; params?: {} }
+    'cart.delete_item': { paramsTuple: [ParamValue]; params: {'itemId': ParamValue} }
+    'cart.clear': { paramsTuple?: []; params?: {} }
+    'favorites.add': { paramsTuple?: []; params?: {} }
+    'favorites.remove': { paramsTuple?: []; params?: {} }
+    'favorites.index': { paramsTuple?: []; params?: {} }
+    'favorites.check': { paramsTuple?: []; params?: {} }
+    'orders.store': { paramsTuple?: []; params?: {} }
+    'orders.all_orders': { paramsTuple?: []; params?: {} }
+    'orders.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
+    'orders.cancel': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
+    'orders.update_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'orders.check_payment_statu': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
+    'order_tracking.search': { paramsTuple?: []; params?: {} }
+    'order_tracking.get_tracking_events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'order_tracking.add_tracking_event': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'order_tracking.update_order_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'coupons.get_all_coupons': { paramsTuple?: []; params?: {} }
+    'coupons.apply': { paramsTuple?: []; params?: {} }
+    'coupons.verify': { paramsTuple?: []; params?: {} }
+    'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'promotions.index': { paramsTuple?: []; params?: {} }
     'promotions.banners': { paramsTuple?: []; params?: {} }
     'promotions.flash_sales': { paramsTuple?: []; params?: {} }
@@ -28,6 +77,10 @@ export type ScannedRoutes = {
     'pubs.update_pub': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.delete_pub': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.toggle_pub_status': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'newsletter.store': { paramsTuple?: []; params?: {} }
+    'push_subscriptions.index': { paramsTuple?: []; params?: {} }
+    'push_subscriptions.store': { paramsTuple?: []; params?: {} }
+    'push_subscriptions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'merchant_dashboard.give_change': { paramsTuple?: []; params?: {} }
     'merchant_dashboard.get_withdrawal_history': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_wallet': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
@@ -49,56 +102,12 @@ export type ScannedRoutes = {
     'merchant_dashboard.create_coupon': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.update_coupon': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'merchant_dashboard.delete_coupon': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
-    'coupons.get_all_coupons': { paramsTuple?: []; params?: {} }
-    'coupons.apply': { paramsTuple?: []; params?: {} }
-    'coupons.verify': { paramsTuple?: []; params?: {} }
-    'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'new_account.store': { paramsTuple?: []; params?: {} }
-    'session.client.store': { paramsTuple?: []; params?: {} }
-    'session.login': { paramsTuple?: []; params?: {} }
-    'session.api.login': { paramsTuple?: []; params?: {} }
-    'session.update': { paramsTuple?: []; params?: {} }
-    'session.change_password': { paramsTuple?: []; params?: {} }
-    'session.destroy': { paramsTuple?: []; params?: {} }
-    'users.index': { paramsTuple?: []; params?: {} }
-    'users.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'products.index': { paramsTuple?: []; params?: {} }
-    'products.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'produits.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'products.store': { paramsTuple?: []; params?: {} }
-    'products.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'products.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'categories.index': { paramsTuple?: []; params?: {} }
-    'categories.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
-    'categories.store': { paramsTuple?: []; params?: {} }
-    'categories.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'categories.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'categories.create_product': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'cart.get_cart': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'cart.show': { paramsTuple?: []; params?: {} }
-    'cart.add': { paramsTuple?: []; params?: {} }
-    'cart.update': { paramsTuple?: []; params?: {} }
-    'cart.delete_item': { paramsTuple: [ParamValue]; params: {'itemId': ParamValue} }
-    'cart.clear': { paramsTuple?: []; params?: {} }
-    'favorites.add': { paramsTuple?: []; params?: {} }
-    'favorites.remove': { paramsTuple?: []; params?: {} }
-    'favorites.index': { paramsTuple?: []; params?: {} }
-    'favorites.check': { paramsTuple?: []; params?: {} }
-    'orders.store': { paramsTuple?: []; params?: {} }
-    'orders.all_orders': { paramsTuple?: []; params?: {} }
-    'orders.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
-    'orders.cancel': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
-    'orders.update_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'order_tracking.search': { paramsTuple?: []; params?: {} }
-    'order_tracking.get_tracking_events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'order_tracking.add_tracking_event': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'order_tracking.update_order_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'newsletter.subscribe': { paramsTuple?: []; params?: {} }
-    'push_subscriptions.index': { paramsTuple?: []; params?: {} }
-    'push_subscriptions.store': { paramsTuple?: []; params?: {} }
-    'push_subscriptions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'blog.admin_index': { paramsTuple?: []; params?: {} }
+    'blog.stats': { paramsTuple?: []; params?: {} }
+    'blog.admin_show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'blog.store': { paramsTuple?: []; params?: {} }
+    'blog.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'blog.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   GET: {
     'home': { paramsTuple?: []; params?: {} }
@@ -108,13 +117,34 @@ export type ScannedRoutes = {
     'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'dashboard.manager': { paramsTuple?: []; params?: {} }
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
-    'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
+    'blog.index': { paramsTuple?: []; params?: {} }
+    'blog.featured': { paramsTuple?: []; params?: {} }
+    'blog.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
+    'products.index': { paramsTuple?: []; params?: {} }
+    'products.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'produits.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'categories.index': { paramsTuple?: []; params?: {} }
+    'categories.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
+    'users.index': { paramsTuple?: []; params?: {} }
+    'users.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'cart.get_cart': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'favorites.index': { paramsTuple?: []; params?: {} }
+    'favorites.check': { paramsTuple?: []; params?: {} }
+    'orders.all_orders': { paramsTuple?: []; params?: {} }
+    'orders.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
+    'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
+    'orders.check_payment_statu': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
+    'order_tracking.get_tracking_events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'coupons.get_all_coupons': { paramsTuple?: []; params?: {} }
+    'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'promotions.index': { paramsTuple?: []; params?: {} }
     'promotions.banners': { paramsTuple?: []; params?: {} }
     'promotions.flash_sales': { paramsTuple?: []; params?: {} }
     'promotions.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.get_all_pubs': { paramsTuple?: []; params?: {} }
+    'push_subscriptions.index': { paramsTuple?: []; params?: {} }
     'merchant_dashboard.get_withdrawal_history': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_wallet': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.dashboard': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
@@ -126,24 +156,9 @@ export type ScannedRoutes = {
     'merchant_dashboard.get_products': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_categories': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_coupons': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'coupons.get_all_coupons': { paramsTuple?: []; params?: {} }
-    'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'users.index': { paramsTuple?: []; params?: {} }
-    'users.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'products.index': { paramsTuple?: []; params?: {} }
-    'products.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'produits.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'categories.index': { paramsTuple?: []; params?: {} }
-    'categories.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
-    'cart.get_cart': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'favorites.index': { paramsTuple?: []; params?: {} }
-    'favorites.check': { paramsTuple?: []; params?: {} }
-    'orders.all_orders': { paramsTuple?: []; params?: {} }
-    'orders.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
-    'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
-    'order_tracking.get_tracking_events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'push_subscriptions.index': { paramsTuple?: []; params?: {} }
+    'blog.admin_index': { paramsTuple?: []; params?: {} }
+    'blog.stats': { paramsTuple?: []; params?: {} }
+    'blog.admin_show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   HEAD: {
     'home': { paramsTuple?: []; params?: {} }
@@ -153,13 +168,34 @@ export type ScannedRoutes = {
     'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'dashboard.manager': { paramsTuple?: []; params?: {} }
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
-    'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
+    'blog.index': { paramsTuple?: []; params?: {} }
+    'blog.featured': { paramsTuple?: []; params?: {} }
+    'blog.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
+    'products.index': { paramsTuple?: []; params?: {} }
+    'products.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'produits.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'categories.index': { paramsTuple?: []; params?: {} }
+    'categories.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
+    'users.index': { paramsTuple?: []; params?: {} }
+    'users.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'cart.get_cart': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'favorites.index': { paramsTuple?: []; params?: {} }
+    'favorites.check': { paramsTuple?: []; params?: {} }
+    'orders.all_orders': { paramsTuple?: []; params?: {} }
+    'orders.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
+    'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
+    'orders.check_payment_statu': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
+    'order_tracking.get_tracking_events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'coupons.get_all_coupons': { paramsTuple?: []; params?: {} }
+    'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'promotions.index': { paramsTuple?: []; params?: {} }
     'promotions.banners': { paramsTuple?: []; params?: {} }
     'promotions.flash_sales': { paramsTuple?: []; params?: {} }
     'promotions.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.get_all_pubs': { paramsTuple?: []; params?: {} }
+    'push_subscriptions.index': { paramsTuple?: []; params?: {} }
     'merchant_dashboard.get_withdrawal_history': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_wallet': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.dashboard': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
@@ -171,37 +207,14 @@ export type ScannedRoutes = {
     'merchant_dashboard.get_products': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_categories': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_coupons': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'coupons.get_all_coupons': { paramsTuple?: []; params?: {} }
-    'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'users.index': { paramsTuple?: []; params?: {} }
-    'users.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'products.index': { paramsTuple?: []; params?: {} }
-    'products.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'produits.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'categories.index': { paramsTuple?: []; params?: {} }
-    'categories.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
-    'cart.get_cart': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'favorites.index': { paramsTuple?: []; params?: {} }
-    'favorites.check': { paramsTuple?: []; params?: {} }
-    'orders.all_orders': { paramsTuple?: []; params?: {} }
-    'orders.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
-    'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
-    'order_tracking.get_tracking_events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'push_subscriptions.index': { paramsTuple?: []; params?: {} }
+    'blog.admin_index': { paramsTuple?: []; params?: {} }
+    'blog.stats': { paramsTuple?: []; params?: {} }
+    'blog.admin_show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   POST: {
     'new_account.web.store': { paramsTuple?: []; params?: {} }
     'session.store': { paramsTuple?: []; params?: {} }
     'session.web.destroy': { paramsTuple?: []; params?: {} }
-    'promotions.store': { paramsTuple?: []; params?: {} }
-    'pubs.create_pub': { paramsTuple?: []; params?: {} }
-    'merchant_dashboard.give_change': { paramsTuple?: []; params?: {} }
-    'merchant_dashboard.create_product': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'merchant_dashboard.create_category': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'merchant_dashboard.create_coupon': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'coupons.apply': { paramsTuple?: []; params?: {} }
-    'coupons.verify': { paramsTuple?: []; params?: {} }
     'new_account.store': { paramsTuple?: []; params?: {} }
     'session.client.store': { paramsTuple?: []; params?: {} }
     'session.login': { paramsTuple?: []; params?: {} }
@@ -218,15 +231,19 @@ export type ScannedRoutes = {
     'orders.cancel': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'order_tracking.search': { paramsTuple?: []; params?: {} }
     'order_tracking.add_tracking_event': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'newsletter.subscribe': { paramsTuple?: []; params?: {} }
+    'coupons.apply': { paramsTuple?: []; params?: {} }
+    'coupons.verify': { paramsTuple?: []; params?: {} }
+    'promotions.store': { paramsTuple?: []; params?: {} }
+    'pubs.create_pub': { paramsTuple?: []; params?: {} }
+    'newsletter.store': { paramsTuple?: []; params?: {} }
     'push_subscriptions.store': { paramsTuple?: []; params?: {} }
+    'merchant_dashboard.give_change': { paramsTuple?: []; params?: {} }
+    'merchant_dashboard.create_product': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchant_dashboard.create_category': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchant_dashboard.create_coupon': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'blog.store': { paramsTuple?: []; params?: {} }
   }
   PUT: {
-    'promotions.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'pubs.update_pub': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'merchant_dashboard.update_product': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
-    'merchant_dashboard.update_category': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
-    'merchant_dashboard.update_coupon': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'session.update': { paramsTuple?: []; params?: {} }
     'session.change_password': { paramsTuple?: []; params?: {} }
     'products.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -234,18 +251,25 @@ export type ScannedRoutes = {
     'cart.update': { paramsTuple?: []; params?: {} }
     'orders.update_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'order_tracking.update_order_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'promotions.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'pubs.update_pub': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'merchant_dashboard.update_product': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
+    'merchant_dashboard.update_category': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
+    'merchant_dashboard.update_coupon': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
+    'blog.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   DELETE: {
-    'promotions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'pubs.delete_pub': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'merchant_dashboard.delete_product': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
-    'merchant_dashboard.delete_category': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
-    'merchant_dashboard.delete_coupon': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'products.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'categories.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'cart.delete_item': { paramsTuple: [ParamValue]; params: {'itemId': ParamValue} }
     'cart.clear': { paramsTuple?: []; params?: {} }
+    'promotions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'pubs.delete_pub': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'push_subscriptions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'merchant_dashboard.delete_product': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
+    'merchant_dashboard.delete_category': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
+    'merchant_dashboard.delete_coupon': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
+    'blog.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   PATCH: {
     'pubs.toggle_pub_status': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
