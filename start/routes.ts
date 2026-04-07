@@ -6,7 +6,6 @@ import SessionController from '#controllers/session_controller'
 import NewAccountViewController from '#controllers/new_account_controllers'
 import SessionViewController from '#controllers/session_controllers'
 import UsersController from '#controllers/users_controller'
-const HealthChecksController = () => import('#controllers/health_checks_controller')
 import ProductsController from '#controllers/products_controller'
 import CategoriesController from '#controllers/categories_controller'
 import CartController from '#controllers/CartController'
@@ -16,9 +15,9 @@ import OrdersController from '#controllers/OrdersController'
 import DashboardViewController from '#controllers/dashboard_view_controller'
 import NewsletterController from '#controllers/newsletter_controller'
 import PushSubscriptionsController from '#controllers/push_subscriptions_controller'
-const CouponsController = () => import('#controllers/coupons_controller')
 const OrderTrackingController = () => import('#controllers/order_trackings_controller')
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
+const CouponsController = () => import('#controllers/coupons_controller')
 
 // Page d'accueil (corrigez aussi cette ligne)
 router.get('/', async ({ view }) => {
@@ -55,10 +54,8 @@ router.group(() => {
   router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus']).as(
     'orders.payment_status_callbacks'
   )
-  router.get('/health/live', [HealthChecksController, 'live'])
 
   // Readiness probe : vérifie que l'application est prête (DB, Redis, etc.)
-  router.get('/health/ready', [HealthChecksController, 'ready'])
     router.get('/promo', [PromotionsController, 'index']).as('promotions.index')
     router.get('/banners', [PromotionsController, 'banners']).as('promotions.banners')
     router.get('/flash-sales', [PromotionsController, 'flashSales']).as('promotions.flash_sales')
@@ -101,7 +98,7 @@ router.group(() => {
   router.put('/merchant/coupons/:userId/:couponId', [MerchantDashboardController, 'updateCoupon'])
   router.delete('/merchant/coupons/:userId/:couponId', [MerchantDashboardController, 'deleteCoupon'])
 
-  router.get('/coupons', [CouponsController, 'index'])
+  router.get('/coupons', [CouponsController, 'getAllCoupons'])
   router.post('/coupons/apply', [CouponsController, 'apply'])
   router.post('/coupons/verify', [CouponsController, 'verify'])
   router.get('/coupons/:id', [CouponsController, 'show'])

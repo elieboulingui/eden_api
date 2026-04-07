@@ -16,8 +16,6 @@ export type ScannedRoutes = {
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
-    'health_checks.live': { paramsTuple?: []; params?: {} }
-    'health_checks.ready': { paramsTuple?: []; params?: {} }
     'promotions.index': { paramsTuple?: []; params?: {} }
     'promotions.banners': { paramsTuple?: []; params?: {} }
     'promotions.flash_sales': { paramsTuple?: []; params?: {} }
@@ -51,7 +49,7 @@ export type ScannedRoutes = {
     'merchant_dashboard.create_coupon': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.update_coupon': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'merchant_dashboard.delete_coupon': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
-    'coupons.index': { paramsTuple?: []; params?: {} }
+    'coupons.get_all_coupons': { paramsTuple?: []; params?: {} }
     'coupons.apply': { paramsTuple?: []; params?: {} }
     'coupons.verify': { paramsTuple?: []; params?: {} }
     'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -112,8 +110,6 @@ export type ScannedRoutes = {
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
-    'health_checks.live': { paramsTuple?: []; params?: {} }
-    'health_checks.ready': { paramsTuple?: []; params?: {} }
     'promotions.index': { paramsTuple?: []; params?: {} }
     'promotions.banners': { paramsTuple?: []; params?: {} }
     'promotions.flash_sales': { paramsTuple?: []; params?: {} }
@@ -130,7 +126,7 @@ export type ScannedRoutes = {
     'merchant_dashboard.get_products': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_categories': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_coupons': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'coupons.index': { paramsTuple?: []; params?: {} }
+    'coupons.get_all_coupons': { paramsTuple?: []; params?: {} }
     'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'users.index': { paramsTuple?: []; params?: {} }
     'users.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -159,8 +155,6 @@ export type ScannedRoutes = {
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
-    'health_checks.live': { paramsTuple?: []; params?: {} }
-    'health_checks.ready': { paramsTuple?: []; params?: {} }
     'promotions.index': { paramsTuple?: []; params?: {} }
     'promotions.banners': { paramsTuple?: []; params?: {} }
     'promotions.flash_sales': { paramsTuple?: []; params?: {} }
@@ -177,7 +171,7 @@ export type ScannedRoutes = {
     'merchant_dashboard.get_products': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_categories': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant_dashboard.get_coupons': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
-    'coupons.index': { paramsTuple?: []; params?: {} }
+    'coupons.get_all_coupons': { paramsTuple?: []; params?: {} }
     'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'users.index': { paramsTuple?: []; params?: {} }
     'users.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }

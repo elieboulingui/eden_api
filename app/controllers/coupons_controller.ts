@@ -1,12 +1,20 @@
 // app/controllers/coupons_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import Coupon from '#models/coupon'
-import Cart from '#models/Cart'
-import CartItem from '#models/CartItem'
-import { DateTime } from 'luxon'  // ✅ Ajout de l'import manquant
+import db from '@adonisjs/lucid/services/db'
+import Cart from '#models/Cart'  // ✅ Majuscule C
+import CartItem from '#models/CartItem'  // ✅ Majuscule C et I
+import { DateTime } from 'luxon'
+
+// Interface pour typer les produits
+interface Product {
+  id: number
+  price: number
+  name?: string
+  image_url?: string
+}
 
 export default class CouponsController {
-
   // Méthode pour récupérer uniquement les coupons valides
   public async getValidCoupons({ request, response }: HttpContext) {
     const { page = 1, limit = 10, includeProduct = 'true' } = request.qs()
@@ -151,44 +159,106 @@ export default class CouponsController {
   public async verify({ request, response }: HttpContext) {
     const { code: rawCode, userId, items } = request.body()
 
+    // 🔒 Vérifier code
     if (!rawCode) {
-      return response.badRequest({ success: false, message: 'Code promo requis' })
+      return response.badRequest({
+        success: false,
+        message: 'Code promo requis',
+      })
     }
 
     const code = rawCode.trim()
-    const coupon = await Coupon.query().where('code', code).first()
+
+    const coupon = await Coupon.query()
+      .where('code', code)
+      .first()
 
     if (!coupon) {
-      return response.notFound({ success: false, message: 'Code promo introuvable' })
+      return response.notFound({
+        success: false,
+        message: 'Code promo introuvable',
+      })
     }
 
+    // 🔒 Vérifier validité (date, actif...)
     if (!coupon.isValid()) {
-      return response.unprocessableEntity({ success: false, message: 'Coupon invalide ou expiré' })
+      return response.unprocessableEntity({
+        success: false,
+        message: 'Coupon invalide ou expiré',
+      })
     }
 
-    // Calculer le montant total éligible
-    let eligibleTotal = 0
-    let eligibleItems = items || []
+    // 🔒 Vérifier limite globale (utilisation de usage_limit au lieu de max_uses)
+    if (coupon.usage_limit && coupon.used_count >= coupon.usage_limit) {
+      return response.unprocessableEntity({
+        success: false,
+        message: 'Ce coupon a atteint son nombre maximal d\'utilisations',
+      })
+    }
 
-    if (coupon.product_id && items && items.length > 0) {
-      eligibleItems = items.filter((item: any) => item.product_id === coupon.product_id)
+    // 🔒 Vérifier si déjà utilisé par cet utilisateur
+    if (userId) {
+      const alreadyUsed = await db
+        .from('coupon_usages')
+        .where('coupon_id', coupon.id)
+        .where('user_id', userId)
+        .first()
+
+      if (alreadyUsed) {
+        return response.unprocessableEntity({
+          success: false,
+          message: 'Vous avez déjà utilisé ce coupon',
+        })
+      }
+    }
+
+    // 🛒 Vérifier panier
+    if (!items || items.length === 0) {
+      return response.badRequest({
+        success: false,
+        message: 'Panier vide',
+      })
+    }
+
+    // 🎯 Filtrer produits éligibles
+    let eligibleItems = items
+
+    if (coupon.product_id) {
+      eligibleItems = items.filter(
+        (item: any) => item.product_id === coupon.product_id
+      )
+
       if (eligibleItems.length === 0) {
-        return response.unprocessableEntity({ success: false, message: 'Ce coupon ne s\'applique à aucun produit de votre panier' })
+        return response.unprocessableEntity({
+          success: false,
+          message: "Ce coupon ne s'applique à aucun produit du panier",
+        })
       }
     }
 
-    if (eligibleItems.length > 0) {
-      for (const item of eligibleItems) {
-        // Récupérer le prix du produit
-        const product = await Coupon.query().select('price').from('products').where('id', item.product_id).first()
-        if (product) {
-          eligibleTotal += item.quantity * product.price
-        }
+    // 🚀 Récupérer tous les produits en une seule requête
+    const productIds = eligibleItems.map((item: any) => item.product_id)
+
+    const products = await db
+      .from('products')
+      .whereIn('id', productIds)
+
+    // 🧮 Calcul total éligible
+    let eligibleTotal = 0
+
+    for (const item of eligibleItems) {
+      const product = products.find((p: Product) => p.id === item.product_id)
+
+      if (product) {
+        eligibleTotal += item.quantity * product.price
       }
     }
 
+    // 💸 Calcul réduction
     const discountAmount = coupon.calculateDiscount(eligibleTotal)
-    const finalAmount = eligibleTotal - discountAmount
+
+    // ✅ UNE SEULE variable finale (pas de discountedTotal inutile)
+    const finalAmount = Math.max(eligibleTotal - discountAmount, 0)
 
     return response.ok({
       success: true,
@@ -200,6 +270,7 @@ export default class CouponsController {
           discount: coupon.discount,
           description: coupon.description,
         },
+        eligible_total: eligibleTotal,
         discount_amount: discountAmount,
         final_amount: finalAmount,
       },
@@ -210,29 +281,44 @@ export default class CouponsController {
     const { code: rawCode, userId } = request.body()
 
     if (!rawCode || !userId) {
-      return response.badRequest({ success: false, message: 'Code promo et userId requis' })
+      return response.badRequest({
+        success: false,
+        message: 'Code promo et userId requis'
+      })
     }
 
     const code = rawCode.trim()
     const coupon = await Coupon.query().where('code', code).first()
 
     if (!coupon) {
-      return response.notFound({ success: false, message: 'Code promo introuvable' })
+      return response.notFound({
+        success: false,
+        message: 'Code promo introuvable'
+      })
     }
 
     if (!coupon.isValid()) {
-      return response.unprocessableEntity({ success: false, message: 'Coupon invalide ou expiré' })
+      return response.unprocessableEntity({
+        success: false,
+        message: 'Coupon invalide ou expiré'
+      })
     }
 
     if (!coupon.userIds) coupon.userIds = []
 
     if (coupon.userIds.includes(userId)) {
-      return response.unprocessableEntity({ success: false, message: 'Déjà utilisé par cet utilisateur' })
+      return response.unprocessableEntity({
+        success: false,
+        message: 'Déjà utilisé par cet utilisateur'
+      })
     }
 
     const cart = await Cart.query().where('user_id', userId).first()
     if (!cart) {
-      return response.unprocessableEntity({ success: false, message: "L'utilisateur n'a pas de panier" })
+      return response.unprocessableEntity({
+        success: false,
+        message: "L'utilisateur n'a pas de panier"
+      })
     }
 
     const cartItems = await CartItem.query()
@@ -240,14 +326,20 @@ export default class CouponsController {
       .preload('product')
 
     if (!cartItems || cartItems.length === 0) {
-      return response.unprocessableEntity({ success: false, message: 'Le panier est vide' })
+      return response.unprocessableEntity({
+        success: false,
+        message: 'Le panier est vide'
+      })
     }
 
     let validItems = cartItems
     if (coupon.product_id) {
-      validItems = cartItems.filter(item => item.product_id === coupon.product_id)
+      validItems = cartItems.filter((item: any) => item.product_id === coupon.product_id)
       if (validItems.length === 0) {
-        return response.unprocessableEntity({ success: false, message: 'Aucun produit éligible pour ce coupon' })
+        return response.unprocessableEntity({
+          success: false,
+          message: 'Aucun produit éligible pour ce coupon'
+        })
       }
     }
 
@@ -278,7 +370,7 @@ export default class CouponsController {
           discount: coupon.discount,
           description: coupon.description,
         },
-        valid_items: validItems.map(i => ({
+        valid_items: validItems.map((i: any) => ({
           id: i.id,
           product_id: i.product_id,
           quantity: i.quantity,

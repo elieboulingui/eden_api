@@ -8,10 +8,8 @@ import CartItem from '#models/CartItem'
 import User from '#models/user'
 import Product from '#models/Product'
 import Wallet from '#models/wallet'
-import Database from '@adonisjs/lucid/services/db'
 import axios from 'axios'
 import { DateTime } from 'luxon'
-import crypto from 'node:crypto'
 
 // Helper : vérifie si une chaîne est un UUID valide
 function isValidUuid(str: string): boolean {
@@ -227,7 +225,6 @@ export default class OrdersController {
       let paymentResult: any = null
       let paymentInfo: PaymentInfo | null = null
       let paymentSuccess = false
-      let paymentErrorMsg: string | null = null
 
       try {
         console.log('🔵 🌐 APPEL API PAIEMENT...')
@@ -302,7 +299,6 @@ export default class OrdersController {
               } else if (statusData.success && statusData.is_failed === true) {
                 console.log(`❌ Paiement échoué`)
                 paymentSuccess = false
-                paymentErrorMsg = statusData.message || 'Paiement échoué'
                 break
               } else {
                 console.log(`⚠️ Statut: ${statusData.status || 'inconnu'}`)
