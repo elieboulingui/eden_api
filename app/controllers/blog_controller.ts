@@ -224,7 +224,6 @@ export default class BlogController {
         })
       }
 
-      // ✅ Maintenant ça fonctionne car le modèle accepte undefined
       const post = await BlogPost.create({
         title,
         excerpt,
@@ -312,11 +311,11 @@ export default class BlogController {
       if (payload.title) post.title = payload.title
       if (payload.excerpt) post.excerpt = payload.excerpt
       if (payload.content) post.content = payload.content
-      if (payload.image_url !== undefined) post.image_url = payload.image_url || undefined
+      if (payload.image_url !== undefined) post.image_url = payload.image_url ?? undefined
       if (payload.category) post.category = payload.category
       if (payload.read_time) post.read_time = payload.read_time
-      if (payload.meta_title !== undefined) post.meta_title = payload.meta_title || undefined
-      if (payload.meta_description !== undefined) post.meta_description = payload.meta_description || undefined
+      if (payload.meta_title !== undefined) post.meta_title = payload.meta_title ?? undefined
+      if (payload.meta_description !== undefined) post.meta_description = payload.meta_description ?? undefined
       if (payload.tags) post.tags = payload.tags
 
       if (payload.status && payload.status !== post.status) {
