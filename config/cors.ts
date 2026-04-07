@@ -20,7 +20,7 @@ const corsConfig = defineConfig({
    */
   origin: app.inDev
     ? ['http://localhost:3333', 'http://localhost:3000', 'http://127.0.0.1:3333']
-    : ['https://paradis-alimentaires.vercel.app'],
+    : ['https://paradis-alimentaires.vercel.app/'],
 
   /**
    * HTTP methods accepted for cross-origin requests.
