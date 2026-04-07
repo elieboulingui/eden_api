@@ -1,8 +1,10 @@
+// start/routes.ts
 import router from '@adonisjs/core/services/router'
+import { middleware } from '#start/kernel'
+
+// Controllers imports
 import PromotionsController from '#controllers/promotions_controller'
 import PubsController from '#controllers/pubs_controller'
-const BlogController = () => import('#controllers/blog_controller')
-
 import NewAccountController from '#controllers/new_account_controller'
 import SessionController from '#controllers/session_controller'
 import NewAccountViewController from '#controllers/new_account_controllers'
@@ -11,22 +13,28 @@ import UsersController from '#controllers/users_controller'
 import ProductsController from '#controllers/products_controller'
 import CategoriesController from '#controllers/categories_controller'
 import CartController from '#controllers/CartController'
-import { middleware } from '#start/kernel'
 import FavoritesController from '#controllers/favorites_controller'
 import OrdersController from '#controllers/OrdersController'
 import DashboardViewController from '#controllers/dashboard_view_controller'
 import NewsletterController from '#controllers/newsletter_controller'
 import PushSubscriptionsController from '#controllers/push_subscriptions_controller'
+
+// Lazy imports
+const BlogController = () => import('#controllers/blog_controller')
 const OrderTrackingController = () => import('#controllers/order_trackings_controller')
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
 const CouponsController = () => import('#controllers/coupons_controller')
 
-// Page d'accueil (corrigez aussi cette ligne)
+// ============================================================
+// ROUTES WEB (PAGES)
+// ============================================================
+
+// Page d'accueil
 router.get('/', async ({ view }) => {
   return view.render('pages/home')
 }).as('home')
 
-// Routes d'authentification - utilisez les contrôleurs directement
+// Routes d'authentification web
 router.group(() => {
   router.get('signup', [NewAccountViewController, 'create']).as('new_account.create')
   router.post('signup', [NewAccountViewController, 'stores']).as('new_account.web.store')
@@ -39,52 +47,148 @@ router.post('logout', [SessionViewController, 'destroy'])
   .as('session.web.destroy')
   .middleware([middleware.auth()])
 
+// Dashboards web
 router.group(() => {
   router.get('admin', [DashboardViewController, 'admin']).as('dashboard.admin')
   router.get('secretary', [DashboardViewController, 'secretary']).as('dashboard.secretary')
   router.get('manager', [DashboardViewController, 'manager']).as('dashboard.manager')
   router.get('promotions', [DashboardViewController, 'promotions']).as('dashboard.promotions')
-})
-  .prefix('dashboards')
+}).prefix('dashboards')
 
+// ============================================================
+// ROUTES API
+// ============================================================
 
-// Routes API
 router.group(() => {
-  router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus']).as(
-    'orders.check_payment_status'
-  )
-  router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus']).as(
-    'orders.payment_status_callbacks'
-  )
-  router.get('/api/blog/posts', [BlogController, 'index'])
-  router.get('/api/blog/posts/featured', [BlogController, 'featured'])
-  router.get('/api/blog/posts/:slug', [BlogController, 'show'])
 
-  // Routes admin
-  router.group(() => {
-    router.get('/blog/admin/posts', [BlogController, 'adminIndex'])
-    router.get('/blog/admin/posts/stats', [BlogController, 'stats'])
-    router.get('/blog/admin/posts/:id', [BlogController, 'adminShow'])
-    router.post('/blog/admin/posts', [BlogController, 'store'])
-    router.put('/blog/admin/posts/:id', [BlogController, 'update'])
-    router.delete('/blog/admin/posts/:id', [BlogController, 'destroy'])
-  // Readiness probe : vérifie que l'application est prête (DB, Redis, etc.)
-    router.get('/promo', [PromotionsController, 'index']).as('promotions.index')
-    router.get('/banners', [PromotionsController, 'banners']).as('promotions.banners')
-    router.get('/flash-sales', [PromotionsController, 'flashSales']).as('promotions.flash_sales')
-    router.get('/promo/:id', [PromotionsController, 'show']).as('promotions.show')
+  // ----------------------------------------------------------
+  // AUTHENTIFICATION
+  // ----------------------------------------------------------
+  router.post('/client/register', [NewAccountController, 'store']).as('new_account.store')
+  router.post('/client/login', [SessionController, 'store']).as('session.client.store')
+  router.post('/login', [SessionController, 'store']).as('session.login')
+  router.post('/api/login', [SessionController, 'store']).as('session.api.login')
+  router.post('/client/logout', [SessionController, 'destroy'])
 
-    router.post('/promo', [PromotionsController, 'store']).as('promotions.store')
-    router.put('/promo/:id', [PromotionsController, 'update']).as('promotions.update')
-    router.delete('/promo/:id', [PromotionsController, 'destroy']).as('promotions.destroy')
+  // ✅ ROUTES PROFIL (conservées)
+  router.put('/profile/update', [SessionController, 'update'])
+  router.put('/profile/password', [SessionController, 'changePassword'])
 
+  // ----------------------------------------------------------
+  // BLOG (PUBLIC)
+  // ----------------------------------------------------------
+  router.get('/blog/posts', [BlogController, 'index'])
+  router.get('/blog/posts/featured', [BlogController, 'featured'])
+  router.get('/blog/posts/:slug', [BlogController, 'show'])
 
+  // ----------------------------------------------------------
+  // PRODUITS
+  // ----------------------------------------------------------
+  router.get('/products', [ProductsController, 'index'])
+  router.get('/products/:id', [ProductsController, 'show']).as('products.show')
+  router.get('/produits/:id', [ProductsController, 'show']).as('produits.show')
+  router.post('/products', [ProductsController, 'store'])
+  router.put('/products/:id', [ProductsController, 'update'])
+  router.delete('/products/:id', [ProductsController, 'destroy'])
+
+  // ----------------------------------------------------------
+  // CATÉGORIES
+  // ----------------------------------------------------------
+  router.get('/categories', [CategoriesController, 'index'])
+  router.get('/categories/:name', [CategoriesController, 'show'])
+  router.post('/categories', [CategoriesController, 'store'])
+  router.put('/categories/:id', [CategoriesController, 'update'])
+  router.delete('/categories/:id', [CategoriesController, 'destroy'])
+  router.post('/categories/:id/products', [CategoriesController, 'createProduct'])
+
+  // ----------------------------------------------------------
+  // UTILISATEURS
+  // ----------------------------------------------------------
+  router.get('/users', [UsersController, 'index'])
+  router.get('/users/:id', [UsersController, 'show'])
+
+  // ----------------------------------------------------------
+  // PANIER
+  // ----------------------------------------------------------
+  router.get('/cart/:userId', [CartController, 'getCart'])
+  router.post('/cart/show', [CartController, 'show'])
+  router.post('/cart/add', [CartController, 'add'])
+  router.put('/cart/update', [CartController, 'update'])
+  router.delete('/cart/item/:itemId', [CartController, 'deleteItem'])
+  router.delete('/cart/clear', [CartController, 'clear'])
+
+  // ----------------------------------------------------------
+  // FAVORIS
+  // ----------------------------------------------------------
+  router.post('/favorites/add', [FavoritesController, 'add'])
+  router.post('/favorites/remove', [FavoritesController, 'remove'])
+  router.get('/favorites', [FavoritesController, 'index'])
+  router.get('/favorites/check', [FavoritesController, 'check'])
+
+  // ----------------------------------------------------------
+  // COMMANDES
+  // ----------------------------------------------------------
+  router.post('/orders', [OrdersController, 'store'])
+  router.get('/orders/all', [OrdersController, 'allOrders'])
+  router.get('/orders/:userId', [OrdersController, 'index'])
+  router.get('/orders/:orderId/user/:userId', [OrdersController, 'show'])
+  router.post('/orders/:orderId/cancel', [OrdersController, 'cancel'])
+  router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice'])
+  router.put('/orders/:orderId/status', [OrdersController, 'updateStatus'])
+  router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus'])
+  router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus'])
+
+  // ----------------------------------------------------------
+  // SUIVI DE COMMANDE
+  // ----------------------------------------------------------
+  router.post('/tracking/search', [OrderTrackingController, 'search'])
+  router.get('/tracking/:orderId/events', [OrderTrackingController, 'getTrackingEvents'])
+  router.post('/tracking/:orderId/event', [OrderTrackingController, 'addTrackingEvent'])
+  router.put('/tracking/:orderId/status', [OrderTrackingController, 'updateOrderStatus'])
+
+  // ----------------------------------------------------------
+  // COUPONS (PUBLIC)
+  // ----------------------------------------------------------
+  router.get('/coupons', [CouponsController, 'getAllCoupons'])
+  router.post('/coupons/apply', [CouponsController, 'apply'])
+  router.post('/coupons/verify', [CouponsController, 'verify'])
+  router.get('/coupons/:id', [CouponsController, 'show'])
+
+  // ----------------------------------------------------------
+  // PROMOTIONS
+  // ----------------------------------------------------------
+  router.get('/promo', [PromotionsController, 'index'])
+  router.get('/banners', [PromotionsController, 'banners'])
+  router.get('/flash-sales', [PromotionsController, 'flashSales'])
+  router.get('/promo/:id', [PromotionsController, 'show'])
+  router.post('/promo', [PromotionsController, 'store'])
+  router.put('/promo/:id', [PromotionsController, 'update'])
+  router.delete('/promo/:id', [PromotionsController, 'destroy'])
+
+  // ----------------------------------------------------------
+  // PUBS
+  // ----------------------------------------------------------
   router.get('/pubs', [PubsController, 'getAllPubs'])
   router.post('/pubs', [PubsController, 'createPub'])
   router.put('/pubs/:id', [PubsController, 'updatePub'])
   router.delete('/pubs/:id', [PubsController, 'deletePub'])
   router.patch('/pubs/:id/toggle', [PubsController, 'togglePubStatus'])
 
+  // ----------------------------------------------------------
+  // NEWSLETTER
+  // ----------------------------------------------------------
+  router.post('/newsletter/subscribe', [NewsletterController, 'store'])
+
+  // ----------------------------------------------------------
+  // PUSH SUBSCRIPTIONS
+  // ----------------------------------------------------------
+  router.get('/push-subscriptions', [PushSubscriptionsController, 'index'])
+  router.post('/push-subscriptions', [PushSubscriptionsController, 'store'])
+  router.delete('/push-subscriptions/:id', [PushSubscriptionsController, 'destroy'])
+
+  // ----------------------------------------------------------
+  // MARCHAND (MERCHANT)
+  // ----------------------------------------------------------
   router.post('/merchant/give-change', [MerchantDashboardController, 'giveChange'])
   router.get('/merchant/withdrawals/:userId', [MerchantDashboardController, 'getWithdrawalHistory'])
   router.get('/merchant/wallet/:userId', [MerchantDashboardController, 'getWallet'])
@@ -111,62 +215,16 @@ router.group(() => {
   router.put('/merchant/coupons/:userId/:couponId', [MerchantDashboardController, 'updateCoupon'])
   router.delete('/merchant/coupons/:userId/:couponId', [MerchantDashboardController, 'deleteCoupon'])
 
-  router.get('/coupons', [CouponsController, 'getAllCoupons'])
-  router.post('/coupons/apply', [CouponsController, 'apply'])
-  router.post('/coupons/verify', [CouponsController, 'verify'])
-  router.get('/coupons/:id', [CouponsController, 'show'])
+  // ----------------------------------------------------------
+  // BLOG ADMIN
+  // ----------------------------------------------------------
+  router.group(() => {
+    router.get('/posts', [BlogController, 'adminIndex'])
+    router.get('/posts/stats', [BlogController, 'stats'])
+    router.get('/posts/:id', [BlogController, 'adminShow'])
+    router.post('/posts', [BlogController, 'store'])
+    router.put('/posts/:id', [BlogController, 'update'])
+    router.delete('/posts/:id', [BlogController, 'destroy'])
+  }).prefix('/blog/admin')
 
-  router.post('/client/register', [NewAccountController, 'store']).as('new_account.store')
-  router.post('/client/login', [SessionController, 'store']).as('session.client.store')
-  router.post('/login', [SessionController, 'store']).as('session.login')
-  router.post('/api/login', [SessionController, 'store']).as('session.api.login')
-  router.put('/profile/update', [SessionController, 'update'])
-  router.put('/profile/password', [SessionController, 'changePassword'])
-  router.post('/client/logout', [SessionController, 'destroy'])
-
-  router.get('/users', [UsersController, 'index'])
-  router.get('/users/:id', [UsersController, 'show'])
-
-  router.get('/products', [ProductsController, 'index'])
-  router.get('/products/:id', [ProductsController, 'show']).as('products.show')
-  router.get('/produits/:id', [ProductsController, 'show']).as('produits.show')
-  router.post('/products', [ProductsController, 'store'])
-  router.put('/products/:id', [ProductsController, 'update'])
-  router.delete('/products/:id', [ProductsController, 'destroy'])
-
-  router.get('/categories', [CategoriesController, 'index'])
-  router.get('/categories/:name', [CategoriesController, 'show'])
-  router.post('/categories', [CategoriesController, 'store'])
-  router.put('/categories/:id', [CategoriesController, 'update'])
-  router.delete('/categories/:id', [CategoriesController, 'destroy'])
-  router.post('/categories/:id/products', [CategoriesController, 'createProduct'])
-
-  router.get('/cart/:userId', [CartController, 'getCart'])
-  router.post('/cart/show', [CartController, 'show'])
-  router.post('/cart/add', [CartController, 'add'])
-  router.put('/cart/update', [CartController, 'update'])
-  router.delete('/cart/item/:itemId', [CartController, 'deleteItem'])
-  router.delete('/cart/clear', [CartController, 'clear'])
-
-  router.post('/favorites/add', [FavoritesController, 'add'])
-  router.post('/favorites/remove', [FavoritesController, 'remove'])
-  router.get('/favorites', [FavoritesController, 'index'])
-  router.get('/favorites/check', [FavoritesController, 'check'])
-
-  router.post('/orders', [OrdersController, 'store'])
-  router.get('/orders/all', [OrdersController, 'allOrders'])
-  router.get('/orders/:userId', [OrdersController, 'index'])
-  router.get('/orders/:orderId/user/:userId', [OrdersController, 'show'])
-  router.post('/orders/:orderId/cancel', [OrdersController, 'cancel'])
-  router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice'])
-  router.put('/orders/:orderId/status', [OrdersController, 'updateStatus'])
-
-  router.post('/tracking/search', [OrderTrackingController, 'search'])
-  router.get('/tracking/:orderId/events', [OrderTrackingController, 'getTrackingEvents'])
-  router.post('/tracking/:orderId/event', [OrderTrackingController, 'addTrackingEvent'])
-  router.put('/tracking/:orderId/status', [OrderTrackingController, 'updateOrderStatus'])
-  router.post('/newsletter/subscribe', [NewsletterController, 'store']).as('newsletter.subscribe')
-  router.get('/push-subscriptions', [PushSubscriptionsController, 'index'])
-  router.post('/push-subscriptions', [PushSubscriptionsController, 'store'])
-  router.delete('/push-subscriptions/:id', [PushSubscriptionsController, 'destroy'])
 }).prefix('/api')
