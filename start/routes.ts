@@ -6,6 +6,7 @@ import SessionController from '#controllers/session_controller'
 import NewAccountViewController from '#controllers/new_account_controllers'
 import SessionViewController from '#controllers/session_controllers'
 import UsersController from '#controllers/users_controller'
+const HealthChecksController = () => import('#controllers/health_checks_controller')
 import ProductsController from '#controllers/products_controller'
 import CategoriesController from '#controllers/categories_controller'
 import CartController from '#controllers/CartController'
@@ -54,7 +55,10 @@ router.group(() => {
   router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus']).as(
     'orders.payment_status_callbacks'
   )
+  router.get('/health/live', [HealthChecksController, 'live'])
 
+  // Readiness probe : vérifie que l'application est prête (DB, Redis, etc.)
+  router.get('/health/ready', [HealthChecksController, 'ready'])
     router.get('/promo', [PromotionsController, 'index']).as('promotions.index')
     router.get('/banners', [PromotionsController, 'banners']).as('promotions.banners')
     router.get('/flash-sales', [PromotionsController, 'flashSales']).as('promotions.flash_sales')

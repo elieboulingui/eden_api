@@ -26,4 +26,5 @@ export const controllers = {
   Session: () => import('#controllers/session_controller'),
   SessionControllers: () => import('#controllers/session_controllers'),
   Users: () => import('#controllers/users_controller'),
+  HealthChecks: () => import('#controllers/health_checks_controller'),
 }

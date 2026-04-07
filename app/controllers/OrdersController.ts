@@ -7,8 +7,11 @@ import Cart from '#models/Cart'
 import CartItem from '#models/CartItem'
 import User from '#models/user'
 import Product from '#models/Product'
+import Wallet from '#models/wallet'
+import Database from '@adonisjs/lucid/services/db'
 import axios from 'axios'
 import { DateTime } from 'luxon'
+import crypto from 'node:crypto'
 
 // Helper : vérifie si une chaîne est un UUID valide
 function isValidUuid(str: string): boolean {
@@ -55,7 +58,6 @@ export default class OrdersController {
         deliveryPrice = 2500,
         customerName: customerNameFallback,
         customerEmail: customerEmailFallback,
-        // ✅ Opérateur Mobile Money envoyé depuis le frontend (optionnel)
         mobileOperatorCode,
         mobileOperatorName,
       } = request.only([
@@ -104,8 +106,6 @@ export default class OrdersController {
         const kycResponse = await axios.get(kycUrl, { timeout: 10000 })
         if (kycResponse.data.success && kycResponse.data.data) {
           const kycData = kycResponse.data.data
-          // ✅ Si l'opérateur vient du frontend, on le garde en priorité
-          // Sinon on utilise ce que retourne le KYC
           operator = mobileOperatorCode || kycData.detected_operator || kycData.operator || 'non renseigné'
           fullName = kycData.full_name || customerNameFallback || 'non renseigné'
           accountNumber = kycData.customer_account_number || customerAccountNumber
@@ -154,10 +154,13 @@ export default class OrdersController {
         return response.status(400).json({ success: false, message: 'Votre panier est vide' })
       }
 
-      // ========== ÉTAPE 4: CALCUL DU TOTAL ==========
+      // ========== ÉTAPE 4: CALCUL DU TOTAL ET RÉCUPÉRATION DES PRODUITS ==========
       console.log('🔵 Calcul du total et récupération des produits...')
       let subtotal = 0
       const orderItems: any[] = []
+
+      // Stocker les ventes par vendeur pour les crédits wallet
+      const sellerSales: Map<string, { sellerId: string; amount: number; products: any[] }> = new Map()
 
       for (const cartItem of cart.items) {
         if (!cartItem.product_id) {
@@ -178,6 +181,26 @@ export default class OrdersController {
         const itemTotal = product.price * cartItem.quantity
         subtotal += itemTotal
 
+        // Stocker les informations pour le crédit du vendeur
+        const sellerId = product.user_id
+        if (!sellerSales.has(sellerId)) {
+          sellerSales.set(sellerId, {
+            sellerId: sellerId,
+            amount: 0,
+            products: []
+          })
+        }
+
+        const sellerData = sellerSales.get(sellerId)!
+        sellerData.amount += itemTotal
+        sellerData.products.push({
+          product_id: product.id,
+          product_name: product.name,
+          quantity: cartItem.quantity,
+          price: product.price,
+          subtotal: itemTotal
+        })
+
         orderItems.push({
           product_id: product.id,
           productName: product.name,
@@ -187,8 +210,10 @@ export default class OrdersController {
           category: product.category,
           image: product.image_url,
           subtotal: itemTotal,
+          seller_id: sellerId,
         })
-        console.log(`✅ Item: ${product.name} x ${cartItem.quantity} = ${itemTotal}`)
+
+        console.log(`✅ Item: ${product.name} x ${cartItem.quantity} = ${itemTotal} (vendeur: ${sellerId})`)
       }
 
       if (orderItems.length === 0) {
@@ -196,14 +221,145 @@ export default class OrdersController {
       }
 
       const total = subtotal + deliveryPrice
-      const orderNumber = `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
       console.log(`🔵 Total: subtotal=${subtotal} + livraison=${deliveryPrice} = ${total}`)
 
-      // ========== ÉTAPE 5: CRÉATION DE LA COMMANDE ==========
+      // ========== ÉTAPE 5: APPEL API DE PAIEMENT (AVANT CRÉATION COMMANDE) ==========
+      let paymentResult: any = null
+      let paymentInfo: PaymentInfo | null = null
+      let paymentSuccess = false
+      let paymentErrorMsg: string | null = null
+
+      try {
+        console.log('🔵 🌐 APPEL API PAIEMENT...')
+
+        const paymentBody: Record<string, any> = {
+          amount: total,
+          customer_account_number: accountNumber,
+          payment_api_key_public: "pk_1773325888803_dt8diavuh3h",
+          payment_api_key_secret: "sk_1773325888803_qt015a3cr5",
+        }
+
+        if (mobileOperatorCode) {
+          paymentBody.operator_code = mobileOperatorCode
+          console.log(`✅ Opérateur fourni par le frontend: ${mobileOperatorCode} (${mobileOperatorName || 'nom non fourni'})`)
+        } else {
+          console.log('🟡 Aucun opérateur fourni, l\'API payment détectera via le numéro')
+        }
+
+        console.log('📤 Body envoyé à /api/payment:', JSON.stringify(paymentBody, null, 2))
+
+        const paymentResponse = await axios.post(
+          'https://apist.onrender.com/api/payment',
+          paymentBody,
+          { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
+        )
+
+        paymentResult = paymentResponse.data
+        console.log('✅ Réponse paiement reçue:', JSON.stringify(paymentResult, null, 2))
+
+        if (paymentResult.success && paymentResult.data) {
+          paymentInfo = {
+            reference_id: paymentResult.data.reference_id,
+            x_secret: paymentResult.data.x_secret || 'not_provided',
+            status: paymentResult.data.status,
+            amount: paymentResult.data.amount,
+            operator_simple: paymentResult.data.operator_simple,
+            transaction_type: paymentResult.data.transaction_type,
+            check_status_url: paymentResult.data.check_status_url,
+            code_url: paymentResult.data.code_url || 'O2S57GKG1BQIE3RF'
+          }
+
+          console.log('🔑 reference_id:', paymentInfo.reference_id)
+
+          // ========== VÉRIFICATION DU STATUT ==========
+          console.log('🔍 Vérification du statut du paiement...')
+          const referenceId = paymentResult.data.reference_id
+          let maxRetries = 15
+          let retryDelay = 3000
+
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            console.log(`📡 Tentative ${attempt}/${maxRetries} de vérification du statut...`)
+
+            try {
+              const statusResponse = await axios.get(
+                `https://apist.onrender.com/api/check-status/${referenceId}`,
+                { timeout: 15000 }
+              )
+
+              const statusData = statusResponse.data
+              console.log(`✅ Réponse API statut tentative ${attempt}:`, JSON.stringify(statusData, null, 2))
+
+              if (statusData.success && statusData.is_success === true) {
+                console.log('✅✅✅ PAIEMENT RÉUSSI ! ✅✅✅')
+                console.log(`💰 Montant: ${statusData.amount} FCFA`)
+                paymentSuccess = true
+                break
+              } else if (statusData.success && statusData.is_pending === true) {
+                console.log(`⏳ Paiement en attente (tentative ${attempt}/${maxRetries})`)
+                if (attempt < maxRetries) {
+                  await new Promise(resolve => setTimeout(resolve, retryDelay))
+                }
+              } else if (statusData.success && statusData.is_failed === true) {
+                console.log(`❌ Paiement échoué`)
+                paymentSuccess = false
+                paymentErrorMsg = statusData.message || 'Paiement échoué'
+                break
+              } else {
+                console.log(`⚠️ Statut: ${statusData.status || 'inconnu'}`)
+                if (attempt < maxRetries) {
+                  await new Promise(resolve => setTimeout(resolve, retryDelay))
+                }
+              }
+            } catch (statusError: any) {
+              console.error(`❌ Erreur vérification statut (tentative ${attempt}):`, statusError.message)
+              if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, retryDelay))
+              }
+            }
+          }
+
+          if (!paymentSuccess) {
+            console.log('❌ Paiement non confirmé après vérifications')
+            return response.status(400).json({
+              success: false,
+              message: '❌ Paiement non confirmé. Veuillez réessayer.',
+              payment_status: 'failed'
+            })
+          }
+        } else {
+          console.log('❌ Paiement échoué:', paymentResult.message)
+          return response.status(400).json({
+            success: false,
+            message: paymentResult.message || '❌ Paiement échoué',
+            payment_status: 'failed'
+          })
+        }
+      } catch (paymentErr: any) {
+        console.error('❌ Erreur paiement:', paymentErr.message)
+        return response.status(500).json({
+          success: false,
+          message: '❌ Erreur lors du traitement du paiement',
+          error: paymentErr.message
+        })
+      }
+
+      // ========== ⚠️ ICI : ON N'ARRIVE QUE SI LE PAIEMENT EST RÉUSSI ==========
+      if (!paymentSuccess) {
+        return response.status(400).json({
+          success: false,
+          message: '❌ Paiement non confirmé. Commande non créée.'
+        })
+      }
+
+      console.log('💰 PAIEMENT CONFIRMÉ - CRÉATION DE LA COMMANDE...')
+
+      // ========== ÉTAPE 6: CRÉATION DE LA COMMANDE (SEULEMENT SI PAIEMENT OK) ==========
+      const orderNumber = `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+
       const order = await Order.create({
         user_id: userId,
         order_number: orderNumber,
-        status: 'pending',
+        status: 'paid',
         total,
         subtotal,
         shipping_cost: deliveryPrice,
@@ -218,8 +374,9 @@ export default class OrdersController {
       })
       console.log(`✅ Commande créée: ${order.order_number}`)
 
-      // ========== ÉTAPE 6: CRÉATION DES ITEMS ==========
+      // ========== ÉTAPE 7: CRÉATION DES ITEMS ET DÉCRÉMENTATION DU STOCK ==========
       for (const item of orderItems) {
+        // Créer l'item de commande
         await OrderItem.create({
           order_id: order.id,
           product_id: item.product_id,
@@ -232,176 +389,111 @@ export default class OrdersController {
           subtotal: item.subtotal,
         })
         console.log(`✅ Item créé: ${item.productName} x ${item.quantity}`)
+
+        // ✅ DÉCRÉMENTER LE STOCK DU PRODUIT
+        const product = await Product.findBy('id', item.product_id)
+        if (product) {
+          const oldStock = product.stock
+          product.stock = product.stock - item.quantity
+          await product.save()
+          console.log(`📦 Stock mis à jour: ${item.productName} - ancien: ${oldStock} → nouveau: ${product.stock}`)
+        }
       }
 
-      // ========== ÉTAPE 7: SUIVI INITIAL ==========
+      // ========== ÉTAPE 8: SUIVI INITIAL ==========
       await OrderTracking.create({
         order_id: order.id,
-        status: 'pending',
-        description: 'Commande confirmée et en attente de traitement',
+        status: 'paid',
+        description: `Paiement effectué avec succès - Réf: ${paymentInfo?.reference_id} - Montant: ${total} FCFA`,
         tracked_at: DateTime.now(),
       })
 
-      // ========== ÉTAPE 8: VIDAGE DU PANIER ==========
+      // ========== ÉTAPE 9: VIDAGE DU PANIER ==========
       await CartItem.query().where('cart_id', cart.id).delete()
       console.log('✅ Panier vidé')
 
-      // ========== ÉTAPE 9: APPEL API DE PAIEMENT ==========
-      let paymentResult: any = null
-      let paymentInfo: PaymentInfo | null = null
-      let paymentErrorMsg: string | null = null
+      // ========== ÉTAPE 10: PRÉLÈVEMENT 0.5% POUR SUPERADMIN ==========
+      const superAdminFee = total * 0.005  // 0.5% du total
+      console.log(`💰 Prélèvement superadmin: ${superAdminFee} FCFA (0.5% de ${total})`)
 
       try {
-        console.log('🔵 🌐 APPEL API PAIEMENT...')
+        const superAdmin = await User.query()
+          .where('role', 'superadmin')
+          .first()
 
-        // ✅ Construction du body selon que l'opérateur est fourni ou non
-        const paymentBody: Record<string, any> = {
-          amount: total,
-          customer_account_number: accountNumber,
-          payment_api_key_public: "pk_1773325888803_dt8diavuh3h",
-          payment_api_key_secret: "sk_1773325888803_qt015a3cr5",
-        }
+        if (superAdmin) {
+          let superAdminWallet = await Wallet.query()
+            .where('user_id', superAdmin.id)
+            .first()
 
-        if (mobileOperatorCode) {
-          // L'utilisateur a sélectionné son pays et son opérateur depuis le frontend
-          paymentBody.operator_code = mobileOperatorCode
-          console.log(`✅ Opérateur fourni par le frontend: ${mobileOperatorCode} (${mobileOperatorName || 'nom non fourni'})`)
-        } else {
-          // Pas d'opérateur fourni : l'API payment détecte elle-même via le numéro
-          console.log('🟡 Aucun opérateur fourni, l\'API payment détectera via le numéro')
-        }
-
-        console.log('📤 Body envoyé à /api/payment:', JSON.stringify(paymentBody, null, 2))
-
-        const paymentResponse = await axios.post(
-          'https://apist.onrender.com/api/payment',
-          paymentBody,
-          { headers: { 'Content-Type': 'application/json' } }
-        )
-
-        paymentResult = paymentResponse.data
-        console.log('✅ Réponse paiement reçue:', JSON.stringify(paymentResult, null, 2))
-
-        if (paymentResult.success && paymentResult.data) {
-          // Récupérer les infos de transaction
-          paymentInfo = {
-            reference_id: paymentResult.data.reference_id,
-            x_secret: paymentResult.data.x_secret || 'not_provided',
-            status: paymentResult.data.status,
-            amount: paymentResult.data.amount,
-            operator_simple: paymentResult.data.operator_simple,
-            transaction_type: paymentResult.data.transaction_type,
-            check_status_url: paymentResult.data.check_status_url,
-            code_url: paymentResult.data.code_url || 'O2S57GKG1BQIE3RF'
-          }
-
-          console.log('🔑 reference_id:', paymentInfo.reference_id)
-          console.log('🔗 API vérification statut:', `https://apist.onrender.com/api/check-status/${paymentInfo.reference_id}`)
-
-          // ========== ÉTAPE 9.1: VÉRIFICATION DU STATUT ==========
-          console.log('🔍 Vérification du statut via apist.onrender.com...')
-
-          let statusVerified = false
-          let maxRetries = 12
-          let retryDelay = 3000
-
-          const referenceId = paymentResult.data.reference_id
-
-          for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            console.log(`📡 Tentative ${attempt}/${maxRetries} de vérification du statut...`)
-            console.log(`📍 URL: https://apist.onrender.com/api/check-status/${referenceId}`)
-
-            try {
-              const statusResponse = await axios.get(
-                `https://apist.onrender.com/api/check-status/${referenceId}`,
-                { timeout: 15000 }
-              )
-
-              const statusData = statusResponse.data
-              console.log(`✅ Réponse API statut tentative ${attempt}:`, JSON.stringify(statusData, null, 2))
-
-              if (statusData.success && statusData.is_success === true) {
-                console.log('✅✅✅ Transaction réussie ! ✅✅✅')
-                console.log(`💰 Montant: ${statusData.amount} FCFA`)
-                console.log(`📊 Statut: ${statusData.status}`)
-
-                statusVerified = true
-
-                order.status = 'paid'
-                await order.save()
-
-                await OrderTracking.create({
-                  order_id: order.id,
-                  status: 'paid',
-                  description: `Paiement effectué avec succès - Réf: ${referenceId} - Montant: ${statusData.amount} FCFA`,
-                  tracked_at: DateTime.now(),
-                })
-
-                break
-              } else if (statusData.success && statusData.is_pending === true) {
-                console.log(`⏳ Transaction en attente (tentative ${attempt}/${maxRetries})`)
-                if (attempt < maxRetries) {
-                  console.log(`⏰ Attente de ${retryDelay}ms avant nouvelle tentative...`)
-                  await new Promise(resolve => setTimeout(resolve, retryDelay))
-                }
-              } else if (statusData.success && statusData.is_failed === true) {
-                console.log(`❌ Transaction échouée:`, statusData)
-                await OrderTracking.create({
-                  order_id: order.id,
-                  status: 'payment_failed',
-                  description: `Paiement échoué - Réf: ${referenceId} - Statut: ${statusData.status}`,
-                  tracked_at: DateTime.now(),
-                })
-                break
-              } else {
-                console.log(`⚠️ Statut: ${statusData.status || 'inconnu'}`)
-                if (attempt < maxRetries) {
-                  await new Promise(resolve => setTimeout(resolve, retryDelay))
-                }
-              }
-            } catch (statusError: any) {
-              console.error(`❌ Erreur vérification statut (tentative ${attempt}):`, statusError.message)
-              if (statusError.response) {
-                console.error('📡 Détails réponse erreur:', statusError.response.data)
-                console.error('📡 Status code:', statusError.response.status)
-              }
-              if (attempt < maxRetries) {
-                console.log(`⏰ Nouvelle tentative dans ${retryDelay}ms...`)
-                await new Promise(resolve => setTimeout(resolve, retryDelay))
-              }
-            }
-          }
-
-          if (!statusVerified) {
-            console.log('⚠️ Transaction toujours en attente après vérifications')
-            await OrderTracking.create({
-              order_id: order.id,
-              status: 'payment_pending',
-              description: `Paiement en attente de confirmation - Réf: ${referenceId} - Veuillez vérifier plus tard`,
-              tracked_at: DateTime.now(),
+          if (!superAdminWallet) {
+            superAdminWallet = await Wallet.create({
+              user_id: superAdmin.id,
+              balance: 0,
+              currency: 'XAF',
+              status: 'active'
             })
+            console.log(`✅ Wallet superadmin créé pour ${superAdmin.email}`)
           }
+
+          const previousBalance = superAdminWallet.balance || 0
+          superAdminWallet.balance = previousBalance + superAdminFee
+          await superAdminWallet.save()
+
+          console.log(`✅ ${superAdminFee.toLocaleString()} FCFA ajouté au wallet superadmin`)
         } else {
-          console.log('🟡 Paiement en attente ou échoué:', paymentResult.message)
-          await OrderTracking.create({
-            order_id: order.id,
-            status: 'payment_pending',
-            description: `Paiement initié mais en attente: ${paymentResult.message || 'En cours de traitement'}`,
-            tracked_at: DateTime.now(),
-          })
+          console.log('⚠️ Superadmin non trouvé, prélèvement non effectué')
         }
-      } catch (paymentErr: any) {
-        console.error('🟡 Erreur paiement (commande créée quand même):', paymentErr.message)
-        paymentErrorMsg = paymentErr.message
-        await OrderTracking.create({
-          order_id: order.id,
-          status: 'payment_pending',
-          description: `Erreur lors de l'initiation du paiement: ${paymentErr.message}`,
-          tracked_at: DateTime.now(),
-        })
+      } catch (walletError: any) {
+        console.error('❌ Erreur lors du prélèvement superadmin:', walletError.message)
       }
 
-      // ========== ÉTAPE 10: RECHARGEMENT ==========
+      // ========== ÉTAPE 11: CRÉDITER CHAQUE VENDEUR DANS SON WALLET ==========
+      console.log('💰 CRÉDIT DES VENDEURS...')
+      const sellerCredits: any[] = []
+
+      for (const [sellerId, saleData] of sellerSales.entries()) {
+        try {
+          // Récupérer ou créer le wallet du vendeur
+          let sellerWallet = await Wallet.query()
+            .where('user_id', sellerId)
+            .first()
+
+          if (!sellerWallet) {
+            sellerWallet = await Wallet.create({
+              user_id: sellerId,
+              balance: 0,
+              currency: 'XAF',
+              status: 'active'
+            })
+            console.log(`✅ Wallet créé pour le vendeur ${sellerId}`)
+          }
+
+          const previousBalance = sellerWallet.balance || 0
+          sellerWallet.balance = previousBalance + saleData.amount
+          await sellerWallet.save()
+
+          sellerCredits.push({
+            seller_id: sellerId,
+            amount: saleData.amount,
+            products_count: saleData.products.length,
+            previous_balance: previousBalance,
+            new_balance: sellerWallet.balance,
+          })
+
+          console.log(`✅ Vendeur ${sellerId} crédité de ${saleData.amount.toLocaleString()} FCFA`)
+          console.log(`   📊 Ancien solde: ${previousBalance.toLocaleString()} FCFA → Nouveau: ${sellerWallet.balance.toLocaleString()} FCFA`)
+
+          // Enregistrer la transaction dans une table (optionnel)
+          for (const product of saleData.products) {
+            console.log(`   📦 Produit: ${product.product_name} x${product.quantity} = ${product.subtotal.toLocaleString()} FCFA`)
+          }
+        } catch (sellerError: any) {
+          console.error(`❌ Erreur lors du crédit du vendeur ${sellerId}:`, sellerError.message)
+        }
+      }
+
+      // ========== ÉTAPE 12: RECHARGEMENT ==========
       await order.load('items')
       console.log('🟢 ========== COMMANDE CREEE AVEC SUCCES ==========')
 
@@ -418,16 +510,15 @@ export default class OrdersController {
           paymentMethod: order.payment_method,
           estimatedDelivery: order.estimated_delivery,
           itemsCount: order.items.length,
+          admin_fee: superAdminFee,
+          seller_credits: sellerCredits,
           payment: paymentInfo ? {
-            success: paymentResult?.success,
-            message: paymentResult?.message,
+            success: true,
             reference_id: paymentInfo.reference_id,
             status: paymentInfo.status,
             operator: paymentInfo.operator_simple,
             amount: paymentInfo.amount,
-            check_status_url: `https://apist.onrender.com/api/check-status/${paymentInfo.reference_id}`
           } : null,
-          paymentError: paymentErrorMsg,
         },
       })
     } catch (error: any) {

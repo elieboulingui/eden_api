@@ -16,6 +16,8 @@ export type ScannedRoutes = {
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
+    'health_checks.live': { paramsTuple?: []; params?: {} }
+    'health_checks.ready': { paramsTuple?: []; params?: {} }
     'promotions.index': { paramsTuple?: []; params?: {} }
     'promotions.banners': { paramsTuple?: []; params?: {} }
     'promotions.flash_sales': { paramsTuple?: []; params?: {} }
@@ -110,6 +112,8 @@ export type ScannedRoutes = {
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
+    'health_checks.live': { paramsTuple?: []; params?: {} }
+    'health_checks.ready': { paramsTuple?: []; params?: {} }
     'promotions.index': { paramsTuple?: []; params?: {} }
     'promotions.banners': { paramsTuple?: []; params?: {} }
     'promotions.flash_sales': { paramsTuple?: []; params?: {} }
@@ -155,6 +159,8 @@ export type ScannedRoutes = {
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
     'orders.check_payment_status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.payment_status_callbacks': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
+    'health_checks.live': { paramsTuple?: []; params?: {} }
+    'health_checks.ready': { paramsTuple?: []; params?: {} }
     'promotions.index': { paramsTuple?: []; params?: {} }
     'promotions.banners': { paramsTuple?: []; params?: {} }
     'promotions.flash_sales': { paramsTuple?: []; params?: {} }

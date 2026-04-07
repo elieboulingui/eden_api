@@ -5,17 +5,35 @@ import CartItem from '#models/CartItem'
 
 export default class CouponsController {
 
-public async index({ request, response }: HttpContext) {
+// Méthode pour récupérer uniquement les coupons valides
+public async getValidCoupons({ request, response }: HttpContext) {
   const { page = 1, limit = 10, includeProduct = 'true' } = request.qs()
+  const now = DateTime.now()
 
   let query = Coupon.query()
-    .select('coupons.*')
-    .orderBy('coupons.created_at', 'desc')
+    .where('status', 'active')
+    .andWhere((builder) => {
+      builder
+        .whereNull('valid_from')
+        .orWhere('valid_from', '<=', now.toSQL())
+    })
+    .andWhere((builder) => {
+      builder
+        .whereNull('valid_until')
+        .orWhere('valid_until', '>=', now.toSQL())
+    })
+    .andWhere((builder) => {
+      builder
+        .whereNull('usage_limit')
+        .orWhereRaw('used_count < usage_limit')
+    })
+    .orderBy('created_at', 'desc')
 
   if (includeProduct === 'true') {
     query = query
       .leftJoin('products', 'coupons.product_id', 'products.id')
       .select(
+        'coupons.*',
         'products.id as product_id',
         'products.name as product_name',
         'products.image_url as product_image_url',
@@ -25,22 +43,65 @@ public async index({ request, response }: HttpContext) {
 
   const coupons = await query.paginate(Number(page), Number(limit))
 
-  const data = coupons.all().map((coupon) => {
-    const json = coupon.toJSON()
-    const result: any = {}
-
-    Object.keys(json).forEach(key => {
-      if (!key.startsWith('product_')) {
-        result[key] = json[key]
-      }
-    })
-
-    if (json.product_id) {
+  const data = coupons.all().map((coupon: any) => {
+    const result = coupon.toJSON()
+    
+    if (coupon.product_id) {
       result.product = {
-        id: json.product_id,
-        name: json.product_name,
-        image: json.product_image_url,
-        price: json.product_price
+        id: coupon.product_id,
+        name: coupon.product_name,
+        image: coupon.product_image_url,
+        price: coupon.product_price
+      }
+      delete result.product_id
+      delete result.product_name
+      delete result.product_image_url
+      delete result.product_price
+    }
+
+    return result
+  })
+
+  return response.ok({
+    success: true,
+    data: data,
+    meta: coupons.getMeta(),
+  })
+}
+
+// Méthode pour récupérer tous les coupons (admin)
+public async getAllCoupons({ request, response }: HttpContext) {
+  const { page = 1, limit = 10, includeProduct = 'true' } = request.qs()
+
+  let query = Coupon.query().orderBy('created_at', 'desc')
+
+  if (includeProduct === 'true') {
+    query = query
+      .leftJoin('products', 'coupons.product_id', 'products.id')
+      .select(
+        'coupons.*',
+        'products.id as product_id',
+        'products.name as product_name',
+        'products.image_url as product_image_url',
+        'products.price as product_price'
+      )
+  }
+
+  const coupons = await query.paginate(Number(page), Number(limit))
+
+  const data = coupons.all().map((coupon: any) => {
+    const result = coupon.toJSON()
+    
+    // Ajouter le statut de validité
+    result.is_valid = coupon.isValid()
+    result.validity_reason = !coupon.isValid() ? getInvalidReason(coupon) : null
+
+    if (coupon.product_id) {
+      result.product = {
+        id: coupon.product_id,
+        name: coupon.product_name,
+        image: coupon.product_image_url,
+        price: coupon.product_price
       }
     }
 
@@ -52,6 +113,25 @@ public async index({ request, response }: HttpContext) {
     data: data,
     meta: coupons.getMeta(),
   })
+}
+
+// Fonction utilitaire pour savoir pourquoi le coupon n'est pas valide
+function getInvalidReason(coupon: any): string {
+  const now = DateTime.now()
+  
+  if (coupon.status !== 'active') {
+    return `Le coupon est ${coupon.status}`
+  }
+  if (coupon.valid_from && DateTime.fromSQL(coupon.valid_from) > now) {
+    return `Le coupon n'est pas encore actif (valide à partir du ${DateTime.fromSQL(coupon.valid_from).toFormat('dd/MM/yyyy')})`
+  }
+  if (coupon.valid_until && DateTime.fromSQL(coupon.valid_until) < now) {
+    return `Le coupon a expiré le ${DateTime.fromSQL(coupon.valid_until).toFormat('dd/MM/yyyy')}`
+  }
+  if (coupon.usage_limit && coupon.used_count >= coupon.usage_limit) {
+    return `Le coupon a atteint sa limite d'utilisation (${coupon.used_count}/${coupon.usage_limit})`
+  }
+  return 'Raison inconnue'
 }
 
   public async show({ params, response }: HttpContext) {

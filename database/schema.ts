@@ -7,6 +7,25 @@
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
 
+export class AdminFeeSchema extends BaseModel {
+  static $columns = ['adminId', 'amount', 'createdAt', 'id', 'orderId', 'orderNumber', 'percentage'] as const
+  $columns = AdminFeeSchema.$columns
+  @column()
+  declare adminId: string | null
+  @column()
+  declare amount: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare orderId: string
+  @column()
+  declare orderNumber: string
+  @column()
+  declare percentage: string
+}
+
 export class CartItemSchema extends BaseModel {
   static $columns = ['cartId', 'createdAt', 'id', 'productId', 'quantity', 'updatedAt'] as const
   $columns = CartItemSchema.$columns
@@ -336,6 +355,12 @@ export class ProductSchema extends BaseModel {
   declare id: string
   @column()
   declare imageUrl: string | null
+  @column()
+  declare imageUrl: string | null
+  @column()
+  declare isNew: boolean | null
+  @column()
+  declare isOnSale: boolean | null
   @column()
   declare isNew: boolean | null
   @column()
