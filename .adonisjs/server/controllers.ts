@@ -11,7 +11,6 @@ export const controllers = {
   Coupons: () => import('#controllers/coupons_controller'),
   DashboardView: () => import('#controllers/dashboard_view_controller'),
   Favorites: () => import('#controllers/favorites_controller'),
-  HealthChecks: () => import('#controllers/health_checks_controller'),
   MerchantDashboard: () => import('#controllers/merchant_dashboard_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
   NewAccountControllers: () => import('#controllers/new_account_controllers'),
@@ -27,4 +26,6 @@ export const controllers = {
   Session: () => import('#controllers/session_controller'),
   SessionControllers: () => import('#controllers/session_controllers'),
   Users: () => import('#controllers/users_controller'),
+  HealthChecks: () => import('#controllers/health_checks_controller'),
+  Blog: () => import('#controllers/blog_controller'),
 }

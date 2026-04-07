@@ -1,6 +1,8 @@
 import router from '@adonisjs/core/services/router'
 import PromotionsController from '#controllers/promotions_controller'
 import PubsController from '#controllers/pubs_controller'
+const BlogController = () => import('#controllers/blog_controller')
+
 import NewAccountController from '#controllers/new_account_controller'
 import SessionController from '#controllers/session_controller'
 import NewAccountViewController from '#controllers/new_account_controllers'
@@ -54,7 +56,18 @@ router.group(() => {
   router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus']).as(
     'orders.payment_status_callbacks'
   )
+  router.get('/api/blog/posts', [BlogController, 'index'])
+  router.get('/api/blog/posts/featured', [BlogController, 'featured'])
+  router.get('/api/blog/posts/:slug', [BlogController, 'show'])
 
+  // Routes admin
+  router.group(() => {
+    router.get('/blog/admin/posts', [BlogController, 'adminIndex'])
+    router.get('/blog/admin/posts/stats', [BlogController, 'stats'])
+    router.get('/blog/admin/posts/:id', [BlogController, 'adminShow'])
+    router.post('/blog/admin/posts', [BlogController, 'store'])
+    router.put('/blog/admin/posts/:id', [BlogController, 'update'])
+    router.delete('/blog/admin/posts/:id', [BlogController, 'destroy'])
   // Readiness probe : vérifie que l'application est prête (DB, Redis, etc.)
     router.get('/promo', [PromotionsController, 'index']).as('promotions.index')
     router.get('/banners', [PromotionsController, 'banners']).as('promotions.banners')

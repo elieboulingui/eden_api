@@ -26,6 +26,47 @@ export class AdminFeeSchema extends BaseModel {
   declare percentage: string
 }
 
+export class BlogPostSchema extends BaseModel {
+  static $columns = ['authorId', 'authorName', 'category', 'content', 'createdAt', 'excerpt', 'id', 'imageUrl', 'metaDescription', 'metaTitle', 'publishedAt', 'readTime', 'slug', 'status', 'tags', 'title', 'updatedAt', 'views'] as const
+  $columns = BlogPostSchema.$columns
+  @column()
+  declare authorId: string | null
+  @column()
+  declare authorName: string
+  @column()
+  declare category: string
+  @column()
+  declare content: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare excerpt: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare imageUrl: string | null
+  @column()
+  declare metaDescription: string | null
+  @column()
+  declare metaTitle: string | null
+  @column.dateTime()
+  declare publishedAt: DateTime | null
+  @column()
+  declare readTime: number | null
+  @column()
+  declare slug: string
+  @column()
+  declare status: string | null
+  @column()
+  declare tags: any | null
+  @column()
+  declare title: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare views: number | null
+}
+
 export class CartItemSchema extends BaseModel {
   static $columns = ['cartId', 'createdAt', 'id', 'productId', 'quantity', 'updatedAt'] as const
   $columns = CartItemSchema.$columns
