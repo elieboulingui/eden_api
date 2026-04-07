@@ -24,6 +24,7 @@ export type ScannedRoutes = {
     'blog.index': { paramsTuple?: []; params?: {} }
     'blog.featured': { paramsTuple?: []; params?: {} }
     'blog.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
+    'blog.submit': { paramsTuple?: []; params?: {} }
     'products.index': { paramsTuple?: []; params?: {} }
     'products.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'produits.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -220,6 +221,7 @@ export type ScannedRoutes = {
     'session.login': { paramsTuple?: []; params?: {} }
     'session.api.login': { paramsTuple?: []; params?: {} }
     'session.destroy': { paramsTuple?: []; params?: {} }
+    'blog.submit': { paramsTuple?: []; params?: {} }
     'products.store': { paramsTuple?: []; params?: {} }
     'categories.store': { paramsTuple?: []; params?: {} }
     'categories.products.create': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }

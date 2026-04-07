@@ -306,7 +306,6 @@ export default class BlogController {
         content,
         image_url: image_url || undefined,
         category,
-        author_name: user.full_name,
         author_id: user.id,
         read_time: read_time || 5,
         status: status || 'draft',
