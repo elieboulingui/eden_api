@@ -80,6 +80,8 @@ router.group(() => {
   router.get('/blog/posts', [BlogController, 'index']).as('blog.index')
   router.get('/blog/posts/featured', [BlogController, 'featured']).as('blog.featured')
   router.get('/blog/posts/:slug', [BlogController, 'show']).as('blog.show')
+  // ✅ Route pour soumettre un article (public)
+  router.post('/blog/posts/submit', [BlogController, 'publicStore']).as('blog.submit')
 
   // ----------------------------------------------------------
   // PRODUITS
@@ -98,7 +100,6 @@ router.group(() => {
   router.get('/categories/:name', [CategoriesController, 'show']).as('categories.show')
   router.post('/categories', [CategoriesController, 'store']).as('categories.store')
   router.put('/categories/:id', [CategoriesController, 'update']).as('categories.update')
-  // ✅ CORRECTION: "destroy" au lieu de "111destroy"
   router.delete('/categories/:id', [CategoriesController, 'destroy']).as('categories.destroy')
   router.post('/categories/:id/products', [CategoriesController, 'createProduct']).as('categories.products.create')
 
@@ -230,5 +231,6 @@ router.group(() => {
     router.post('/posts', [BlogController, 'store']).as('admin.posts.store')
     router.put('/posts/:id', [BlogController, 'update']).as('admin.posts.update')
     router.delete('/posts/:id', [BlogController, 'destroy']).as('admin.posts.destroy')
+  }).prefix('/blog/admin')
 
-}).prefix('/api')
+}).prefix('/api') // ✅ Cette accolade ferme le groupe API
