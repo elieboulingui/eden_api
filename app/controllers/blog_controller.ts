@@ -151,7 +151,6 @@ export default class BlogController {
         image_url,
         category,
         author_name,
-        author_email,
         read_time,
         tags
       } = request.only([
