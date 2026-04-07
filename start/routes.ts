@@ -135,7 +135,7 @@ router.group(() => {
   router.post('/orders/:orderId/cancel', [OrdersController, 'cancel'])
   router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice'])
   router.put('/orders/:orderId/status', [OrdersController, 'updateStatus'])
-  router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus'])
+  router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatu'])
   router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus'])
 
   // ----------------------------------------------------------
