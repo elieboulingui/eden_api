@@ -137,10 +137,8 @@ export default class BlogController {
     }
   }
 
-  // ============= CRÉATION D'ARTICLE PUBLIC (SANS AUTH) =============
-
   /**
-   * Créer un nouvel article (PUBLIC - tout le monde peut poster)
+   * Soumettre un article (PUBLIC - tout le monde peut poster)
    */
   async publicStore({ request, response }: HttpContext) {
     try {
@@ -160,12 +158,10 @@ export default class BlogController {
         'image_url',
         'category',
         'author_name',
-        'author_email',
         'read_time',
         'tags'
       ])
 
-      // Validation
       if (!title || !excerpt || !content || !category) {
         return response.badRequest({
           success: false,
@@ -180,7 +176,6 @@ export default class BlogController {
         })
       }
 
-      // Créer l'article avec statut "draft" par défaut (à valider par un admin)
       const post = await BlogPost.create({
         title,
         excerpt,
@@ -188,9 +183,9 @@ export default class BlogController {
         image_url: image_url || undefined,
         category,
         author_name: author_name,
-        author_id: undefined, // Pas d'utilisateur lié
+        author_id: undefined,
         read_time: read_time || 5,
-        status: 'draft', // Toujours en brouillon, un admin devra le publier
+        status: 'draft',
         meta_title: title,
         meta_description: excerpt.substring(0, 160),
         tags: tags || [],
@@ -200,7 +195,7 @@ export default class BlogController {
       return response.created({
         success: true,
         data: post,
-        message: 'Article soumis avec succès ! Il sera publié après validation par notre équipe.'
+        message: 'Article soumis avec succès ! Il sera publié après validation.'
       })
 
     } catch (error: any) {
@@ -212,7 +207,7 @@ export default class BlogController {
     }
   }
 
-  // ============= ROUTES ADMIN (PROTÉGÉES) =============
+  // ============= ROUTES ADMIN (SANS AUTH) =============
 
   async adminIndex({ request, response }: HttpContext) {
     try {
@@ -222,9 +217,6 @@ export default class BlogController {
       const search = request.input('search')
 
       let query = BlogPost.query()
-        .preload('author', (query) => {
-          query.select('id', 'full_name', 'email')
-        })
         .orderBy('created_at', 'desc')
 
       if (status) {
@@ -258,22 +250,18 @@ export default class BlogController {
     }
   }
 
-  async store({ request, response, auth }: HttpContext) {
+  /**
+   * Créer un article (ADMIN - sans authentification)
+   */
+  async store({ request, response }: HttpContext) {
     try {
-      const user = auth.user
-      if (!user) {
-        return response.unauthorized({
-          success: false,
-          message: 'Non authentifié'
-        })
-      }
-
       const {
         title,
         excerpt,
         content,
         image_url,
         category,
+        author_name,
         read_time,
         status,
         meta_title,
@@ -285,6 +273,7 @@ export default class BlogController {
         'content',
         'image_url',
         'category',
+        'author_name',
         'read_time',
         'status',
         'meta_title',
@@ -305,7 +294,8 @@ export default class BlogController {
         content,
         image_url: image_url || undefined,
         category,
-        author_id: user.id,
+        author_name: author_name || 'Admin',
+        author_id: undefined,
         read_time: read_time || 5,
         status: status || 'draft',
         meta_title: meta_title || title,
@@ -385,11 +375,11 @@ export default class BlogController {
       if (payload.title) post.title = payload.title
       if (payload.excerpt) post.excerpt = payload.excerpt
       if (payload.content) post.content = payload.content
-      if (payload.image_url !== undefined) post.image_url = payload.image_url ?? undefined
+      if (payload.image_url !== undefined) post.image_url = payload.image_url || undefined
       if (payload.category) post.category = payload.category
       if (payload.read_time) post.read_time = payload.read_time
-      if (payload.meta_title !== undefined) post.meta_title = payload.meta_title ?? undefined
-      if (payload.meta_description !== undefined) post.meta_description = payload.meta_description ?? undefined
+      if (payload.meta_title !== undefined) post.meta_title = payload.meta_title || undefined
+      if (payload.meta_description !== undefined) post.meta_description = payload.meta_description || undefined
       if (payload.tags) post.tags = payload.tags
 
       if (payload.status && payload.status !== post.status) {
