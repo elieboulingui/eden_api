@@ -356,12 +356,6 @@ export class ProductSchema extends BaseModel {
   @column()
   declare imageUrl: string | null
   @column()
-  declare imageUrl: string | null
-  @column()
-  declare isNew: boolean | null
-  @column()
-  declare isOnSale: boolean | null
-  @column()
   declare isNew: boolean | null
   @column()
   declare isOnSale: boolean | null
