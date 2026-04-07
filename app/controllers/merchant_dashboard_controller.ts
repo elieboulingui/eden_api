@@ -714,10 +714,59 @@ export default class MerchantDashboardController {
       return response.forbidden({ success: false, message: 'Non autorisé' })
     }
 
+    // ✅ Charger les produits avec leur catégorie
     const products = await Product.query()
+      .where('user_id', user.id)
+      .preload('categoryRelation')
+      .orderBy('created_at', 'desc')
+
+    // Récupérer les catégories du marchand
+    const categories = await Category.query()
+      .where('user_id', user.id)
+      .orderBy('name', 'asc')
+
+    // Récupérer les coupons du marchand
+    const coupons = await Coupon.query()
       .where('user_id', user.id)
       .orderBy('created_at', 'desc')
 
+    // Récupérer le wallet
+    let wallet = await Wallet.query()
+      .where('user_id', user.id)
+      .first()
+
+    if (!wallet) {
+      wallet = await Wallet.create({
+        user_id: user.id,
+        balance: 0,
+        currency: 'XAF',
+        status: 'active'
+      })
+    }
+
+    // Transformer les produits
+    const transformedProducts = products.map(p => {
+      let categoryName = 'Sans catégorie'
+      if (p.categoryRelation) {
+        categoryName = p.categoryRelation.name
+      } else if (p.category) {
+        categoryName = p.category
+      }
+
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        stock: p.stock,
+        image_url: p.image_url,
+        category: categoryName,
+        likes: 0,
+        sales: p.sales || 0,
+        status: p.status || 'active',
+        createdAt: p.created_at
+      }
+    })
 
     return response.ok({
       success: true,
@@ -729,32 +778,31 @@ export default class MerchantDashboardController {
           totalLikes: 0,
           pendingOrders: 0,
         },
-        products: products.map(p => ({
-          id: p.id,
-          name: p.name,
-          description: p.description,
-          price: p.price,
-          stock: p.stock,
-          image_url: p.image_url,
-          likes: 0,
-          sales: 0,
-          status: 'active',
+        products: transformedProducts,
+        categories: categories.map(c => ({
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          image_url: c.image_url || null,
+          productCount: c.product_count || 0
         })),
-        categories: [],
-        coupons: [],
+        coupons: coupons,
         salesChart: [],
         pendingOrders: [],
         popularProducts: [],
         merchant: {
           id: user.id,
+          uuid: user.id,
           full_name: user.full_name,
           email: user.email,
-          avatar: null,
-          availableBalance: 0,
+          avatar: user.avatar || null,
+          availableBalance: wallet.balance
         }
       }
     })
   }
+
+  // app/controllers/merchant_dashboard_controller.ts
 
   async getProducts({ params, request, response }: HttpContext) {
     try {
@@ -772,9 +820,10 @@ export default class MerchantDashboardController {
       const page = request.input('page', 1)
       const limit = request.input('limit', 10)
 
-      // ❌ SUPPRIMÉ preload (pas de relation)
+      // ✅ CHARGER LA RELATION categoryRelation
       const products = await Product.query()
         .where('user_id', user.id)
+        .preload('categoryRelation')  // ✅ Charger la catégorie
         .orderBy('created_at', 'desc')
         .paginate(page, limit)
 
@@ -798,23 +847,32 @@ export default class MerchantDashboardController {
         }, {})
       }
 
-      const transformedProducts = productArray.map((product: any) => ({
-        id: product.id,
-        name: product.name,
-        description: product.description,
-        price: product.price,
-        stock: product.stock,
+      const transformedProducts = productArray.map((product: any) => {
+        // ✅ Récupérer le nom de la catégorie depuis la relation
+        let categoryName = 'Sans catégorie'
 
-        // ✅ OK car ton modèle est en snake_case
-        image_url: product.image_url,
+        if (product.categoryRelation) {
+          categoryName = product.categoryRelation.name
+        } else if (product.category) {
+          // Fallback sur l'ancienne colonne textuelle
+          categoryName = product.category
+        }
 
-        // ⚠️ ici c’est une colonne simple, pas une relation
-        category: product.category || 'Sans catégorie',
-
-        likes: favoritesCountMap[product.id] || 0,
-        sales: product.sales || 0,
-        status: product.status || 'active'
-      }))
+        return {
+          id: product.id,
+          name: product.name,
+          description: product.description,
+          price: product.price,
+          stock: product.stock,
+          image_url: product.image_url,
+          category: categoryName,  // ✅ Nom de la catégorie
+          category_id: product.category_id,
+          likes: favoritesCountMap[product.id] || 0,
+          sales: product.sales || 0,
+          status: product.status || 'active',
+          created_at: product.created_at
+        }
+      })
 
       return response.ok({
         success: true,
@@ -825,6 +883,7 @@ export default class MerchantDashboardController {
       })
 
     } catch (error: any) {
+      console.error('Erreur getProducts:', error)
       return response.internalServerError({
         success: false,
         message: error.message
