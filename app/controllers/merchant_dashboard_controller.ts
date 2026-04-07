@@ -357,6 +357,8 @@ export default class MerchantDashboardController {
 
   // ============= COMMANDES MARCHAND =============
 
+  // app/controllers/merchant_dashboard_controller.ts
+
   async getMerchantOrders({ params, response }: HttpContext) {
     try {
       const { userId } = params
@@ -373,12 +375,14 @@ export default class MerchantDashboardController {
         return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
       }
 
+      // ✅ Récupérer TOUS les produits du marchand (y compris leur catégorie si besoin)
       const merchantProducts = await Product.query()
         .where('user_id', user.id)
-        .whereNull('deleted_at')
-        .select('id', 'name', 'price', 'imageUrl')
+        .select('id', 'name', 'price', 'image_url')
 
       const productIds = merchantProducts.map(p => p.id)
+
+      console.log(`📦 Produits du marchand: ${productIds.length} IDs`)
 
       if (productIds.length === 0) {
         return response.ok({
@@ -398,6 +402,7 @@ export default class MerchantDashboardController {
         })
       }
 
+      // ✅ Récupérer les OrderItem qui contiennent les produits du marchand
       const orderItems = await OrderItem.query()
         .whereIn('product_id', productIds)
         .preload('order', (orderQuery) => {
@@ -407,6 +412,9 @@ export default class MerchantDashboardController {
             })
             .orderBy('created_at', 'desc')
         })
+        .preload('product')  // ✅ Précharger le produit pour avoir ses infos
+
+      console.log(`🛒 OrderItems trouvés: ${orderItems.length}`)
 
       if (orderItems.length === 0) {
         return response.ok({
@@ -430,7 +438,10 @@ export default class MerchantDashboardController {
 
       for (const item of orderItems) {
         const order = item.order
-        if (order && !ordersMap.has(order.id)) {
+        if (!order) continue
+
+        // Si la commande n'est pas encore dans la map, on l'initialise
+        if (!ordersMap.has(order.id)) {
           const tracking = await OrderTracking.query()
             .where('order_id', order.id)
             .orderBy('tracked_at', 'desc')
@@ -468,51 +479,162 @@ export default class MerchantDashboardController {
           })
         }
 
-        if (ordersMap.has(order.id)) {
-          const orderData = ordersMap.get(order.id)
+        // Ajouter l'item à la commande (seulement les items qui appartiennent au marchand)
+        const orderData = ordersMap.get(order.id)
+
+        // ✅ Vérifier que le produit appartient bien au marchand
+        const productBelongsToMerchant = merchantProducts.some(p => p.id === item.product_id)
+
+        if (productBelongsToMerchant) {
           orderData.items.push({
             id: item.id,
             product_id: item.product_id,
-            product_name: item.product_name,
-            product_description: item.product_description,
+            product_name: item.product_name || item.product?.name || 'Produit',
+            product_description: item.product_description || item.product?.description || null,
             price: item.price,
             quantity: item.quantity,
-            subtotal: item.subtotal,
+            subtotal: item.subtotal || (item.price * item.quantity),
             category: item.category,
-            image: item.image
+            image: item.image || item.product?.image_url || null
           })
         }
       }
 
+      // Convertir la map en tableau
       const orders = Array.from(ordersMap.values())
 
-      orders.sort((a, b) => {
+      // Filtrer les commandes qui ont au moins un item du marchand
+      const ordersWithMerchantItems = orders.filter(order => order.items.length > 0)
+
+      // Trier par date de création (plus récent d'abord)
+      ordersWithMerchantItems.sort((a, b) => {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       })
 
+      // Calculer les statistiques
       const stats = {
-        totalOrders: orders.length,
-        totalRevenue: orders.reduce((sum, order) => sum + order.total, 0),
-        pendingOrders: orders.filter(o => o.status === 'pending').length,
-        processingOrders: orders.filter(o => o.status === 'processing').length,
-        shippedOrders: orders.filter(o => o.status === 'shipped').length,
-        deliveredOrders: orders.filter(o => o.status === 'delivered').length,
-        cancelledOrders: orders.filter(o => o.status === 'cancelled').length,
-        totalItems: orders.reduce((sum, order) => sum + order.items.length, 0),
-        averageOrderValue: orders.length > 0
-          ? orders.reduce((sum, order) => sum + order.total, 0) / orders.length
+        totalOrders: ordersWithMerchantItems.length,
+        totalRevenue: ordersWithMerchantItems.reduce((sum, order) => {
+          // Calculer le revenu seulement pour les items du marchand
+          const merchantRevenue = order.items.reduce((itemSum: number, item: any) => itemSum + item.subtotal, 0)
+          return sum + merchantRevenue
+        }, 0),
+        pendingOrders: ordersWithMerchantItems.filter(o => o.status === 'pending').length,
+        processingOrders: ordersWithMerchantItems.filter(o => o.status === 'processing').length,
+        shippedOrders: ordersWithMerchantItems.filter(o => o.status === 'shipped').length,
+        deliveredOrders: ordersWithMerchantItems.filter(o => o.status === 'delivered').length,
+        cancelledOrders: ordersWithMerchantItems.filter(o => o.status === 'cancelled').length,
+        totalItems: ordersWithMerchantItems.reduce((sum, order) => sum + order.items.length, 0),
+        averageOrderValue: ordersWithMerchantItems.length > 0
+          ? ordersWithMerchantItems.reduce((sum, order) => {
+            const merchantRevenue = order.items.reduce((itemSum: number, item: any) => itemSum + item.subtotal, 0)
+            return sum + merchantRevenue
+          }, 0) / ordersWithMerchantItems.length
           : 0
       }
 
+      console.log(`✅ Commandes trouvées: ${ordersWithMerchantItems.length}`)
+
       return response.ok({
         success: true,
-        data: orders,
+        data: ordersWithMerchantItems,
         stats: stats,
-        count: orders.length
+        count: ordersWithMerchantItems.length
       })
 
     } catch (error: any) {
       console.error('Erreur dans getMerchantOrders:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
+    }
+  }
+
+  async getPendingOrders({ params, response }: HttpContext) {
+    try {
+      const { userId } = params
+
+      if (!userId) {
+        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      // ✅ Récupérer les produits du marchand
+      const merchantProducts = await Product.query()
+        .where('user_id', user.id)
+        .select('id')
+
+      const productIds = merchantProducts.map(p => p.id)
+
+      if (productIds.length === 0) {
+        return response.ok({
+          success: true,
+          data: [],
+          count: 0
+        })
+      }
+
+      // ✅ Récupérer les OrderItem pour les commandes en attente
+      const orderItems = await OrderItem.query()
+        .whereIn('product_id', productIds)
+        .preload('order', (orderQuery) => {
+          orderQuery
+            .where('status', 'pending')
+            .preload('user', (userQuery) => {
+              userQuery.select('id', 'full_name', 'email')
+            })
+        })
+        .preload('product')
+
+      const ordersMap = new Map()
+
+      for (const item of orderItems) {
+        const order = item.order
+        if (!order || order.status !== 'pending') continue
+
+        // ✅ Vérifier que le produit appartient au marchand
+        const productBelongsToMerchant = merchantProducts.some(p => p.id === item.product_id)
+        if (!productBelongsToMerchant) continue
+
+        if (!ordersMap.has(order.id)) {
+          ordersMap.set(order.id, {
+            id: order.id,
+            order_number: order.order_number,
+            status: order.status,
+            total: order.total,
+            customer_name: order.customer_name,
+            customer_email: order.customer_email,
+            customer_phone: order.customer_phone,
+            created_at: order.created_at,
+            items_count: 0,
+            user: order.user ? {
+              full_name: order.user.full_name,
+              email: order.user.email
+            } : null
+          })
+        }
+
+        const orderData = ordersMap.get(order.id)
+        orderData.items_count++
+      }
+
+      const pendingOrders = Array.from(ordersMap.values())
+      pendingOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+      return response.ok({
+        success: true,
+        data: pendingOrders,
+        count: pendingOrders.length
+      })
+
+    } catch (error: any) {
+      console.error('Erreur dans getPendingOrders:', error)
       return response.internalServerError({
         success: false,
         message: error.message
