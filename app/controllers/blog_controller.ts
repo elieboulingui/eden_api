@@ -1,7 +1,8 @@
 // app/controllers/blog_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import BlogPost from '#models/blog_post'
-import User from '#models/user'
+// ❌ Supprimer l'import non utilisé
+// import User from '#models/user'
 import { DateTime } from 'luxon'
 
 export default class BlogController {
@@ -251,7 +252,7 @@ export default class BlogController {
         title,
         excerpt,
         content,
-        image_url: image_url || null,
+        image_url: image_url || undefined,  // ✅ Correction: null -> undefined
         category,
         author_name: user.full_name,
         author_id: user.id,
@@ -260,7 +261,7 @@ export default class BlogController {
         meta_title: meta_title || title,
         meta_description: meta_description || excerpt.substring(0, 160),
         tags: tags || [],
-        published_at: status === 'published' ? DateTime.now() : null
+        published_at: status === 'published' ? DateTime.now() : undefined  // ✅ Correction: null -> undefined
       })
 
       return response.created({
@@ -352,11 +353,11 @@ export default class BlogController {
       if (title) post.title = title
       if (excerpt) post.excerpt = excerpt
       if (content) post.content = content
-      if (image_url !== undefined) post.image_url = image_url
+      if (image_url !== undefined) post.image_url = image_url || undefined  // ✅ Correction
       if (category) post.category = category
       if (read_time) post.read_time = read_time
-      if (meta_title !== undefined) post.meta_title = meta_title
-      if (meta_description !== undefined) post.meta_description = meta_description
+      if (meta_title !== undefined) post.meta_title = meta_title || undefined  // ✅ Correction
+      if (meta_description !== undefined) post.meta_description = meta_description || undefined  // ✅ Correction
       if (tags) post.tags = tags
 
       // Gérer le changement de statut
