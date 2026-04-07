@@ -7,16 +7,13 @@ export default class BlogController {
 
   // ============= ROUTES PUBLIQUES =============
 
-  /**
-   * Récupérer tous les articles publiés (public)
-   */
   async index({ request, response }: HttpContext) {
     try {
       const page = request.input('page', 1)
       const limit = request.input('limit', 9)
       const category = request.input('category')
       const search = request.input('search')
-      const sort = request.input('sort', 'latest') // latest, popular
+      const sort = request.input('sort', 'latest')
 
       let query = BlogPost.query()
         .where('status', 'published')
@@ -25,12 +22,10 @@ export default class BlogController {
           query.select('id', 'full_name', 'email', 'avatar')
         })
 
-      // Filtrer par catégorie
       if (category && category !== 'all') {
         query = query.where('category', category)
       }
 
-      // Recherche
       if (search) {
         query = query.where((builder) => {
           builder
@@ -40,7 +35,6 @@ export default class BlogController {
         })
       }
 
-      // Tri
       if (sort === 'popular') {
         query = query.orderBy('views', 'desc')
       } else {
@@ -49,7 +43,6 @@ export default class BlogController {
 
       const posts = await query.paginate(page, limit)
 
-      // Récupérer toutes les catégories uniques
       const categories = await BlogPost.query()
         .where('status', 'published')
         .distinct('category')
@@ -73,9 +66,6 @@ export default class BlogController {
     }
   }
 
-  /**
-   * Récupérer un article par son slug (public)
-   */
   async show({ params, response }: HttpContext) {
     try {
       const { slug } = params
@@ -95,11 +85,9 @@ export default class BlogController {
         })
       }
 
-      // Incrémenter le compteur de vues
       post.views += 1
       await post.save()
 
-      // Récupérer les articles similaires
       const relatedPosts = await BlogPost.query()
         .where('category', post.category)
         .where('status', 'published')
@@ -124,9 +112,6 @@ export default class BlogController {
     }
   }
 
-  /**
-   * Récupérer l'article en vedette (public)
-   */
   async featured({ response }: HttpContext) {
     try {
       const featuredPost = await BlogPost.query()
@@ -154,9 +139,6 @@ export default class BlogController {
 
   // ============= ROUTES ADMIN =============
 
-  /**
-   * Récupérer tous les articles (admin)
-   */
   async adminIndex({ request, response }: HttpContext) {
     try {
       const page = request.input('page', 1)
@@ -201,9 +183,6 @@ export default class BlogController {
     }
   }
 
-  /**
-   * Créer un nouvel article (admin)
-   */
   async store({ request, response, auth }: HttpContext) {
     try {
       const user = auth.user
@@ -238,7 +217,6 @@ export default class BlogController {
         'tags'
       ])
 
-      // Validation
       if (!title || !excerpt || !content || !category) {
         return response.badRequest({
           success: false,
@@ -246,11 +224,12 @@ export default class BlogController {
         })
       }
 
-      // ✅ CORRECTION: Préparer les données avec des undefined au lieu de null
-      const postData: Partial<BlogPost> = {
+      // ✅ Maintenant ça fonctionne car le modèle accepte undefined
+      const post = await BlogPost.create({
         title,
         excerpt,
         content,
+        image_url: image_url || undefined,
         category,
         author_name: user.full_name,
         author_id: user.id,
@@ -259,19 +238,8 @@ export default class BlogController {
         meta_title: meta_title || title,
         meta_description: meta_description || excerpt.substring(0, 160),
         tags: tags || [],
-      }
-
-      // ✅ Ajouter image_url seulement si défini
-      if (image_url) {
-        postData.image_url = image_url
-      }
-
-      // ✅ Ajouter published_at seulement si status est 'published'
-      if (status === 'published') {
-        postData.published_at = DateTime.now()
-      }
-
-      const post = await BlogPost.create(postData)
+        published_at: status === 'published' ? DateTime.now() : undefined
+      })
 
       return response.created({
         success: true,
@@ -288,9 +256,6 @@ export default class BlogController {
     }
   }
 
-  /**
-   * Récupérer un article par ID (admin)
-   */
   async adminShow({ params, response }: HttpContext) {
     try {
       const { id } = params
@@ -318,9 +283,6 @@ export default class BlogController {
     }
   }
 
-  /**
-   * Mettre à jour un article (admin)
-   */
   async update({ params, request, response }: HttpContext) {
     try {
       const { id } = params
@@ -334,18 +296,7 @@ export default class BlogController {
         })
       }
 
-      const {
-        title,
-        excerpt,
-        content,
-        image_url,
-        category,
-        read_time,
-        status,
-        meta_title,
-        meta_description,
-        tags
-      } = request.only([
+      const payload = request.only([
         'title',
         'excerpt',
         'content',
@@ -358,28 +309,19 @@ export default class BlogController {
         'tags'
       ])
 
-      // Mettre à jour les champs
-      if (title) post.title = title
-      if (excerpt) post.excerpt = excerpt
-      if (content) post.content = content
-      // ✅ CORRECTION: Gérer image_url correctement
-      if (image_url !== undefined) {
-        post.image_url = image_url || undefined
-      }
-      if (category) post.category = category
-      if (read_time) post.read_time = read_time
-      if (meta_title !== undefined) {
-        post.meta_title = meta_title || undefined
-      }
-      if (meta_description !== undefined) {
-        post.meta_description = meta_description || undefined
-      }
-      if (tags) post.tags = tags
+      if (payload.title) post.title = payload.title
+      if (payload.excerpt) post.excerpt = payload.excerpt
+      if (payload.content) post.content = payload.content
+      if (payload.image_url !== undefined) post.image_url = payload.image_url || undefined
+      if (payload.category) post.category = payload.category
+      if (payload.read_time) post.read_time = payload.read_time
+      if (payload.meta_title !== undefined) post.meta_title = payload.meta_title || undefined
+      if (payload.meta_description !== undefined) post.meta_description = payload.meta_description || undefined
+      if (payload.tags) post.tags = payload.tags
 
-      // Gérer le changement de statut
-      if (status && status !== post.status) {
-        post.status = status
-        if (status === 'published' && !post.published_at) {
+      if (payload.status && payload.status !== post.status) {
+        post.status = payload.status
+        if (payload.status === 'published' && !post.published_at) {
           post.published_at = DateTime.now()
         }
       }
@@ -401,9 +343,6 @@ export default class BlogController {
     }
   }
 
-  /**
-   * Supprimer un article (admin)
-   */
   async destroy({ params, response }: HttpContext) {
     try {
       const { id } = params
@@ -433,9 +372,6 @@ export default class BlogController {
     }
   }
 
-  /**
-   * Récupérer les statistiques du blog (admin)
-   */
   async stats({ response }: HttpContext) {
     try {
       const totalPosts = await BlogPost.query().count('* as total')
@@ -447,7 +383,6 @@ export default class BlogController {
         .orderBy('views', 'desc')
         .limit(5)
 
-      // Posts par catégorie
       const postsByCategory = await BlogPost.query()
         .where('status', 'published')
         .select('category')
