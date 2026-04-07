@@ -230,6 +230,5 @@ router.group(() => {
     router.post('/posts', [BlogController, 'store']).as('admin.posts.store')
     router.put('/posts/:id', [BlogController, 'update']).as('admin.posts.update')
     router.delete('/posts/:id', [BlogController, 'destroy']).as('admin.posts.destroy')
-  }).prefix('/blog/admin')
 
 }).prefix('/api')

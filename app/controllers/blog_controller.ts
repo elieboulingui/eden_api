@@ -137,7 +137,83 @@ export default class BlogController {
     }
   }
 
-  // ============= ROUTES ADMIN =============
+  // ============= CRÉATION D'ARTICLE PUBLIC (SANS AUTH) =============
+
+  /**
+   * Créer un nouvel article (PUBLIC - tout le monde peut poster)
+   */
+  async publicStore({ request, response }: HttpContext) {
+    try {
+      const {
+        title,
+        excerpt,
+        content,
+        image_url,
+        category,
+        author_name,
+        author_email,
+        read_time,
+        tags
+      } = request.only([
+        'title',
+        'excerpt',
+        'content',
+        'image_url',
+        'category',
+        'author_name',
+        'author_email',
+        'read_time',
+        'tags'
+      ])
+
+      // Validation
+      if (!title || !excerpt || !content || !category) {
+        return response.badRequest({
+          success: false,
+          message: 'Titre, extrait, contenu et catégorie sont requis'
+        })
+      }
+
+      if (!author_name) {
+        return response.badRequest({
+          success: false,
+          message: 'Le nom de l\'auteur est requis'
+        })
+      }
+
+      // Créer l'article avec statut "draft" par défaut (à valider par un admin)
+      const post = await BlogPost.create({
+        title,
+        excerpt,
+        content,
+        image_url: image_url || undefined,
+        category,
+        author_name: author_name,
+        author_id: undefined, // Pas d'utilisateur lié
+        read_time: read_time || 5,
+        status: 'draft', // Toujours en brouillon, un admin devra le publier
+        meta_title: title,
+        meta_description: excerpt.substring(0, 160),
+        tags: tags || [],
+        published_at: undefined
+      })
+
+      return response.created({
+        success: true,
+        data: post,
+        message: 'Article soumis avec succès ! Il sera publié après validation par notre équipe.'
+      })
+
+    } catch (error: any) {
+      console.error('Erreur publicStore blog:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
+    }
+  }
+
+  // ============= ROUTES ADMIN (PROTÉGÉES) =============
 
   async adminIndex({ request, response }: HttpContext) {
     try {
@@ -230,6 +306,7 @@ export default class BlogController {
         content,
         image_url: image_url || undefined,
         category,
+        author_name: user.full_name,
         author_id: user.id,
         read_time: read_time || 5,
         status: status || 'draft',
