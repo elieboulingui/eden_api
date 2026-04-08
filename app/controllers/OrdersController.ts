@@ -46,7 +46,6 @@ export default class OrdersController {
         `https://apist.onrender.com/api/check-status/${referenceId}`,
         { timeout: 10000 }
       )
-      // Tout brut vers le front, sans filtre
       return response.status(200).json(apiResponse.data)
 
     } catch (error: any) {
@@ -121,7 +120,7 @@ export default class OrdersController {
       console.log('🔵 Appel API KYC...')
       const kycUrl = `https://apist.onrender.com/api/mypvit/kyc/marchant?customerAccountNumber=${customerAccountNumber}`
 
-      let operator = mobileOperatorCode || 'non renseigné'
+      let operator = mobileOperatorName || mobileOperatorCode || 'non renseigné'
       let fullName = customerNameFallback || 'non renseigné'
       let accountNumber = customerAccountNumber
 
@@ -129,7 +128,7 @@ export default class OrdersController {
         const kycResponse = await axios.get(kycUrl, { timeout: 10000 })
         if (kycResponse.data.success && kycResponse.data.data) {
           const kycData = kycResponse.data.data
-          operator = mobileOperatorCode || kycData.detected_operator || kycData.operator || 'non renseigné'
+          operator = mobileOperatorName || mobileOperatorCode || kycData.detected_operator || kycData.operator || 'non renseigné'
           fullName = kycData.full_name || customerNameFallback || 'non renseigné'
           accountNumber = kycData.customer_account_number || customerAccountNumber
           console.log('✅ KYC OK - opérateur:', operator, '| nom:', fullName)
@@ -138,7 +137,7 @@ export default class OrdersController {
         }
       } catch (kycError: any) {
         console.log('🟡 KYC injoignable, fallback sur données frontend')
-        operator = mobileOperatorCode || 'non renseigné'
+        operator = mobileOperatorName || mobileOperatorCode || 'non renseigné'
       }
 
       // ========== ÉTAPE 2: UTILISATEUR ==========
@@ -237,7 +236,7 @@ export default class OrdersController {
 
         if (mobileOperatorCode) {
           paymentBody.operator_code = mobileOperatorCode
-          console.log(`✅ Opérateur: ${mobileOperatorCode}`)
+          console.log(`✅ Opérateur code: ${mobileOperatorCode} | nom: ${mobileOperatorName}`)
         }
 
         const paymentResponse = await axios.post(
@@ -269,7 +268,7 @@ export default class OrdersController {
 
           let attemptCount = 0
 
-          // ✅ Boucle infinie — attend le temps qu'il faut
+          // ✅ Boucle infinie — attend le temps qu'il faut, pas de timeout
           while (true) {
             attemptCount++
 
@@ -285,7 +284,7 @@ export default class OrdersController {
                 console.log(`📡 Tentative #${attemptCount} - statut: ${statusData.status}`)
               }
 
-              // Paiement confirmé
+              // Paiement confirmé ✅
               if (statusData.is_success === true) {
                 console.log(`✅ PAIEMENT CONFIRMÉ après ${attemptCount} tentatives`)
                 paymentSuccess = true
@@ -294,7 +293,7 @@ export default class OrdersController {
                   x_secret: paymentResult.data.x_secret || '',
                   status: statusData.status,
                   amount: statusData.amount,
-                  operator_simple: paymentResult.data.operator_simple,
+                  operator_simple: mobileOperatorName || paymentResult.data.operator_simple,
                   transaction_type: paymentResult.data.transaction_type,
                   check_status_url: paymentResult.data.check_status_url,
                   code_url: paymentResult.data.code_url || '',
@@ -302,14 +301,14 @@ export default class OrdersController {
                 break
               }
 
-              // Paiement échoué
+              // Paiement échoué ❌
               if (statusData.is_failed === true) {
                 console.log(`❌ Paiement échoué après ${attemptCount} tentatives: ${statusData.status}`)
                 paymentSuccess = false
                 break
               }
 
-              // Toujours pending → on continue
+              // is_pending → on continue à attendre
 
             } catch (pollError: any) {
               if (attemptCount % 20 === 0) {
@@ -317,7 +316,7 @@ export default class OrdersController {
               }
             }
 
-            // Attendre 3 secondes avant la prochaine vérification
+            // 3 secondes entre chaque vérification
             await new Promise(resolve => setTimeout(resolve, 3000))
           }
 
