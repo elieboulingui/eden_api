@@ -225,6 +225,7 @@ export default class OrdersController {
       let paymentResult: any = null
       let paymentInfo: PaymentInfo | null = null
       let paymentSuccess = false
+      let paymentFailed = false
 
       try {
         console.log('🔵 🌐 APPEL API PAIEMENT...')
@@ -268,14 +269,22 @@ export default class OrdersController {
 
           console.log('🔑 reference_id:', paymentInfo.reference_id)
 
-          // ========== VÉRIFICATION DU STATUT ==========
-          console.log('🔍 Vérification du statut du paiement...')
+          // ========== VÉRIFICATION DU STATUT PENDANT 4 MINUTES (VÉRIFICATION CHAQUE SECONDE) ==========
+          console.log('🔍 Vérification du statut du paiement pendant max 4 minutes...')
           const referenceId = paymentResult.data.reference_id
-          let maxRetries = 15
-          let retryDelay = 3000
+          
+          const startTime = Date.now()
+          const maxWaitTime = 4 * 60 * 1000 // 4 minutes en millisecondes
+          const checkInterval = 1000 // 1 seconde entre chaque vérification
+          
+          let attemptCount = 0
+          let lastStatus = 'unknown'
 
-          for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            console.log(`📡 Tentative ${attempt}/${maxRetries} de vérification du statut...`)
+          while (Date.now() - startTime < maxWaitTime) {
+            attemptCount++
+            const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
+            
+            console.log(`📡 Vérification #${attemptCount} - Temps écoulé: ${elapsedSeconds}s / 240s`)
 
             try {
               const statusResponse = await axios.get(
@@ -284,42 +293,80 @@ export default class OrdersController {
               )
 
               const statusData = statusResponse.data
-              console.log(`✅ Réponse API statut tentative ${attempt}:`, JSON.stringify(statusData, null, 2))
+              
+              // Log simplifié pour ne pas surcharger la console
+              if (attemptCount % 10 === 0 || statusData.is_success === true || statusData.is_failed === true) {
+                console.log(`📊 Statut vérification #${attemptCount}:`, {
+                  success: statusData.success,
+                  is_success: statusData.is_success || false,
+                  is_pending: statusData.is_pending || false,
+                  is_failed: statusData.is_failed || false,
+                  status: statusData.status || 'unknown'
+                })
+              }
 
               if (statusData.success && statusData.is_success === true) {
                 console.log('✅✅✅ PAIEMENT RÉUSSI ! ✅✅✅')
                 console.log(`💰 Montant: ${statusData.amount} FCFA`)
+                console.log(`⏱️ Temps de confirmation: ${elapsedSeconds} secondes`)
                 paymentSuccess = true
+                paymentFailed = false
+                break
+              } else if (statusData.success && statusData.is_failed === true) {
+                console.log(`❌ Paiement échoué après ${elapsedSeconds} secondes`)
+                paymentSuccess = false
+                paymentFailed = true
                 break
               } else if (statusData.success && statusData.is_pending === true) {
-                console.log(`⏳ Paiement en attente (tentative ${attempt}/${maxRetries})`)
-                if (attempt < maxRetries) {
-                  await new Promise(resolve => setTimeout(resolve, retryDelay))
-                }
-              } else if (statusData.success && statusData.is_failed === true) {
-                console.log(`❌ Paiement échoué`)
-                paymentSuccess = false
-                break
+                lastStatus = 'pending'
+                // Continue la boucle
               } else {
-                console.log(`⚠️ Statut: ${statusData.status || 'inconnu'}`)
-                if (attempt < maxRetries) {
-                  await new Promise(resolve => setTimeout(resolve, retryDelay))
-                }
+                lastStatus = statusData.status || 'unknown'
+                // Continue la boucle
               }
             } catch (statusError: any) {
-              console.error(`❌ Erreur vérification statut (tentative ${attempt}):`, statusError.message)
-              if (attempt < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, retryDelay))
+              console.error(`❌ Erreur vérification #${attemptCount}:`, statusError.message)
+              // Continue malgré l'erreur réseau
+            }
+
+            // Attendre 1 seconde avant la prochaine vérification
+            await new Promise(resolve => setTimeout(resolve, checkInterval))
+          }
+
+          // Vérification finale du résultat
+          if (!paymentSuccess && !paymentFailed) {
+            console.log(`⏰ Timeout atteint après 4 minutes - Statut final: ${lastStatus}`)
+            
+            // Une dernière vérification pour être sûr
+            try {
+              const finalStatusResponse = await axios.get(
+                `https://apist.onrender.com/api/check-status/${referenceId}`,
+                { timeout: 15000 }
+              )
+              
+              const finalStatusData = finalStatusResponse.data
+              
+              if (finalStatusData.success && finalStatusData.is_success === true) {
+                console.log('✅ Paiement confirmé lors de la vérification finale !')
+                paymentSuccess = true
+              } else {
+                console.log('❌ Paiement non confirmé après 4 minutes')
+                paymentSuccess = false
               }
+            } catch (finalError: any) {
+              console.error('❌ Erreur lors de la vérification finale:', finalError.message)
+              paymentSuccess = false
             }
           }
 
           if (!paymentSuccess) {
-            console.log('❌ Paiement non confirmé après vérifications')
+            console.log('❌ Paiement non confirmé - Annulation de la commande')
             return response.status(400).json({
               success: false,
-              message: '❌ Paiement non confirmé. Veuillez réessayer.',
-              payment_status: 'failed'
+              message: '❌ Paiement non confirmé après 4 minutes. Veuillez réessayer.',
+              payment_status: paymentFailed ? 'failed' : 'timeout',
+              attempts: attemptCount,
+              time_elapsed_seconds: Math.floor((Date.now() - startTime) / 1000)
             })
           }
         } else {
