@@ -750,7 +750,8 @@ export default class OrdersController {
         tracked_at: DateTime.now(),
       })
 
-      order.status = status
+      // ✅ Correction : utiliser une assertion de type pour éviter l'erreur TypeScript
+      order.status = status as typeof order.status
       if (trackingNumber) order.tracking_number = trackingNumber
       if (estimatedDelivery) order.estimated_delivery = estimatedDelivery
       if (status === 'delivered') order.delivered_at = DateTime.now()
@@ -790,11 +791,18 @@ export default class OrdersController {
         return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
 
-      if (order.status !== 'pending' && order.status !== 'payment_pending') {
-        return response.status(400).json({ success: false, message: 'Cette commande ne peut plus être annulée' })
+      // ✅ Correction : utiliser les statuts valides du modèle Order
+      const cancellableStatuses = ['pending', 'paid', 'pending_payment']
+      if (!cancellableStatuses.includes(order.status)) {
+        return response.status(400).json({ 
+          success: false, 
+          message: 'Cette commande ne peut plus être annulée',
+          current_status: order.status
+        })
       }
 
-      order.status = 'cancelled'
+      // ✅ Correction : utiliser une assertion de type
+      order.status = 'cancelled' as typeof order.status
       await order.save()
 
       await OrderTracking.create({
@@ -913,7 +921,7 @@ export default class OrdersController {
       shipped: 'Votre commande a été expédiée',
       delivered: 'Votre commande a été livrée avec succès',
       paid: 'Paiement effectué avec succès',
-      payment_pending: 'Paiement en attente de confirmation',
+      pending_payment: 'Paiement en attente de confirmation',
       payment_failed: 'Le paiement a échoué',
       cancelled: 'Votre commande a été annulée',
     }
