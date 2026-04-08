@@ -221,11 +221,10 @@ export default class OrdersController {
       const total = subtotal + deliveryPrice
       console.log(`🔵 Total: subtotal=${subtotal} + livraison=${deliveryPrice} = ${total}`)
 
-      // ========== ÉTAPE 5: APPEL API DE PAIEMENT (AVANT CRÉATION COMMANDE) ==========
+      // ========== ÉTAPE 5: APPEL API DE PAIEMENT ==========
       let paymentResult: any = null
       let paymentInfo: PaymentInfo | null = null
       let paymentSuccess = false
-      let paymentFailed = false
 
       try {
         console.log('🔵 🌐 APPEL API PAIEMENT...')
@@ -268,85 +267,101 @@ export default class OrdersController {
           }
 
           console.log('🔑 reference_id:', paymentInfo.reference_id)
+          console.log('📱 operator_simple:', paymentInfo.operator_simple)
 
-          // ========== VÉRIFICATION DU STATUT PENDANT 4 MINUTES (VÉRIFICATION CHAQUE SECONDE) ==========
-          console.log('🔍 Vérification du statut du paiement pendant max 4 minutes...')
-          const referenceId = paymentResult.data.reference_id
+          // ========== VÉRIFICATION DU STATUT EN BOUCLE PENDANT 4 MINUTES ==========
+          console.log('🔍 Vérification du statut du paiement en boucle pendant 4 minutes...')
+          
+          const referenceId = paymentInfo.reference_id
+          const operatorSimple = paymentInfo.operator_simple
           
           const startTime = Date.now()
-          const maxWaitTime = 4 * 60 * 1000 // 4 minutes en millisecondes
-          const checkInterval = 1000 // 1 seconde entre chaque vérification
+          const maxWaitTime = 4 * 60 * 1000 // 4 minutes
+          const checkInterval = 1000 // 1 seconde
           
           let attemptCount = 0
-          let lastStatus = 'unknown'
 
           while (Date.now() - startTime < maxWaitTime) {
             attemptCount++
             const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
             
-            console.log(`📡 Vérification #${attemptCount} - Temps écoulé: ${elapsedSeconds}s / 240s`)
+            if (attemptCount % 10 === 0 || attemptCount === 1) {
+              console.log(`📡 Vérification #${attemptCount} - Temps écoulé: ${elapsedSeconds}s / 240s`)
+            }
 
             try {
+              // ✅ APPEL À /api/mypvit/transaction/status
               const statusResponse = await axios.get(
-                `https://apist.onrender.com/api/check-status/${referenceId}`,
-                { timeout: 15000 }
+                `https://apist.onrender.com/api/mypvit/transaction/status`,
+                {
+                  params: {
+                    transactionId: referenceId,
+                    accountOperationCode: operatorSimple,
+                    transactionOperation: 'PAYMENT'
+                  },
+                  timeout: 10000
+                }
               )
 
               const statusData = statusResponse.data
               
-              // Log simplifié pour ne pas surcharger la console
-              if (attemptCount % 10 === 0 || statusData.is_success === true || statusData.is_failed === true) {
-                console.log(`📊 Statut vérification #${attemptCount}:`, {
+              // Log périodique ou quand le statut change
+              if (attemptCount % 10 === 0 || statusData.data?.is_success === true) {
+                console.log(`📊 Statut #${attemptCount}:`, {
                   success: statusData.success,
-                  is_success: statusData.is_success || false,
-                  is_pending: statusData.is_pending || false,
-                  is_failed: statusData.is_failed || false,
-                  status: statusData.status || 'unknown'
+                  is_success: statusData.data?.is_success || false,
+                  is_pending: statusData.data?.is_pending || false,
+                  is_failed: statusData.data?.is_failed || false,
+                  status: statusData.data?.status || 'unknown'
                 })
               }
 
-              if (statusData.success && statusData.is_success === true) {
+              // ✅ VÉRIFICATION DU SUCCÈS
+              if (statusData.success && statusData.data?.is_success === true) {
                 console.log('✅✅✅ PAIEMENT RÉUSSI ! ✅✅✅')
-                console.log(`💰 Montant: ${statusData.amount} FCFA`)
+                console.log(`💰 Montant: ${statusData.data.amount} FCFA`)
                 console.log(`⏱️ Temps de confirmation: ${elapsedSeconds} secondes`)
+                console.log(`🔄 Nombre de tentatives: ${attemptCount}`)
                 paymentSuccess = true
-                paymentFailed = false
                 break
-              } else if (statusData.success && statusData.is_failed === true) {
+              }
+              
+              // ✅ VÉRIFICATION DE L'ÉCHEC
+              if (statusData.success && statusData.data?.is_failed === true) {
                 console.log(`❌ Paiement échoué après ${elapsedSeconds} secondes`)
                 paymentSuccess = false
-                paymentFailed = true
                 break
-              } else if (statusData.success && statusData.is_pending === true) {
-                lastStatus = 'pending'
-                // Continue la boucle
-              } else {
-                lastStatus = statusData.status || 'unknown'
-                // Continue la boucle
               }
+
             } catch (statusError: any) {
-              console.error(`❌ Erreur vérification #${attemptCount}:`, statusError.message)
-              // Continue malgré l'erreur réseau
+              // Erreur réseau, on continue
+              if (attemptCount % 50 === 0) {
+                console.error(`⚠️ Erreur réseau temporaire #${attemptCount}:`, statusError.message)
+              }
             }
 
             // Attendre 1 seconde avant la prochaine vérification
             await new Promise(resolve => setTimeout(resolve, checkInterval))
           }
 
-          // Vérification finale du résultat
-          if (!paymentSuccess && !paymentFailed) {
-            console.log(`⏰ Timeout atteint après 4 minutes - Statut final: ${lastStatus}`)
+          // Vérification finale si timeout
+          if (!paymentSuccess) {
+            console.log(`⏰ Timeout après 4 minutes - Dernière vérification...`)
             
-            // Une dernière vérification pour être sûr
             try {
-              const finalStatusResponse = await axios.get(
-                `https://apist.onrender.com/api/check-status/${referenceId}`,
-                { timeout: 15000 }
+              const finalResponse = await axios.get(
+                `https://apist.onrender.com/api/mypvit/transaction/status`,
+                {
+                  params: {
+                    transactionId: referenceId,
+                    accountOperationCode: operatorSimple,
+                    transactionOperation: 'PAYMENT'
+                  },
+                  timeout: 10000
+                }
               )
               
-              const finalStatusData = finalStatusResponse.data
-              
-              if (finalStatusData.success && finalStatusData.is_success === true) {
+              if (finalResponse.data.success && finalResponse.data.data?.is_success === true) {
                 console.log('✅ Paiement confirmé lors de la vérification finale !')
                 paymentSuccess = true
               } else {
@@ -354,17 +369,17 @@ export default class OrdersController {
                 paymentSuccess = false
               }
             } catch (finalError: any) {
-              console.error('❌ Erreur lors de la vérification finale:', finalError.message)
+              console.error('❌ Erreur vérification finale:', finalError.message)
               paymentSuccess = false
             }
           }
 
           if (!paymentSuccess) {
-            console.log('❌ Paiement non confirmé - Annulation de la commande')
+            console.log('❌ Paiement non confirmé - Commande annulée')
             return response.status(400).json({
               success: false,
               message: '❌ Paiement non confirmé après 4 minutes. Veuillez réessayer.',
-              payment_status: paymentFailed ? 'failed' : 'timeout',
+              payment_status: 'timeout',
               attempts: attemptCount,
               time_elapsed_seconds: Math.floor((Date.now() - startTime) / 1000)
             })
@@ -386,7 +401,7 @@ export default class OrdersController {
         })
       }
 
-      // ========== ⚠️ ICI : ON N'ARRIVE QUE SI LE PAIEMENT EST RÉUSSI ==========
+      // ========== SI PAIEMENT RÉUSSI, CRÉATION DE LA COMMANDE ==========
       if (!paymentSuccess) {
         return response.status(400).json({
           success: false,
@@ -396,7 +411,6 @@ export default class OrdersController {
 
       console.log('💰 PAIEMENT CONFIRMÉ - CRÉATION DE LA COMMANDE...')
 
-      // ========== ÉTAPE 6: CRÉATION DE LA COMMANDE (SEULEMENT SI PAIEMENT OK) ==========
       const orderNumber = `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
 
       const order = await Order.create({
@@ -417,9 +431,8 @@ export default class OrdersController {
       })
       console.log(`✅ Commande créée: ${order.order_number}`)
 
-      // ========== ÉTAPE 7: CRÉATION DES ITEMS ET DÉCRÉMENTATION DU STOCK ==========
+      // Création des items et décrémentation du stock
       for (const item of orderItems) {
-        // Créer l'item de commande
         await OrderItem.create({
           order_id: order.id,
           product_id: item.product_id,
@@ -433,7 +446,6 @@ export default class OrdersController {
         })
         console.log(`✅ Item créé: ${item.productName} x ${item.quantity}`)
 
-        // ✅ DÉCRÉMENTER LE STOCK DU PRODUIT
         const product = await Product.findBy('id', item.product_id)
         if (product) {
           const oldStock = product.stock
@@ -443,7 +455,7 @@ export default class OrdersController {
         }
       }
 
-      // ========== ÉTAPE 8: SUIVI INITIAL ==========
+      // Suivi initial
       await OrderTracking.create({
         order_id: order.id,
         status: 'paid',
@@ -451,12 +463,12 @@ export default class OrdersController {
         tracked_at: DateTime.now(),
       })
 
-      // ========== ÉTAPE 9: VIDAGE DU PANIER ==========
+      // Vider le panier
       await CartItem.query().where('cart_id', cart.id).delete()
       console.log('✅ Panier vidé')
 
-      // ========== ÉTAPE 10: PRÉLÈVEMENT 0.5% POUR SUPERADMIN ==========
-      const superAdminFee = total * 0.005  // 0.5% du total
+      // Prélèvement 0.5% pour superadmin
+      const superAdminFee = total * 0.005
       console.log(`💰 Prélèvement superadmin: ${superAdminFee} FCFA (0.5% de ${total})`)
 
       try {
@@ -491,13 +503,12 @@ export default class OrdersController {
         console.error('❌ Erreur lors du prélèvement superadmin:', walletError.message)
       }
 
-      // ========== ÉTAPE 11: CRÉDITER CHAQUE VENDEUR DANS SON WALLET ==========
+      // Créditer chaque vendeur
       console.log('💰 CRÉDIT DES VENDEURS...')
       const sellerCredits: any[] = []
 
       for (const [sellerId, saleData] of sellerSales.entries()) {
         try {
-          // Récupérer ou créer le wallet du vendeur
           let sellerWallet = await Wallet.query()
             .where('user_id', sellerId)
             .first()
@@ -527,7 +538,6 @@ export default class OrdersController {
           console.log(`✅ Vendeur ${sellerId} crédité de ${saleData.amount.toLocaleString()} FCFA`)
           console.log(`   📊 Ancien solde: ${previousBalance.toLocaleString()} FCFA → Nouveau: ${sellerWallet.balance.toLocaleString()} FCFA`)
 
-          // Enregistrer la transaction dans une table (optionnel)
           for (const product of saleData.products) {
             console.log(`   📦 Produit: ${product.product_name} x${product.quantity} = ${product.subtotal.toLocaleString()} FCFA`)
           }
@@ -536,7 +546,6 @@ export default class OrdersController {
         }
       }
 
-      // ========== ÉTAPE 12: RECHARGEMENT ==========
       await order.load('items')
       console.log('🟢 ========== COMMANDE CREEE AVEC SUCCES ==========')
 
@@ -572,41 +581,6 @@ export default class OrdersController {
         success: false,
         message: '❌ Erreur lors de la création de la commande',
         error: error.message,
-      })
-    }
-  }
-
-  // Méthode pour vérifier le statut d'une transaction via notre API
-  async checkPaymentStatus({ params, response }: HttpContext) {
-    try {
-      const { referenceId } = params
-
-      if (!referenceId) {
-        return response.status(400).json({ success: false, message: 'referenceId est requis' })
-      }
-
-      console.log(`🔍 Vérification du statut via API externe pour: ${referenceId}`)
-
-      const statusResponse = await axios.get(
-        `https://apist.onrender.com/api/check-status/${referenceId}`,
-        { timeout: 15000 }
-      )
-
-      const statusData = statusResponse.data
-
-      return response.status(200).json({
-        success: true,
-        message: 'Statut vérifié avec succès',
-        data: statusData
-      })
-
-    } catch (error: any) {
-      console.error('❌ Erreur vérification statut:', error.message)
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur lors de la vérification du statut',
-        error: error.message,
-        details: error.response?.data || null
       })
     }
   }
@@ -732,7 +706,7 @@ export default class OrdersController {
         return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
 
-      if (order.status !== 'pending') {
+      if (order.status !== 'pending' && order.status !== 'payment_pending') {
         return response.status(400).json({ success: false, message: 'Cette commande ne peut plus être annulée' })
       }
 
