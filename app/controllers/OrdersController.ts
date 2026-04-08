@@ -300,7 +300,7 @@ export default class OrdersController {
         const paymentResponse = await axios.post(
           'https://apist.onrender.com/api/payment',
           paymentBody,
-          { headers: { 'Content-Type': 'application/json' },  timeout: 180000 ,// 3 minutes }
+          { headers: { 'Content-Type': 'application/json' },  timeout: 180000// 3 minutes }
         )
 
         paymentResult = paymentResponse.data
