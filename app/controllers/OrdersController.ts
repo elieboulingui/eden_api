@@ -29,6 +29,58 @@ interface PaymentInfo {
 }
 
 export default class OrdersController {
+  
+  // ========== NOUVELLE API : Récupérer les données du service mypvit ==========
+  async giveAllWithoutId({ response }: HttpContext) {
+    console.log('📡 [giveAllWithoutId] Appel du service mypvit...')
+    
+    try {
+      // ID de référence fixe
+      const referenceId = "PAY0804261016190"
+      
+      // Appeler l'API externe mypvit
+      const apiResponse = await axios.get(
+        `https://apist.onrender.com/api/check-status/${referenceId}`,
+        { 
+          timeout: 10000,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+      
+      console.log('✅ [giveAllWithoutId] Données reçues de mypvit:', {
+        success: apiResponse.data.success,
+        reference_id: apiResponse.data.reference_id,
+        status: apiResponse.data.status,
+        amount: apiResponse.data.amount,
+        is_success: apiResponse.data.is_success,
+        is_failed: apiResponse.data.is_failed
+      })
+      
+      // Renvoyer EXACTEMENT ce que l'API externe a retourné
+      return response.status(200).json(apiResponse.data)
+      
+    } catch (error: any) {
+      console.error('❌ [giveAllWithoutId] Erreur:', error.message)
+      
+      // En cas d'erreur, renvoyer un format similaire
+      return response.status(200).json({
+        success: false,
+        reference_id: "PAY0804261016190",
+        status: "SERVICE_UNAVAILABLE",
+        amount: 0,
+        is_success: false,
+        is_pending: false,
+        is_failed: true,
+        last_update: new Date().toISOString(),
+        error_message: error.message,
+        service_status: error.response?.status || 503
+      })
+    }
+  }
+
   public async allOrders({ response }: HttpContext) {
     const orders = await Order.query()
       .preload('items')
