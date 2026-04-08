@@ -269,16 +269,14 @@ export default class OrdersController {
           console.log('🔑 reference_id:', paymentInfo.reference_id)
           console.log('🔐 x_secret disponible:', paymentInfo.x_secret ? 'Oui' : 'Non')
 
-          // ========== VÉRIFICATION DOUBLE PENDANT 4 MINUTES ==========
-          console.log('🔍 Vérification double (DB + MyPVIT) pendant 4 minutes...')
+          // ========== VÉRIFICATION PENDANT 4 MINUTES ==========
+          console.log('🔍 Vérification du statut pendant 4 minutes...')
           
           const referenceId = paymentInfo.reference_id
-          const operatorSimple = paymentInfo.operator_simple
-          const xSecret = paymentInfo.x_secret
           
           const startTime = Date.now()
           const maxWaitTime = 4 * 60 * 1000 // 4 minutes
-          const checkInterval = 1000 // 1 seconde
+          const checkInterval = 3000 // 3 secondes
           
           let attemptCount = 0
 
@@ -290,136 +288,62 @@ export default class OrdersController {
               console.log(`📡 Vérification #${attemptCount} - Temps écoulé: ${elapsedSeconds}s / 240s`)
             }
 
-            // ========== VÉRIFICATION 1: DB LOCALE ==========
             try {
-              const dbCheckResponse = await axios.get(
+              // Vérifier le statut via l'API
+              const statusResponse = await axios.get(
                 `https://apist.onrender.com/api/check-status/${referenceId}`,
                 { timeout: 5000 }
               )
 
-              const dbData = dbCheckResponse.data
+              const statusData = statusResponse.data
               
-              if (dbData.success && dbData.is_success === true) {
-                console.log('✅✅✅ PAIEMENT CONFIRMÉ DANS LA DB ! ✅✅✅')
-                console.log(`💰 Montant: ${dbData.amount} FCFA`)
+              if (statusData.success && statusData.is_success === true) {
+                console.log('✅✅✅ PAIEMENT CONFIRMÉ ! ✅✅✅')
+                console.log(`💰 Montant: ${statusData.amount} FCFA`)
                 console.log(`⏱️ Temps de confirmation: ${elapsedSeconds} secondes`)
-                console.log(`📊 Source: Base de données locale`)
                 paymentSuccess = true
                 break
               }
               
-              if (dbData.success && dbData.is_failed === true) {
-                console.log(`❌ Paiement marqué comme échoué dans la DB`)
+              if (statusData.success && statusData.is_failed === true) {
+                console.log(`❌ Paiement échoué: ${statusData.status}`)
                 paymentSuccess = false
                 break
               }
               
               // Log périodique
               if (attemptCount % 10 === 0) {
-                console.log(`  📊 DB Check #${attemptCount}: is_success=${dbData.is_success}, is_pending=${dbData.is_pending}`)
+                console.log(`  📊 Statut actuel: ${statusData.status}, is_success=${statusData.is_success}`)
               }
-            } catch (dbError: any) {
-              if (attemptCount % 50 === 0) {
-                console.error(`  ⚠️ Erreur DB check #${attemptCount}:`, dbError.message)
-              }
-            }
-
-            // ========== VÉRIFICATION 2: MyPVIT EN TEMPS RÉEL ==========
-            try {
-              const mypvitResponse = await axios.get(
-                `https://apist.onrender.com/api/mypvit/transaction/status`,
-                {
-                  params: {
-                    transactionId: referenceId,
-                    accountOperationCode: operatorSimple,
-                    transactionOperation: 'PAYMENT'
-                  },
-                  headers: {
-                    'X-Secret': xSecret
-                  },
-                  timeout: 10000
-                }
-              )
-
-              const mypvitData = mypvitResponse.data
-              
-              if (mypvitData.success && mypvitData.data?.is_success === true) {
-                console.log('✅✅✅ PAIEMENT CONFIRMÉ PAR MYPVIT ! ✅✅✅')
-                console.log(`💰 Montant: ${mypvitData.data.amount} FCFA`)
-                console.log(`⏱️ Temps de confirmation: ${elapsedSeconds} secondes`)
-                console.log(`📊 Source: API MyPVIT (temps réel)`)
-                paymentSuccess = true
-                break
-              }
-              
-              if (mypvitData.success && mypvitData.data?.is_failed === true) {
-                console.log(`❌ Paiement échoué selon MyPVIT`)
-                paymentSuccess = false
-                break
-              }
-              
-              // Log périodique
-              if (attemptCount % 10 === 0) {
-                console.log(`  📊 MyPVIT Check #${attemptCount}: is_success=${mypvitData.data?.is_success}, status=${mypvitData.data?.status}`)
-              }
-            } catch (mypvitError: any) {
-              if (attemptCount % 50 === 0) {
-                console.error(`  ⚠️ Erreur MyPVIT check #${attemptCount}:`, mypvitError.message)
+            } catch (error: any) {
+              if (attemptCount % 20 === 0) {
+                console.error(`  ⚠️ Erreur vérification #${attemptCount}:`, error.message)
               }
             }
 
-            // Attendre 1 seconde avant la prochaine vérification
+            // Attendre avant la prochaine vérification
             await new Promise(resolve => setTimeout(resolve, checkInterval))
           }
 
           // Vérification finale si timeout
           if (!paymentSuccess) {
-            console.log(`⏰ Timeout après 4 minutes - Dernière vérification...`)
+            console.log(`⏰ Timeout après 4 minutes - Vérification finale...`)
             
-            // Dernière vérification DB
             try {
-              const finalDbCheck = await axios.get(
+              const finalCheck = await axios.get(
                 `https://apist.onrender.com/api/check-status/${referenceId}`,
                 { timeout: 5000 }
               )
               
-              if (finalDbCheck.data.success && finalDbCheck.data.is_success === true) {
-                console.log('✅ Paiement confirmé dans la DB lors de la vérification finale !')
+              if (finalCheck.data.success && finalCheck.data.is_success === true) {
+                console.log('✅ Paiement confirmé lors de la vérification finale !')
                 paymentSuccess = true
+              } else if (finalCheck.data.success && finalCheck.data.is_success === false) {
+                console.log(`❌ Paiement échoué: ${finalCheck.data.status}`)
+                paymentSuccess = false
               }
             } catch (finalError: any) {
-              console.error('❌ Erreur vérification finale DB:', finalError.message)
-            }
-            
-            // Dernière vérification MyPVIT
-            if (!paymentSuccess) {
-              try {
-                const finalMypvitCheck = await axios.get(
-                  `https://apist.onrender.com/api/mypvit/transaction/status`,
-                  {
-                    params: {
-                      transactionId: referenceId,
-                      accountOperationCode: operatorSimple,
-                      transactionOperation: 'PAYMENT'
-                    },
-                    headers: {
-                      'X-Secret': xSecret
-                    },
-                    timeout: 10000
-                  }
-                )
-                
-                if (finalMypvitCheck.data.success && finalMypvitCheck.data.data?.is_success === true) {
-                  console.log('✅ Paiement confirmé par MyPVIT lors de la vérification finale !')
-                  paymentSuccess = true
-                }
-              } catch (finalError: any) {
-                console.error('❌ Erreur vérification finale MyPVIT:', finalError.message)
-              }
-            }
-            
-            if (!paymentSuccess) {
-              console.log('❌ Paiement non confirmé après 4 minutes')
+              console.error('❌ Erreur vérification finale:', finalError.message)
             }
           }
 
@@ -646,7 +570,7 @@ export default class OrdersController {
       console.log(`🔍 Vérification du statut dans la DB pour: ${referenceId}`)
 
       const statusResponse = await axios.get(
-        `https://apist.onrender.com/api/mypvit/status/${referenceId}`,
+        `https://apist.onrender.com/api/check-status/${referenceId}`,
         { timeout: 15000 }
       )
 
@@ -750,7 +674,6 @@ export default class OrdersController {
         tracked_at: DateTime.now(),
       })
 
-      // ✅ Correction : utiliser une assertion de type pour éviter l'erreur TypeScript
       order.status = status as typeof order.status
       if (trackingNumber) order.tracking_number = trackingNumber
       if (estimatedDelivery) order.estimated_delivery = estimatedDelivery
@@ -791,7 +714,6 @@ export default class OrdersController {
         return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
 
-      // ✅ Correction : utiliser les statuts valides du modèle Order
       const cancellableStatuses = ['pending', 'paid', 'pending_payment']
       if (!cancellableStatuses.includes(order.status)) {
         return response.status(400).json({ 
@@ -801,7 +723,6 @@ export default class OrdersController {
         })
       }
 
-      // ✅ Correction : utiliser une assertion de type
       order.status = 'cancelled' as typeof order.status
       await order.save()
 
