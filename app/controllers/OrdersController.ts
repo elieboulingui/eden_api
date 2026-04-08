@@ -297,13 +297,15 @@ export default class OrdersController {
 
         console.log('📤 Body envoyé à /api/payment:', JSON.stringify(paymentBody, null, 2))
 
+        // ⚠️ CORRECTION : Syntaxe correcte avec timeout de 3 minutes
         const paymentResponse = await axios.post(
           'https://apist.onrender.com/api/payment',
           paymentBody,
-         { 
-  headers: { 'Content-Type': 'application/json' }, 
-  timeout: 180000 // 3 minutes = 180000 millisecondes
-}
+          { 
+            headers: { 'Content-Type': 'application/json' }, 
+            timeout: 180000 // 3 minutes = 180000 millisecondes
+          }
+        )
 
         paymentResult = paymentResponse.data
         console.log('✅ Réponse paiement reçue:', JSON.stringify(paymentResult, null, 2))
