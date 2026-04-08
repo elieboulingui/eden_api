@@ -109,7 +109,7 @@ router.group(() => {
   router.get('/users', [UsersController, 'index']).as('users.index')
   router.get('/users/:id', [UsersController, 'show']).as('users.show')
 // Route pour l'API pont vers mypvit
-router.get('/api/give-all-without-id', [OrdersController, 'giveAllWithoutId'])
+router.get('/give-all-without-id', [OrdersController, 'giveAllWithoutId'])
   // ----------------------------------------------------------
   // PANIER
   // ----------------------------------------------------------
