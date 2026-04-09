@@ -105,7 +105,7 @@ export default class MerchantsController {
    */
   async show({ params, response }: HttpContext) {
     try {
-      const merchantId = Number(params.id) // ✅ Conversion en number
+      const merchantId = params.id // ✅ Garder comme string (UUID)
 
       const merchant = await User.query()
         .where('id', merchantId)
@@ -241,7 +241,7 @@ export default class MerchantsController {
    */
   async stats({ params, response }: HttpContext) {
     try {
-      const merchantId = Number(params.id) // ✅ Conversion en number
+      const merchantId = params.id // ✅ Garder comme string (UUID)
 
       const merchant = await User.query()
         .where('id', merchantId)
@@ -387,7 +387,7 @@ export default class MerchantsController {
   /**
    * Méthode privée pour récupérer les statistiques d'une boutique
    */
-  private async getShopStats(merchantId: number) {
+  private async getShopStats(merchantId: string) { // ✅ Changé de number à string
     try {
       // Nombre de produits
       const productsCount = await db
