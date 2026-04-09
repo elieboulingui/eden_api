@@ -1,34 +1,36 @@
+// app/models/testimonial.ts
 import { DateTime } from 'luxon'
-import { BaseModel, column, beforeCreate, belongsTo, BelongsTo } from '@adonisjs/lucid/orm'
+import { BaseModel, column, beforeCreate, belongsTo } from '@adonisjs/lucid/orm'
+import type { BelongsTo } from '@adonisjs/lucid/orm' // ✅ Import séparé pour le type
 import { v4 as uuidv4 } from 'uuid'
 import User from '#models/user'
 
 export default class Testimonial extends BaseModel {
   @column({ isPrimary: true })
-  public id!: string
+  declare id: string
 
   @column()
-  public userId!: string
+  declare userId: string
 
   @column()
-  public rating!: number
+  declare rating: number
 
   @column()
-  public text!: string
+  declare text: string
 
   @column.dateTime({ autoCreate: true })
-  public createdAt!: DateTime
+  declare createdAt: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  public updatedAt!: DateTime
+  declare updatedAt: DateTime
 
-  // ✅ relation
+  // ✅ Relation
   @belongsTo(() => User)
-  public user!: BelongsTo<typeof User>
+  declare user: BelongsTo<typeof User>
 
   // ✅ UUID auto
   @beforeCreate()
-  public static assignUuid(testimonial: Testimonial) {
+  static assignUuid(testimonial: Testimonial) {
     testimonial.id = uuidv4()
   }
 }
