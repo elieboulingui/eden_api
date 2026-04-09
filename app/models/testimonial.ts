@@ -1,8 +1,7 @@
 // app/models/testimonial.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, beforeCreate, belongsTo } from '@adonisjs/lucid/orm'
-import type { BelongsTo } from '@adonisjs/lucid/types/relations' // ✅ Import depuis types/relations
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'node:crypto' // ✅ UUID natif de Node.js
 import User from '#models/user'
 
 export default class Testimonial extends BaseModel {
@@ -26,11 +25,11 @@ export default class Testimonial extends BaseModel {
 
   // ✅ Relation
   @belongsTo(() => User)
-  declare user: BelongsTo<typeof User>
+  declare user: any
 
-  // ✅ UUID auto
+  // ✅ UUID auto avec crypto natif
   @beforeCreate()
   static assignUuid(testimonial: Testimonial) {
-    testimonial.id = uuidv4()
+    testimonial.id = randomUUID()
   }
 }
