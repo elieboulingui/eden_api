@@ -28,6 +28,84 @@ interface PaymentInfo {
 
 export default class OrdersController {
 
+
+  // Dans OrdersController.ts
+
+/**
+ * Vérifier le statut de paiement d'une commande spécifique
+ * GET /api/orders/:orderId/payment-status
+ */
+async getPaymentStatus({ params, response }: HttpContext) {
+  try {
+    const { orderId } = params
+    
+    // Trouver la commande
+    let order: Order | null = null
+    
+    if (orderId.startsWith('CMD-')) {
+      order = await Order.findBy('order_number', orderId)
+    } else {
+      order = await Order.find(orderId)
+    }
+    
+    if (!order) {
+      return response.status(404).json({
+        success: false,
+        message: 'Commande non trouvée'
+      })
+    }
+    
+    // Récupérer le dernier tracking de paiement
+    const lastPaymentTracking = await OrderTracking.query()
+      .where('order_id', order.id)
+      .whereIn('status', ['paid', 'pending_payment', 'payment_failed'])
+      .orderBy('tracked_at', 'desc')
+      .first()
+    
+    // Déterminer le statut de paiement
+    let paymentStatus = 'unknown'
+    let isPaid = false
+    let isPending = false
+    let isFailed = false
+    
+    if (order.status === 'paid' || order.status === 'processing' || 
+        order.status === 'shipped' || order.status === 'delivered') {
+      paymentStatus = 'paid'
+      isPaid = true
+    } else if (order.status === 'pending_payment') {
+      paymentStatus = 'pending'
+      isPending = true
+    } else if (order.status === 'payment_failed') {
+      paymentStatus = 'failed'
+      isFailed = true
+    }
+    
+    return response.status(200).json({
+      success: true,
+      data: {
+        orderId: order.order_number,
+        order_id: order.id,
+        payment_status: paymentStatus,
+        is_paid: isPaid,
+        is_pending: isPending,
+        is_failed: isFailed,
+        payment_method: order.payment_method,
+        payment_reference: lastPaymentTracking?.description?.match(/Réf: (\S+)/)?.[1] || null,
+        amount: order.total,
+        status: order.status,
+        last_update: order.updated_at
+      }
+    })
+    
+  } catch (error: any) {
+    return response.status(500).json({
+      success: false,
+      message: 'Erreur lors de la vérification du statut de paiement',
+      error: error.message
+    })
+  }
+}
+
   // ========== PROXY CHECK-STATUS POUR LE FRONT ==========
   async giveAllWithoutId({ params, response }: HttpContext) {
     const { referenceId } = params

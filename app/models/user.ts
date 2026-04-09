@@ -32,6 +32,12 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare password: string
 
   @column()
+  declare shop_name: string | null
+
+  @column()
+  declare shop_image: string | null
+
+  @column()
   declare role: 'superadmin' | 'admin' | 'client' | 'marchant' | 'merchant'
 
   @column()

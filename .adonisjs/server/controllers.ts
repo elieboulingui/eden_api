@@ -18,6 +18,7 @@ export const controllers = {
   NewAccountControllers: () => import('#controllers/new_account_controllers'),
   Newsletter: () => import('#controllers/newsletter_controller'),
   OrderTrackings: () => import('#controllers/order_trackings_controller'),
+  Orders: () => import('#controllers/OrdersController'),
   Products: () => import('#controllers/products_controller'),
   Profile: () => import('#controllers/profile_controller'),
   Promotions: () => import('#controllers/promotions_controller'),
@@ -26,7 +27,6 @@ export const controllers = {
   Reviews: () => import('#controllers/reviews_controller'),
   Session: () => import('#controllers/session_controller'),
   SessionControllers: () => import('#controllers/session_controllers'),
-  Users: () => import('#controllers/users_controller'),
-  Orders: () => import('#controllers/OrdersController'),
   Testimonials: () => import('#controllers/testimonials_controller'),
+  Users: () => import('#controllers/users_controller'),
 }

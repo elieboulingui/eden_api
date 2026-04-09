@@ -599,7 +599,7 @@ export class TransactionSchema extends BaseModel {
 }
 
 export class UserSchema extends BaseModel {
-  static $columns = ['address', 'avatar', 'createdAt', 'email', 'fullName', 'id', 'password', 'phone', 'role', 'updatedAt'] as const
+  static $columns = ['address', 'avatar', 'createdAt', 'email', 'fullName', 'id', 'password', 'phone', 'role', 'shopImage', 'shopName', 'updatedAt'] as const
   $columns = UserSchema.$columns
   @column()
   declare address: string | null
@@ -619,6 +619,10 @@ export class UserSchema extends BaseModel {
   declare phone: string | null
   @column()
   declare role: string | null
+  @column()
+  declare shopImage: string | null
+  @column()
+  declare shopName: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
 }
