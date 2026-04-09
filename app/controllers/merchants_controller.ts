@@ -105,10 +105,10 @@ export default class MerchantsController {
    */
   async show({ params, response }: HttpContext) {
     try {
-      const merchantId = params.id // Garder comme string
+      const merchantId = Number(params.id) // ✅ Conversion en number
 
       const merchant = await User.query()
-        .where('id', merchantId) // Lucid ORM accepte string ou number
+        .where('id', merchantId)
         .where('role', 'merchant')
         .preload('wallet')
         .select([
@@ -241,10 +241,10 @@ export default class MerchantsController {
    */
   async stats({ params, response }: HttpContext) {
     try {
-      const merchantId = params.id // Garder comme string
+      const merchantId = Number(params.id) // ✅ Conversion en number
 
       const merchant = await User.query()
-        .where('id', merchantId) // Lucid ORM accepte string ou number
+        .where('id', merchantId)
         .where('role', 'merchant')
         .first()
 
