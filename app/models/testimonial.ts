@@ -1,7 +1,7 @@
 // app/models/testimonial.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
-
+import type { BelongsTo } from '@adonisjs/lucid/types/relations' // ✅ Import correct
 import User from '#models/user'
 
 export default class Testimonial extends BaseModel {
@@ -23,7 +23,7 @@ export default class Testimonial extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
 
-  // ✅ Relation
+  // ✅ Relation avec le bon type
   @belongsTo(() => User)
-  declare user: any
+  declare user: BelongsTo<typeof User>
 }
