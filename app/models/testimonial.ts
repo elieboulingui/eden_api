@@ -1,6 +1,7 @@
 // app/models/testimonial.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
+
 import User from '#models/user'
 
 export default class Testimonial extends BaseModel {
