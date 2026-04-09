@@ -81,28 +81,20 @@ router.group(() => {
   router.get('/blog/posts', [BlogController, 'index']).as('blog.index')
   router.get('/blog/posts/featured', [BlogController, 'featured']).as('blog.featured')
   router.get('/blog/posts/:slug', [BlogController, 'show']).as('blog.show')
-  // ✅ Route pour soumettre un article (public)
   router.post('/blog/posts/submit', [BlogController, 'publicStore']).as('blog.submit')
+
+  // ----------------------------------------------------------
+  // TESTIMONIALS (TÉMOIGNAGES)
+  // ----------------------------------------------------------
+  router.get('/testimonials', [TestimonialsController, 'index']).as('testimonials.index')
+  router.post('/testimonials', [TestimonialsController, 'store']).as('testimonials.store')
+  router.get('/testimonials/:id', [TestimonialsController, 'show']).as('testimonials.show')
+  router.put('/testimonials/:id', [TestimonialsController, 'update']).as('testimonials.update')
+  router.delete('/testimonials/:id', [TestimonialsController, 'destroy']).as('testimonials.destroy')
 
   // ----------------------------------------------------------
   // PRODUITS
   // ----------------------------------------------------------
-
-
-  router.get('/testimonials', [TestimonialsController, 'index'])
-
-  // 🔹 Créer un témoignage
-  router.post('/testimonials', [TestimonialsController, 'store'])
-
-  // 🔹 Voir un témoignage (UUID)
-  router.get('/testimonials/:id', [TestimonialsController, 'show'])
-
-  // 🔹 Modifier
-  router.put('/testimonials/:id', [TestimonialsController, 'update'])
-
-  // 🔹 Supprimer
-  router.delete('/testimonials/:id', [TestimonialsController, 'destroy'])
-  
   router.get('/products', [ProductsController, 'index']).as('products.index')
   router.get('/products/:id', [ProductsController, 'show']).as('products.show')
   router.get('/produits/:id', [ProductsController, 'show']).as('produits.show')
@@ -125,8 +117,7 @@ router.group(() => {
   // ----------------------------------------------------------
   router.get('/users', [UsersController, 'index']).as('users.index')
   router.get('/users/:id', [UsersController, 'show']).as('users.show')
-// Route pour l'API pont vers mypvit
-router.get('/give-all-without-id', [OrdersController, 'giveAllWithoutId'])
+
   // ----------------------------------------------------------
   // PANIER
   // ----------------------------------------------------------
@@ -156,11 +147,14 @@ router.get('/give-all-without-id', [OrdersController, 'giveAllWithoutId'])
   router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice']).as('orders.invoice')
   router.put('/orders/:orderId/status', [OrdersController, 'updateStatus']).as('orders.status.update')
 
-  // Routes avec le même contrôleur - noms différents
-  router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus'])
-    .as('orders.payment-status')
-  router.get('/payment/status/:transactionId', [OrdersController, 'checkPaymentStatus'])
-    .as('payment.status')
+  // ✅ API PONT VERS MYPVIT - Récupérer les données sans ID (pour test/debug)
+  router.get('/give-all-without-id', [OrdersController, 'giveAllWithoutId']).as('payment.without-id')
+
+  // ✅ API pour vérifier le statut d'un paiement par reference_id
+  router.get('/payment/status/:referenceId', [OrdersController, 'checkPaymentStatus']).as('payment.status')
+
+  // Alias pour compatibilité
+  router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus']).as('orders.payment-status')
 
   // ----------------------------------------------------------
   // SUIVI DE COMMANDE
@@ -251,4 +245,4 @@ router.get('/give-all-without-id', [OrdersController, 'giveAllWithoutId'])
     router.delete('/posts/:id', [BlogController, 'destroy']).as('admin.posts.destroy')
   }).prefix('/blog/admin')
 
-}).prefix('/api') // ✅ Cette accolade ferme le groupe API
+}).prefix('/api') // ✅ Fin du groupe API
