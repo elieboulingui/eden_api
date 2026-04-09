@@ -11,17 +11,17 @@ export default class MerchantsController {
    * GET /api/merchants?status=active
    * GET /api/merchants?search=nom
    */
+  // app/controllers/merchants_controller.ts - méthode index()
   async index({ request, response }: HttpContext) {
     try {
       const page = request.input('page', 1)
       const limit = request.input('limit', 10)
-      const status = request.input('status') // active, inactive, pending
-      const search = request.input('search') // Recherche par nom de boutique ou nom du marchand
+      const status = request.input('status')
+      const search = request.input('search')
 
-      // Construire la requête de base
       let query = User.query()
         .where('role', 'merchant')
-        .preload('wallet') // Charger le wallet du marchand
+        .preload('wallet')
         .select([
           'id',
           'full_name',
@@ -33,14 +33,12 @@ export default class MerchantsController {
           'updated_at'
         ])
 
-      // Filtrer par statut si spécifié (basé sur le wallet)
-      if (status) {
+      if (status && status !== 'all') {
         query = query.whereHas('wallet', (walletQuery) => {
           walletQuery.where('status', status)
         })
       }
 
-      // Recherche par nom ou nom de boutique
       if (search) {
         query = query.where((builder) => {
           builder
@@ -50,10 +48,8 @@ export default class MerchantsController {
         })
       }
 
-      // Exécuter la requête avec pagination
       const merchants = await query.paginate(page, limit)
 
-      // Formater les données
       const formattedMerchants = merchants.map((merchant) => ({
         id: merchant.id,
         full_name: merchant.full_name,
@@ -73,6 +69,7 @@ export default class MerchantsController {
         updated_at: merchant.updated_at,
       }))
 
+      // ✅ Format de réponse cohérent
       return response.status(200).json({
         success: true,
         data: formattedMerchants,
@@ -89,12 +86,12 @@ export default class MerchantsController {
         },
       })
     } catch (error) {
-      console.error('Erreur lors de la récupération des marchands:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+      console.error('Erreur:', error)
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la récupération des marchands',
-        error: errorMessage,
+        message: 'Erreur serveur',
+        data: [],  // ✅ Toujours renvoyer un tableau vide
+        meta: null
       })
     }
   }
