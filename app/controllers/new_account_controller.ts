@@ -32,8 +32,7 @@ export default class NewAccountController {
       }
 
       // 3. Normaliser le rôle
-      const role = payload.role === 'marchant' ? 'merchant' : payload.role || 'client'
-
+      const role = payload.role || 'client'
       // 4. Création utilisateur
       const user = await User.create({
         full_name: payload.full_name,
