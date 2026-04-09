@@ -397,6 +397,12 @@ export class ProductSchema extends BaseModel {
   @column()
   declare imageUrl: string | null
   @column()
+  declare imageUrl: string | null
+  @column()
+  declare isNew: boolean | null
+  @column()
+  declare isOnSale: boolean | null
+  @column()
   declare isNew: boolean | null
   @column()
   declare isOnSale: boolean | null
@@ -544,6 +550,23 @@ export class ReviewSchema extends BaseModel {
   declare updatedAt: DateTime | null
   @column()
   declare userId: string
+}
+
+export class TestimonialSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'rating', 'text', 'updatedAt', 'userId'] as const
+  $columns = TestimonialSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare rating: number
+  @column()
+  declare text: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string | null
 }
 
 export class TransactionSchema extends BaseModel {

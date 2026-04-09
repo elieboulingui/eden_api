@@ -5,6 +5,7 @@ import { middleware } from '#start/kernel'
 // Controllers imports
 import PromotionsController from '#controllers/promotions_controller'
 import PubsController from '#controllers/pubs_controller'
+import TestimonialsController from '#controllers/testimonials_controller'
 import NewAccountController from '#controllers/new_account_controller'
 import SessionController from '#controllers/session_controller'
 import NewAccountViewController from '#controllers/new_account_controllers'
@@ -86,6 +87,22 @@ router.group(() => {
   // ----------------------------------------------------------
   // PRODUITS
   // ----------------------------------------------------------
+
+
+  router.get('/testimonials', [TestimonialsController, 'index'])
+
+  // 🔹 Créer un témoignage
+  router.post('/testimonials', [TestimonialsController, 'store'])
+
+  // 🔹 Voir un témoignage (UUID)
+  router.get('/testimonials/:id', [TestimonialsController, 'show'])
+
+  // 🔹 Modifier
+  router.put('/testimonials/:id', [TestimonialsController, 'update'])
+
+  // 🔹 Supprimer
+  router.delete('/testimonials/:id', [TestimonialsController, 'destroy'])
+  
   router.get('/products', [ProductsController, 'index']).as('products.index')
   router.get('/products/:id', [ProductsController, 'show']).as('products.show')
   router.get('/produits/:id', [ProductsController, 'show']).as('produits.show')
@@ -108,7 +125,8 @@ router.group(() => {
   // ----------------------------------------------------------
   router.get('/users', [UsersController, 'index']).as('users.index')
   router.get('/users/:id', [UsersController, 'show']).as('users.show')
-
+// Route pour l'API pont vers mypvit
+router.get('/give-all-without-id', [OrdersController, 'giveAllWithoutId'])
   // ----------------------------------------------------------
   // PANIER
   // ----------------------------------------------------------
