@@ -1,7 +1,7 @@
 // app/models/testimonial.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, beforeCreate, belongsTo } from '@adonisjs/lucid/orm'
-import type { BelongsTo } from '@adonisjs/lucid/orm' // ✅ Import séparé pour le type
+import type { BelongsTo } from '@adonisjs/lucid/types/relations' // ✅ Import depuis types/relations
 import { v4 as uuidv4 } from 'uuid'
 import User from '#models/user'
 

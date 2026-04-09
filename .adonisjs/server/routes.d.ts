@@ -44,7 +44,6 @@ export type ScannedRoutes = {
     'categories.products.create': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'users.index': { paramsTuple?: []; params?: {} }
     'users.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'orders.give_all_without_id': { paramsTuple?: []; params?: {} }
     'cart.get': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'cart.show': { paramsTuple?: []; params?: {} }
     'cart.add': { paramsTuple?: []; params?: {} }
@@ -62,8 +61,9 @@ export type ScannedRoutes = {
     'orders.cancel': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
     'orders.status.update': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'payment.without-id': { paramsTuple?: []; params?: {} }
+    'payment.status': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
     'orders.payment-status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'payment.status': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
     'tracking.search': { paramsTuple?: []; params?: {} }
     'tracking.events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'tracking.event.add': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
@@ -136,7 +136,6 @@ export type ScannedRoutes = {
     'categories.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
     'users.index': { paramsTuple?: []; params?: {} }
     'users.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'orders.give_all_without_id': { paramsTuple?: []; params?: {} }
     'cart.get': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'favorites.index': { paramsTuple?: []; params?: {} }
     'favorites.check': { paramsTuple?: []; params?: {} }
@@ -144,8 +143,9 @@ export type ScannedRoutes = {
     'orders.user.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
     'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
+    'payment.without-id': { paramsTuple?: []; params?: {} }
+    'payment.status': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
     'orders.payment-status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'payment.status': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
     'tracking.events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'coupons.index': { paramsTuple?: []; params?: {} }
     'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -190,7 +190,6 @@ export type ScannedRoutes = {
     'categories.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
     'users.index': { paramsTuple?: []; params?: {} }
     'users.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'orders.give_all_without_id': { paramsTuple?: []; params?: {} }
     'cart.get': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'favorites.index': { paramsTuple?: []; params?: {} }
     'favorites.check': { paramsTuple?: []; params?: {} }
@@ -198,8 +197,9 @@ export type ScannedRoutes = {
     'orders.user.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
     'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
+    'payment.without-id': { paramsTuple?: []; params?: {} }
+    'payment.status': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
     'orders.payment-status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'payment.status': { paramsTuple: [ParamValue]; params: {'transactionId': ParamValue} }
     'tracking.events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'coupons.index': { paramsTuple?: []; params?: {} }
     'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
