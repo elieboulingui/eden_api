@@ -3,6 +3,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+const MerchantsController = () => import('#controllers/merchants_controller')
 import PromotionsController from '#controllers/promotions_controller'
 import PubsController from '#controllers/pubs_controller'
 import TestimonialsController from '#controllers/testimonials_controller'
@@ -246,3 +247,24 @@ router.group(() => {
   }).prefix('/blog/admin')
 
 }).prefix('/api') // ✅ Fin du groupe API
+
+es pour les marchands
+router.group(() => {
+  // Récupérer tous les marchands (avec pagination)
+  router.get('/', [MerchantsController, 'index'])
+
+  // Récupérer tous les marchands sans pagination (pour les selects)
+  router.get('/all', [MerchantsController, 'all'])
+
+  // Récupérer les marchands actifs
+  router.get('/active', [MerchantsController, 'active'])
+
+  // Rechercher des marchands
+  router.get('/search', [MerchantsController, 'search'])
+
+  // Récupérer un marchand spécifique
+  router.get('/:id', [MerchantsController, 'show'])
+
+  // Récupérer les statistiques d'un marchand
+  router.get('/:id/stats', [MerchantsController, 'stats'])
+}).prefix('/api/merchants')
