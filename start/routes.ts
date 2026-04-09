@@ -235,6 +235,29 @@ router.group(() => {
   router.delete('/merchant/coupons/:userId/:couponId', [MerchantDashboardController, 'deleteCoupon']).as('merchant.coupons.destroy')
 
   // ----------------------------------------------------------
+  // MARCHANDS (LISTE PUBLIQUE)
+  // ----------------------------------------------------------
+  router.group(() => {
+    // Récupérer tous les marchands (avec pagination)
+    router.get('/', [MerchantsController, 'index'])
+
+    // Récupérer tous les marchands sans pagination (pour les selects)
+    router.get('/all', [MerchantsController, 'all'])
+
+    // Récupérer les marchands actifs
+    router.get('/active', [MerchantsController, 'active'])
+
+    // Rechercher des marchands
+    router.get('/search', [MerchantsController, 'search'])
+
+    // Récupérer un marchand spécifique
+    router.get('/:id', [MerchantsController, 'show'])
+
+    // Récupérer les statistiques d'un marchand
+    router.get('/:id/stats', [MerchantsController, 'stats'])
+  }).prefix('/merchants')
+
+  // ----------------------------------------------------------
   // BLOG ADMIN
   // ----------------------------------------------------------
   router.group(() => {
@@ -247,24 +270,3 @@ router.group(() => {
   }).prefix('/blog/admin')
 
 }).prefix('/api') // ✅ Fin du groupe API
-
-es pour les marchands
-router.group(() => {
-  // Récupérer tous les marchands (avec pagination)
-  router.get('/', [MerchantsController, 'index'])
-
-  // Récupérer tous les marchands sans pagination (pour les selects)
-  router.get('/all', [MerchantsController, 'all'])
-
-  // Récupérer les marchands actifs
-  router.get('/active', [MerchantsController, 'active'])
-
-  // Rechercher des marchands
-  router.get('/search', [MerchantsController, 'search'])
-
-  // Récupérer un marchand spécifique
-  router.get('/:id', [MerchantsController, 'show'])
-
-  // Récupérer les statistiques d'un marchand
-  router.get('/:id/stats', [MerchantsController, 'stats'])
-}).prefix('/api/merchants')
