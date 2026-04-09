@@ -109,6 +109,12 @@ export type ScannedRoutes = {
     'merchant.coupons.store': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.coupons.update': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'merchant.coupons.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
+    'merchants.index': { paramsTuple?: []; params?: {} }
+    'merchants.all': { paramsTuple?: []; params?: {} }
+    'merchants.active': { paramsTuple?: []; params?: {} }
+    'merchants.search': { paramsTuple?: []; params?: {} }
+    'merchants.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'merchants.stats': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'admin.posts.index': { paramsTuple?: []; params?: {} }
     'admin.posts.stats': { paramsTuple?: []; params?: {} }
     'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -166,6 +172,12 @@ export type ScannedRoutes = {
     'merchant.products.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.categories.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.coupons.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchants.index': { paramsTuple?: []; params?: {} }
+    'merchants.all': { paramsTuple?: []; params?: {} }
+    'merchants.active': { paramsTuple?: []; params?: {} }
+    'merchants.search': { paramsTuple?: []; params?: {} }
+    'merchants.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'merchants.stats': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'admin.posts.index': { paramsTuple?: []; params?: {} }
     'admin.posts.stats': { paramsTuple?: []; params?: {} }
     'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -220,6 +232,12 @@ export type ScannedRoutes = {
     'merchant.products.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.categories.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.coupons.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchants.index': { paramsTuple?: []; params?: {} }
+    'merchants.all': { paramsTuple?: []; params?: {} }
+    'merchants.active': { paramsTuple?: []; params?: {} }
+    'merchants.search': { paramsTuple?: []; params?: {} }
+    'merchants.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'merchants.stats': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'admin.posts.index': { paramsTuple?: []; params?: {} }
     'admin.posts.stats': { paramsTuple?: []; params?: {} }
     'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }

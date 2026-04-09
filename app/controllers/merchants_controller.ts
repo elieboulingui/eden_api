@@ -1,7 +1,6 @@
 // app/controllers/merchants_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
-import Wallet from '#models/wallet'
 import db from '@adonisjs/lucid/services/db'
 
 export default class MerchantsController {
@@ -83,18 +82,19 @@ export default class MerchantsController {
           current_page: merchants.currentPage,
           last_page: merchants.lastPage,
           first_page: merchants.firstPage,
-          first_page_url: merchants.firstPageUrl,
-          last_page_url: merchants.lastPageUrl,
-          next_page_url: merchants.nextPageUrl,
-          previous_page_url: merchants.previousPageUrl,
+          first_page_url: merchants.getUrl(1),
+          last_page_url: merchants.getUrl(merchants.lastPage),
+          next_page_url: merchants.getNextPageUrl(),
+          previous_page_url: merchants.getPreviousPageUrl(),
         },
       })
     } catch (error) {
       console.error('Erreur lors de la récupération des marchands:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des marchands',
-        error: error.message,
+        error: errorMessage,
       })
     }
   }
@@ -105,10 +105,10 @@ export default class MerchantsController {
    */
   async show({ params, response }: HttpContext) {
     try {
-      const merchantId = params.id
+      const merchantId = params.id // Garder comme string
 
       const merchant = await User.query()
-        .where('id', merchantId)
+        .where('id', merchantId) // Lucid ORM accepte string ou number
         .where('role', 'merchant')
         .preload('wallet')
         .select([
@@ -159,10 +159,11 @@ export default class MerchantsController {
       })
     } catch (error) {
       console.error('Erreur lors de la récupération du marchand:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération du marchand',
-        error: error.message,
+        error: errorMessage,
       })
     }
   }
@@ -225,10 +226,11 @@ export default class MerchantsController {
       })
     } catch (error) {
       console.error('Erreur lors de la récupération des marchands actifs:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des marchands actifs',
-        error: error.message,
+        error: errorMessage,
       })
     }
   }
@@ -239,10 +241,10 @@ export default class MerchantsController {
    */
   async stats({ params, response }: HttpContext) {
     try {
-      const merchantId = params.id
+      const merchantId = params.id // Garder comme string
 
       const merchant = await User.query()
-        .where('id', merchantId)
+        .where('id', merchantId) // Lucid ORM accepte string ou number
         .where('role', 'merchant')
         .first()
 
@@ -261,10 +263,11 @@ export default class MerchantsController {
       })
     } catch (error) {
       console.error('Erreur lors de la récupération des statistiques:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des statistiques',
-        error: error.message,
+        error: errorMessage,
       })
     }
   }
@@ -339,10 +342,11 @@ export default class MerchantsController {
       })
     } catch (error) {
       console.error('Erreur lors de la recherche des marchands:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la recherche des marchands',
-        error: error.message,
+        error: errorMessage,
       })
     }
   }
@@ -371,10 +375,11 @@ export default class MerchantsController {
       })
     } catch (error) {
       console.error('Erreur lors de la récupération des marchands:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des marchands',
-        error: error.message,
+        error: errorMessage,
       })
     }
   }
