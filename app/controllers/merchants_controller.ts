@@ -213,88 +213,91 @@ export default class MerchantsController {
     }
   }
 
-  async all({ response }: HttpContext) {
-    try {
-      const merchants = await User.query()
-        .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .select(['id', 'full_name', 'shop_name', 'shop_image', 'avatar'])
-        .orderBy('shop_name', 'asc')
+// app/controllers/merchants_controller.ts
 
-      return response.status(200).json({
-        success: true,
-        data: merchants.map(m => ({
-          id: m.id,
-          name: m.shop_name || m.full_name,
-          image: m.shop_image || m.avatar,
-        })),
-        total: merchants.length,
-      })
-    } catch (error) {
-      return response.status(500).json({ success: false, data: [] })
-    }
+async all({ response }: HttpContext) {
+  try {
+    const merchants = await User.query()
+      .whereIn('role', ['merchant', 'marchant', 'marchand'])
+      .select(['id', 'full_name', 'shop_name', 'shop_image', 'avatar', 'email'])
+      .orderBy('shop_name', 'asc')
+      .orderBy('full_name', 'asc')
+      .orderBy('created_at', 'desc') // ✅ Ajouter pour avoir le plus récent en premier
+
+    // ✅ Filtrer les doublons par user_id (garder un seul merchant par ID)
+    const uniqueMerchants = this.removeDuplicatesById(merchants)
+
+    const formattedMerchants = uniqueMerchants.map(m => ({
+      id: m.id,
+      name: this.getShopDisplayName(m),
+      image: this.getShopImage(m),
+    }))
+
+    return response.status(200).json({
+      success: true,
+      data: formattedMerchants,
+      total: formattedMerchants.length
+    })
+  } catch (error) {
+    console.error('Erreur all merchants:', error)
+    return response.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors de la récupération des marchands',
+      data: [] 
+    })
   }
+}
 
-  async stats({ params, response }: HttpContext) {
-    try {
-      const merchant = await User.query()
-        .where('id', params.id)
-        .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .first()
-
-      if (!merchant) {
-        return response.status(404).json({
-          success: false,
-          message: 'Marchand non trouvé',
-        })
-      }
-
-      const stats = await this.getShopStats(merchant.id)
-
-      return response.status(200).json({
-        success: true,
-        data: stats,
-      })
-    } catch (error) {
-      return response.status(500).json({ success: false, data: null })
+// ✅ Nouvelle méthode : Filtrer par ID unique
+private removeDuplicatesById(merchants: User[]): User[] {
+  const uniqueMerchants = new Map<string, User>()
+  
+  // Le premier rencontré sera gardé (grâce au order by created_at desc)
+  merchants.forEach(merchant => {
+    if (!uniqueMerchants.has(merchant.id)) {
+      uniqueMerchants.set(merchant.id, merchant)
     }
-  }
+  })
+  
+  return Array.from(uniqueMerchants.values())
+}
 
-  private async getShopStats(merchantId: string) {
-    try {
-      const productsCount = await db
-        .from('products')
-        .where('user_id', merchantId)
-        .count('* as total')
-
-      const ordersCount = await db
-        .from('orders')
-        .where('merchant_id', merchantId)
-        .count('* as total')
-
-      const totalRevenue = await db
-        .from('orders')
-        .where('merchant_id', merchantId)
-        .where('status', 'completed')
-        .sum('total_amount as total')
-
-      const averageRating = await db
-        .from('reviews')
-        .where('merchant_id', merchantId)
-        .avg('rating as average')
-
-      return {
-        products_count: parseInt(productsCount[0]?.total || '0'),
-        orders_count: parseInt(ordersCount[0]?.total || '0'),
-        total_revenue: parseFloat(totalRevenue[0]?.total || '0'),
-        average_rating: parseFloat(averageRating[0]?.average || '0').toFixed(1),
-      }
-    } catch (error) {
-      return {
-        products_count: 0,
-        orders_count: 0,
-        total_revenue: 0,
-        average_rating: '0.0',
+// ✅ Alternative : Grouper par user_id et garder le plus complet
+private removeDuplicatesByIdKeepBest(merchants: User[]): User[] {
+  const merchantMap = new Map<string, User>()
+  
+  merchants.forEach(merchant => {
+    const existing = merchantMap.get(merchant.id)
+    
+    if (!existing) {
+      merchantMap.set(merchant.id, merchant)
+    } else {
+      // Garder celui qui a le plus d'informations
+      const existingScore = this.calculateMerchantScore(existing)
+      const newScore = this.calculateMerchantScore(merchant)
+      
+      if (newScore > existingScore) {
+        merchantMap.set(merchant.id, merchant)
       }
     }
-  }
+  })
+  
+  return Array.from(merchantMap.values())
+}
+
+private calculateMerchantScore(merchant: User): number {
+  let score = 0
+  if (merchant.shop_name) score += 3
+  if (merchant.shop_image) score += 2
+  if (merchant.avatar) score += 1
+  if (merchant.full_name) score += 1
+  return score
+}
+
+private getShopDisplayName(merchant: User): string {
+  return merchant.shop_name || merchant.full_name || 'Marchand'
+}
+
+private getShopImage(merchant: User): string | null {
+  return merchant.shop_image || merchant.avatar || null
 }
