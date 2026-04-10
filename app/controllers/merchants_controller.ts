@@ -75,7 +75,7 @@ export default class MerchantsController {
           last_page: merchants.lastPage,
         },
       })
-    } catch (error) {
+    } catch (error :any) {
       console.error('Erreur index merchants:', error)
       return response.status(500).json({
         success: false,
@@ -148,7 +148,7 @@ export default class MerchantsController {
           updated_at: merchant.updated_at,
         },
       })
-    } catch (error) {
+    } catch (error:any) {
       console.error('Erreur show merchant:', error)
       return response.status(500).json({
         success: false,
@@ -188,7 +188,7 @@ export default class MerchantsController {
           last_page: merchants.lastPage,
         },
       })
-    } catch (error) {
+    } catch (error:any) {
       console.error('Erreur active merchants:', error)
       return response.status(500).json({ 
         success: false, 
@@ -240,7 +240,7 @@ export default class MerchantsController {
           last_page: merchants.lastPage,
         },
       })
-    } catch (error) {
+    } catch (error :any) {
       console.error('Erreur search merchants:', error)
       return response.status(500).json({ 
         success: false, 
@@ -318,7 +318,7 @@ export default class MerchantsController {
         total: formattedMerchants.length
       })
       
-    } catch (error) {
+    } catch (error :any) {
       console.error('=== ERREUR all merchants ===')
       console.error('Message:', error.message)
       
@@ -356,7 +356,7 @@ export default class MerchantsController {
           ...stats
         },
       })
-    } catch (error) {
+    } catch (error:any) {
       console.error('Erreur stats merchant:', error)
       return response.status(500).json({ 
         success: false, 
@@ -445,7 +445,7 @@ export default class MerchantsController {
           last_page: Math.ceil(parseInt(totalCount[0]?.total || '0') / limit)
         }
       })
-    } catch (error) {
+    } catch (error:any) {
       console.error('Erreur merchant products:', error)
       return response.status(500).json({
         success: false,
@@ -512,7 +512,7 @@ export default class MerchantsController {
           total: parseInt(reviewsCount[0]?.total || '0'),
         }
       }
-    } catch (error) {
+    } catch (error:any) {
       console.error('Erreur getShopStats:', error)
       return {
         products: { total: 0, active: 0 },
