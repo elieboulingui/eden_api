@@ -4,14 +4,13 @@ import User from '#models/user'
 import db from '@adonisjs/lucid/services/db'
 
 export default class MerchantsController {
-  /**
-   * Récupérer tous les marchands avec leurs boutiques
-   * GET /api/merchants
-   * GET /api/merchants?page=1&limit=10
-   * GET /api/merchants?status=active
-   * GET /api/merchants?search=nom
-   */
-  // app/controllers/merchants_controller.ts - méthode index()
+
+  // ✅ Helper pour identifier les marchands (peu importe l'orthographe)
+  private isMerchantRole(role: string): boolean {
+    const merchantRoles = ['merchant', 'marchant', 'marchand']
+    return merchantRoles.includes(role?.toLowerCase() || '')
+  }
+
   async index({ request, response }: HttpContext) {
     try {
       const page = request.input('page', 1)
@@ -19,13 +18,15 @@ export default class MerchantsController {
       const status = request.input('status')
       const search = request.input('search')
 
+      // ✅ Filtrer tous les rôles possibles de marchand
       let query = User.query()
-        .where('role', 'merchant')
+        .whereIn('role', ['merchant', 'marchant', 'marchand'])
         .preload('wallet')
         .select([
           'id',
           'full_name',
           'email',
+          'role',
           'avatar',
           'shop_name',
           'shop_image',
@@ -55,9 +56,10 @@ export default class MerchantsController {
         full_name: merchant.full_name,
         email: merchant.email,
         avatar: merchant.avatar,
+        role: merchant.role,
         shop: {
-          name: merchant.shop_name,
-          image: merchant.shop_image,
+          name: merchant.shop_name || merchant.full_name,
+          image: merchant.shop_image || merchant.avatar,
         },
         wallet: merchant.wallet ? {
           id: merchant.wallet.id,
@@ -69,7 +71,6 @@ export default class MerchantsController {
         updated_at: merchant.updated_at,
       }))
 
-      // ✅ Format de réponse cohérent
       return response.status(200).json({
         success: true,
         data: formattedMerchants,
@@ -78,11 +79,6 @@ export default class MerchantsController {
           per_page: merchants.perPage,
           current_page: merchants.currentPage,
           last_page: merchants.lastPage,
-          first_page: merchants.firstPage,
-          first_page_url: merchants.getUrl(1),
-          last_page_url: merchants.getUrl(merchants.lastPage),
-          next_page_url: merchants.getNextPageUrl(),
-          previous_page_url: merchants.getPreviousPageUrl(),
         },
       })
     } catch (error) {
@@ -90,159 +86,192 @@ export default class MerchantsController {
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur',
-        data: [],  // ✅ Toujours renvoyer un tableau vide
+        data: [],
         meta: null
       })
     }
   }
 
-  /**
-   * Récupérer un marchand spécifique avec sa boutique
-   * GET /api/merchants/:id
-   */
   async show({ params, response }: HttpContext) {
     try {
-      const merchantId = params.id // ✅ Garder comme string (UUID)
-
       const merchant = await User.query()
-        .where('id', merchantId)
-        .where('role', 'merchant')
+        .where('id', params.id)
+        .whereIn('role', ['merchant', 'marchant', 'marchand'])
         .preload('wallet')
-        .select([
-          'id',
-          'full_name',
-          'email',
-          'avatar',
-          'shop_name',
-          'shop_image',
-          'created_at',
-          'updated_at'
-        ])
         .first()
 
       if (!merchant) {
         return response.status(404).json({
           success: false,
           message: 'Marchand non trouvé',
+          data: null
         })
       }
 
-      // Récupérer les statistiques de la boutique
       const stats = await this.getShopStats(merchant.id)
-
-      const formattedMerchant = {
-        id: merchant.id,
-        full_name: merchant.full_name,
-        email: merchant.email,
-        avatar: merchant.avatar,
-        shop: {
-          name: merchant.shop_name,
-          image: merchant.shop_image,
-          stats: stats,
-        },
-        wallet: merchant.wallet ? {
-          id: merchant.wallet.id,
-          balance: merchant.wallet.balance,
-          currency: merchant.wallet.currency,
-          status: merchant.wallet.status,
-        } : null,
-        created_at: merchant.created_at,
-        updated_at: merchant.updated_at,
-      }
 
       return response.status(200).json({
         success: true,
-        data: formattedMerchant,
+        data: {
+          id: merchant.id,
+          full_name: merchant.full_name,
+          email: merchant.email,
+          avatar: merchant.avatar,
+          role: merchant.role,
+          shop: {
+            name: merchant.shop_name || merchant.full_name,
+            image: merchant.shop_image || merchant.avatar,
+            stats: stats,
+          },
+          wallet: merchant.wallet ? {
+            id: merchant.wallet.id,
+            balance: merchant.wallet.balance,
+            currency: merchant.wallet.currency,
+            status: merchant.wallet.status,
+          } : null,
+          created_at: merchant.created_at,
+          updated_at: merchant.updated_at,
+        },
       })
     } catch (error) {
-      console.error('Erreur lors de la récupération du marchand:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+      console.error('Erreur:', error)
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la récupération du marchand',
-        error: errorMessage,
+        message: 'Erreur serveur',
+        data: null
       })
     }
   }
 
-  /**
-   * Récupérer tous les marchands actifs
-   * GET /api/merchants/active
-   */
   async active({ request, response }: HttpContext) {
     try {
       const page = request.input('page', 1)
       const limit = request.input('limit', 10)
 
       const merchants = await User.query()
-        .where('role', 'merchant')
+        .whereIn('role', ['merchant', 'marchant', 'marchand'])
         .whereHas('wallet', (walletQuery) => {
           walletQuery.where('status', 'active')
         })
         .preload('wallet')
-        .select([
-          'id',
-          'full_name',
-          'email',
-          'avatar',
-          'shop_name',
-          'shop_image',
-          'created_at',
-          'updated_at'
-        ])
         .paginate(page, limit)
-
-      const formattedMerchants = merchants.map((merchant) => ({
-        id: merchant.id,
-        full_name: merchant.full_name,
-        email: merchant.email,
-        avatar: merchant.avatar,
-        shop: {
-          name: merchant.shop_name,
-          image: merchant.shop_image,
-        },
-        wallet: merchant.wallet ? {
-          id: merchant.wallet.id,
-          balance: merchant.wallet.balance,
-          currency: merchant.wallet.currency,
-          status: merchant.wallet.status,
-        } : null,
-        created_at: merchant.created_at,
-        updated_at: merchant.updated_at,
-      }))
 
       return response.status(200).json({
         success: true,
-        data: formattedMerchants,
+        data: merchants.map(m => ({
+          id: m.id,
+          full_name: m.full_name,
+          role: m.role,
+          shop: {
+            name: m.shop_name || m.full_name,
+            image: m.shop_image || m.avatar
+          },
+          wallet: m.wallet ? {
+            id: m.wallet.id,
+            balance: m.wallet.balance,
+            currency: m.wallet.currency,
+            status: m.wallet.status
+          } : null,
+        })),
         meta: {
           total: merchants.total,
-          per_page: merchants.perPage,
           current_page: merchants.currentPage,
           last_page: merchants.lastPage,
         },
       })
     } catch (error) {
-      console.error('Erreur lors de la récupération des marchands actifs:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+      console.error('Erreur:', error)
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la récupération des marchands actifs',
-        error: errorMessage,
+        message: 'Erreur serveur',
+        data: []
       })
     }
   }
 
-  /**
-   * Récupérer les statistiques d'une boutique
-   * GET /api/merchants/:id/stats
-   */
+  async search({ request, response }: HttpContext) {
+    try {
+      const searchTerm = request.input('q', '')
+      const page = request.input('page', 1)
+      const limit = request.input('limit', 10)
+
+      if (!searchTerm || searchTerm.length < 2) {
+        return response.status(400).json({
+          success: false,
+          message: 'Terme de recherche trop court',
+          data: [],
+        })
+      }
+
+      const merchants = await User.query()
+        .whereIn('role', ['merchant', 'marchant', 'marchand'])
+        .where((builder) => {
+          builder
+            .where('full_name', 'LIKE', `%${searchTerm}%`)
+            .orWhere('shop_name', 'LIKE', `%${searchTerm}%`)
+            .orWhere('email', 'LIKE', `%${searchTerm}%`)
+        })
+        .preload('wallet')
+        .paginate(page, limit)
+
+      return response.status(200).json({
+        success: true,
+        data: merchants.map(m => ({
+          id: m.id,
+          full_name: m.full_name,
+          role: m.role,
+          shop: {
+            name: m.shop_name || m.full_name,
+            image: m.shop_image || m.avatar
+          },
+        })),
+        meta: {
+          total: merchants.total,
+          current_page: merchants.currentPage,
+          last_page: merchants.lastPage,
+        },
+      })
+    } catch (error) {
+      console.error('Erreur:', error)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur serveur',
+        data: []
+      })
+    }
+  }
+
+  async all({ response }: HttpContext) {
+    try {
+      const merchants = await User.query()
+        .whereIn('role', ['merchant', 'marchant', 'marchand'])
+        .select(['id', 'full_name', 'role', 'shop_name', 'shop_image', 'avatar'])
+        .orderBy('shop_name', 'asc')
+
+      return response.status(200).json({
+        success: true,
+        data: merchants.map(m => ({
+          id: m.id,
+          name: m.shop_name || m.full_name,
+          image: m.shop_image || m.avatar,
+        })),
+        total: merchants.length,
+      })
+    } catch (error) {
+      console.error('Erreur:', error)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur serveur',
+        data: []
+      })
+    }
+  }
+
   async stats({ params, response }: HttpContext) {
     try {
-      const merchantId = params.id // ✅ Garder comme string (UUID)
-
       const merchant = await User.query()
-        .where('id', merchantId)
-        .where('role', 'merchant')
+        .where('id', params.id)
+        .whereIn('role', ['merchant', 'marchant', 'marchand'])
         .first()
 
       if (!merchant) {
@@ -259,153 +288,33 @@ export default class MerchantsController {
         data: stats,
       })
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+      console.error('Erreur:', error)
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la récupération des statistiques',
-        error: errorMessage,
+        message: 'Erreur serveur',
+        data: null
       })
     }
   }
 
-  /**
-   * Rechercher des marchands
-   * GET /api/merchants/search?q=terme
-   */
-  async search({ request, response }: HttpContext) {
+  private async getShopStats(merchantId: string) {
     try {
-      const searchTerm = request.input('q', '')
-      const page = request.input('page', 1)
-      const limit = request.input('limit', 10)
-
-      if (!searchTerm || searchTerm.length < 2) {
-        return response.status(400).json({
-          success: false,
-          message: 'Le terme de recherche doit contenir au moins 2 caractères',
-        })
-      }
-
-      const merchants = await User.query()
-        .where('role', 'merchant')
-        .where((builder) => {
-          builder
-            .where('full_name', 'LIKE', `%${searchTerm}%`)
-            .orWhere('shop_name', 'LIKE', `%${searchTerm}%`)
-            .orWhere('email', 'LIKE', `%${searchTerm}%`)
-        })
-        .preload('wallet')
-        .select([
-          'id',
-          'full_name',
-          'email',
-          'avatar',
-          'shop_name',
-          'shop_image',
-          'created_at',
-          'updated_at'
-        ])
-        .paginate(page, limit)
-
-      const formattedMerchants = merchants.map((merchant) => ({
-        id: merchant.id,
-        full_name: merchant.full_name,
-        email: merchant.email,
-        avatar: merchant.avatar,
-        shop: {
-          name: merchant.shop_name,
-          image: merchant.shop_image,
-        },
-        wallet: merchant.wallet ? {
-          id: merchant.wallet.id,
-          balance: merchant.wallet.balance,
-          currency: merchant.wallet.currency,
-          status: merchant.wallet.status,
-        } : null,
-        created_at: merchant.created_at,
-        updated_at: merchant.updated_at,
-      }))
-
-      return response.status(200).json({
-        success: true,
-        data: formattedMerchants,
-        meta: {
-          total: merchants.total,
-          per_page: merchants.perPage,
-          current_page: merchants.currentPage,
-          last_page: merchants.lastPage,
-        },
-        search_term: searchTerm,
-      })
-    } catch (error) {
-      console.error('Erreur lors de la recherche des marchands:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur lors de la recherche des marchands',
-        error: errorMessage,
-      })
-    }
-  }
-
-  /**
-   * Récupérer tous les marchands (sans pagination) - pour les listes déroulantes
-   * GET /api/merchants/all
-   */
-  async all({ response }: HttpContext) {
-    try {
-      const merchants = await User.query()
-        .where('role', 'merchant')
-        .select(['id', 'full_name', 'shop_name', 'shop_image', 'avatar'])
-        .orderBy('shop_name', 'asc')
-
-      const formattedMerchants = merchants.map((merchant) => ({
-        id: merchant.id,
-        name: merchant.shop_name || merchant.full_name,
-        image: merchant.shop_image || merchant.avatar,
-      }))
-
-      return response.status(200).json({
-        success: true,
-        data: formattedMerchants,
-        total: merchants.length,
-      })
-    } catch (error) {
-      console.error('Erreur lors de la récupération des marchands:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur lors de la récupération des marchands',
-        error: errorMessage,
-      })
-    }
-  }
-
-  /**
-   * Méthode privée pour récupérer les statistiques d'une boutique
-   */
-  private async getShopStats(merchantId: string) { // ✅ Changé de number à string
-    try {
-      // Nombre de produits
       const productsCount = await db
         .from('products')
         .where('user_id', merchantId)
         .count('* as total')
 
-      // Nombre de commandes
       const ordersCount = await db
         .from('orders')
         .where('merchant_id', merchantId)
         .count('* as total')
 
-      // Chiffre d'affaires total
       const totalRevenue = await db
         .from('orders')
         .where('merchant_id', merchantId)
         .where('status', 'completed')
         .sum('total_amount as total')
 
-      // Note moyenne (si vous avez un système de notation)
       const averageRating = await db
         .from('reviews')
         .where('merchant_id', merchantId)
@@ -418,7 +327,7 @@ export default class MerchantsController {
         average_rating: parseFloat(averageRating[0]?.average || '0').toFixed(1),
       }
     } catch (error) {
-      console.error('Erreur lors du calcul des statistiques:', error)
+      console.error('Erreur stats:', error)
       return {
         products_count: 0,
         orders_count: 0,
