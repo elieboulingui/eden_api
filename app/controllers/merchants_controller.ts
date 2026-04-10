@@ -2,7 +2,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import db from '@adonisjs/lucid/services/db'
-import Product from '#models/product'
+import Product from '#models/product' // ✅ Correction du chemin d'import
 
 export default class MerchantsController {
   
@@ -299,7 +299,7 @@ export default class MerchantsController {
 
         // ✅ Ajouter les produits si chargés
         if (includeProducts && m.products) {
-          merchantData.products = m.products.map(p => ({
+          merchantData.products = m.products.map((p: Product) => ({
             id: p.id,
             name: p.name,
             price: p.price,
@@ -407,7 +407,7 @@ export default class MerchantsController {
       const productsQuery = Product.query()
         .where('user_id', merchantId)
         .preload('categoryRelation')
-        .orderBy(sortBy, sortOrder)
+        .orderBy(sortBy, sortOrder as 'asc' | 'desc')
 
       if (status !== 'all') {
         productsQuery.where('status', status)
@@ -415,7 +415,7 @@ export default class MerchantsController {
 
       const products = await productsQuery.paginate(page, limit)
 
-      const formattedProducts = products.map(p => ({
+      const formattedProducts = products.map((p: Product) => ({
         id: p.id,
         name: p.name,
         price: p.price,
@@ -553,17 +553,5 @@ export default class MerchantsController {
 
   private getShopImage(merchant: User): string | null {
     return merchant.shop_image || merchant.avatar || null
-  }
-
-  private removeDuplicatesById(merchants: User[]): User[] {
-    const uniqueMerchants = new Map<string, User>()
-    
-    merchants.forEach(merchant => {
-      if (!uniqueMerchants.has(merchant.id)) {
-        uniqueMerchants.set(merchant.id, merchant)
-      }
-    })
-    
-    return Array.from(uniqueMerchants.values())
   }
 }
