@@ -2,9 +2,11 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import db from '@adonisjs/lucid/services/db'
+import Product from '#models/Product'
 
 export default class MerchantsController {
   
+  // ✅ GET /api/merchants - Liste paginée des marchands
   async index({ request, response }: HttpContext) {
     try {
       const page = request.input('page', 1)
@@ -85,12 +87,16 @@ export default class MerchantsController {
     }
   }
 
+  // ✅ GET /api/merchants/:id - Détail d'un marchand avec ses produits
   async show({ params, response }: HttpContext) {
     try {
       const merchant = await User.query()
         .where('id', params.id)
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
         .preload('wallet')
+        .preload('products', (query) => {
+          query.where('status', 'active').orderBy('created_at', 'desc')
+        })
         .first()
 
       if (!merchant) {
@@ -115,6 +121,20 @@ export default class MerchantsController {
             image: merchant.shop_image || merchant.avatar,
             stats: stats,
           },
+          products: merchant.products.map(p => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            description: p.description,
+            image_url: p.image_url,
+            stock: p.stock,
+            rating: p.rating,
+            status: p.status,
+            isNew: p.isNew,
+            isOnSale: p.isOnSale,
+            category_id: p.category_id,
+            created_at: p.created_at,
+          })),
           wallet: merchant.wallet ? {
             id: merchant.wallet.id,
             balance: merchant.wallet.balance,
@@ -134,6 +154,7 @@ export default class MerchantsController {
     }
   }
 
+  // ✅ GET /api/merchants/active - Liste des marchands actifs
   async active({ request, response }: HttpContext) {
     try {
       const page = request.input('page', 1)
@@ -174,6 +195,7 @@ export default class MerchantsController {
     }
   }
 
+  // ✅ GET /api/merchants/search?q=xxx - Recherche de marchands
   async search({ request, response }: HttpContext) {
     try {
       const searchTerm = request.input('q', '')
@@ -225,98 +247,45 @@ export default class MerchantsController {
     }
   }
 
-  // ✅ VERSION CORRIGÉE - request n'est pas utilisé
+  // ✅ GET /api/merchants/all - TOUS les marchands avec leurs produits (sans filtrage de doublons)
   async all({ response }: HttpContext) {
     try {
-      console.log('Début all merchants')
-      
-      // Récupérer tous les marchands sans pagination
+      // Récupérer tous les marchands avec leurs produits
       const merchants = await User.query()
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
         .select(['id', 'full_name', 'shop_name', 'shop_image', 'avatar', 'email', 'created_at'])
+        .preload('products', (productsQuery) => {
+          productsQuery
+            .where('status', 'active')
+            .orderBy('created_at', 'desc')
+        })
         .orderBy('shop_name', 'asc')
         .orderBy('full_name', 'asc')
 
-      console.log('Marchands trouvés:', merchants.length)
-
-      // Pour chaque marchand, récupérer ses produits
-      const formattedMerchants = []
-      
-      for (const merchant of merchants) {
-        try {
-          // Récupérer les produits du marchand
-          const products = await db
-            .from('products')
-            .where('user_id', merchant.id)
-            .where('status', 'active')
-            .select([
-              'id',
-              'name',
-              'price',
-              'description',
-              'image_url',
-              'stock',
-              'rating',
-              'status',
-              'isNew',
-              'isOnSale',
-              'category_id',
-              'created_at'
-            ])
-            .orderBy('created_at', 'desc')
-            .limit(10)
-
-          // Compter le total des produits
-          const productsCount = await db
-            .from('products')
-            .where('user_id', merchant.id)
-            .where('status', 'active')
-            .count('* as total')
-
-          formattedMerchants.push({
-            id: merchant.id,
-            name: merchant.shop_name || merchant.full_name || 'Marchand',
-            image: merchant.shop_image || merchant.avatar || null,
-            email: merchant.email,
-            created_at: merchant.created_at,
-            products: products.map((p: any) => ({
-              id: p.id,
-              name: p.name,
-              price: p.price,
-              description: p.description,
-              image_url: p.image_url,
-              stock: p.stock,
-              rating: p.rating,
-              status: p.status,
-              isNew: p.isNew,
-              isOnSale: p.isOnSale,
-              category_id: p.category_id,
-              created_at: p.created_at,
-            })),
-            products_stats: {
-              total_active: parseInt(productsCount[0]?.total || '0'),
-              loaded: products.length
-            }
-          })
-        } catch (err) {
-          console.error(`Erreur pour le marchand ${merchant.id}:`, err)
-          // Ajouter le marchand sans produits en cas d'erreur
-          formattedMerchants.push({
-            id: merchant.id,
-            name: merchant.shop_name || merchant.full_name || 'Marchand',
-            image: merchant.shop_image || merchant.avatar || null,
-            email: merchant.email,
-            created_at: merchant.created_at,
-            products: [],
-            products_stats: {
-              total_active: 0,
-              loaded: 0
-            }
-          })
-        }
-      }
-
-      console.log('Réponse formatée avec succès')
+      // Formater la réponse avec les produits
+      const formattedMerchants = merchants.map(merchant => ({
+        id: merchant.id,
+        name: merchant.shop_name || merchant.full_name || 'Marchand',
+        image: merchant.shop_image || merchant.avatar || null,
+        email: merchant.email,
+        created_at: merchant.created_at,
+        products: merchant.products.map(product => ({
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          description: product.description,
+          image_url: product.image_url,
+          stock: product.stock,
+          rating: product.rating,
+          status: product.status,
+          isNew: product.isNew,
+          isOnSale: product.isOnSale,
+          category_id: product.category_id,
+          created_at: product.created_at,
+          updated_at: product.updated_at,
+        })),
+        products_count: merchant.products.length
+      }))
 
       return response.status(200).json({
         success: true,
@@ -324,16 +293,16 @@ export default class MerchantsController {
         total: formattedMerchants.length
       })
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
-      console.error('Erreur all merchants:', errorMessage)
+      console.error('Erreur all merchants:', error)
       return response.status(500).json({ 
         success: false, 
-        message: `Erreur lors de la récupération des marchands: ${errorMessage}`,
+        message: 'Erreur lors de la récupération des marchands',
         data: [] 
       })
     }
   }
 
+  // ✅ GET /api/merchants/:id/stats - Statistiques d'un marchand
   async stats({ params, response }: HttpContext) {
     try {
       const merchant = await User.query()
@@ -368,6 +337,7 @@ export default class MerchantsController {
     }
   }
 
+  // ✅ GET /api/merchants/:id/products - Produits paginés d'un marchand
   async merchantProducts({ params, request, response }: HttpContext) {
     try {
       const merchantId = params.id
@@ -387,8 +357,7 @@ export default class MerchantsController {
         })
       }
 
-      const productsQuery = db
-        .from('products')
+      const productsQuery = Product.query()
         .where('user_id', merchantId)
         .orderBy('created_at', 'desc')
 
@@ -396,18 +365,9 @@ export default class MerchantsController {
         productsQuery.where('status', status)
       }
 
-      // Pagination manuelle
-      const offset = (page - 1) * limit
-      const products = await productsQuery
-        .limit(limit)
-        .offset(offset)
+      const products = await productsQuery.paginate(page, limit)
 
-      const totalCount = await db
-        .from('products')
-        .where('user_id', merchantId)
-        .count('* as total')
-
-      const formattedProducts = products.map((p: any) => ({
+      const formattedProducts = products.map(p => ({
         id: p.id,
         name: p.name,
         price: p.price,
@@ -440,10 +400,10 @@ export default class MerchantsController {
           products: formattedProducts,
         },
         meta: {
-          total: parseInt(totalCount[0]?.total || '0'),
-          per_page: limit,
-          current_page: page,
-          last_page: Math.ceil(parseInt(totalCount[0]?.total || '0') / limit)
+          total: products.total,
+          per_page: products.perPage,
+          current_page: products.currentPage,
+          last_page: products.lastPage,
         }
       })
     } catch (error) {
@@ -455,6 +415,7 @@ export default class MerchantsController {
     }
   }
 
+  // ✅ Méthode privée pour calculer les statistiques d'une boutique
   private async getShopStats(merchantId: string) {
     try {
       const productsCount = await db
