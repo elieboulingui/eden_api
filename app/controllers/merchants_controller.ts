@@ -75,7 +75,7 @@ export default class MerchantsController {
           last_page: merchants.lastPage,
         },
       })
-    } catch (error :any) {
+    } catch (error: any) {
       console.error('Erreur index merchants:', error)
       return response.status(500).json({
         success: false,
@@ -102,11 +102,10 @@ export default class MerchantsController {
         })
       }
 
-      // ✅ Récupérer les produits du marchand (user_id = merchant.id)
+      // ✅ Récupérer TOUS les produits du marchand (sans filtre status)
       const products = await db
         .from('products')
         .where('user_id', merchant.id)
-        .where('status', 'active')
         .orderBy('created_at', 'desc')
 
       const stats = await this.getShopStats(merchant.id)
@@ -132,7 +131,6 @@ export default class MerchantsController {
             image_url: p.image_url,
             stock: p.stock,
             rating: p.rating,
-            status: p.status,
             isNew: p.isNew,
             isOnSale: p.isOnSale,
             category_id: p.category_id,
@@ -148,7 +146,7 @@ export default class MerchantsController {
           updated_at: merchant.updated_at,
         },
       })
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('Erreur show merchant:', error)
       return response.status(500).json({
         success: false,
@@ -188,7 +186,7 @@ export default class MerchantsController {
           last_page: merchants.lastPage,
         },
       })
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('Erreur active merchants:', error)
       return response.status(500).json({ 
         success: false, 
@@ -240,7 +238,7 @@ export default class MerchantsController {
           last_page: merchants.lastPage,
         },
       })
-    } catch (error :any) {
+    } catch (error: any) {
       console.error('Erreur search merchants:', error)
       return response.status(500).json({ 
         success: false, 
@@ -277,11 +275,10 @@ export default class MerchantsController {
       const formattedMerchants = []
       
       for (const merchant of merchants) {
-        // ✅ Récupérer les produits de ce marchand (user_id = merchant.id)
+        // ✅ Récupérer TOUS les produits de ce marchand (sans filtre status)
         const products = await db
           .from('products')
           .where('user_id', merchant.id)
-          .where('status', 'active')
           .select('*')
           .orderBy('created_at', 'desc')
         
@@ -299,7 +296,6 @@ export default class MerchantsController {
             image_url: p.image_url,
             stock: p.stock,
             rating: p.rating,
-            status: p.status,
             isNew: p.isNew,
             isOnSale: p.isOnSale,
             category_id: p.category_id,
@@ -318,7 +314,7 @@ export default class MerchantsController {
         total: formattedMerchants.length
       })
       
-    } catch (error :any) {
+    } catch (error: any) {
       console.error('=== ERREUR all merchants ===')
       console.error('Message:', error.message)
       
@@ -356,7 +352,7 @@ export default class MerchantsController {
           ...stats
         },
       })
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('Erreur stats merchant:', error)
       return response.status(500).json({ 
         success: false, 
@@ -372,7 +368,6 @@ export default class MerchantsController {
       const merchantId = params.id
       const page = request.input('page', 1)
       const limit = request.input('limit', 20)
-      const status = request.input('status', 'active')
 
       const merchant = await db
         .from('users')
@@ -390,16 +385,12 @@ export default class MerchantsController {
       // Pagination manuelle
       const offset = (page - 1) * limit
       
-      let productsQuery = db
+      const products = await db
         .from('products')
         .where('user_id', merchantId)
         .orderBy('created_at', 'desc')
-
-      if (status !== 'all') {
-        productsQuery = productsQuery.where('status', status)
-      }
-
-      const products = await productsQuery.limit(limit).offset(offset)
+        .limit(limit)
+        .offset(offset)
 
       const totalCount = await db
         .from('products')
@@ -417,7 +408,6 @@ export default class MerchantsController {
         isNew: p.isNew,
         isOnSale: p.isOnSale,
         sales: p.sales,
-        status: p.status,
         origin: p.origin,
         weight: p.weight,
         packaging: p.packaging,
@@ -445,7 +435,7 @@ export default class MerchantsController {
           last_page: Math.ceil(parseInt(totalCount[0]?.total || '0') / limit)
         }
       })
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('Erreur merchant products:', error)
       return response.status(500).json({
         success: false,
@@ -457,15 +447,10 @@ export default class MerchantsController {
   // ✅ Méthode privée pour calculer les statistiques d'une boutique
   private async getShopStats(merchantId: string) {
     try {
+      // ✅ Pas de filtre status pour les produits
       const productsCount = await db
         .from('products')
         .where('user_id', merchantId)
-        .count('* as total')
-
-      const activeProductsCount = await db
-        .from('products')
-        .where('user_id', merchantId)
-        .where('status', 'active')
         .count('* as total')
 
       const ordersCount = await db
@@ -498,7 +483,6 @@ export default class MerchantsController {
       return {
         products: {
           total: parseInt(productsCount[0]?.total || '0'),
-          active: parseInt(activeProductsCount[0]?.total || '0'),
         },
         orders: {
           total: parseInt(ordersCount[0]?.total || '0'),
@@ -512,10 +496,10 @@ export default class MerchantsController {
           total: parseInt(reviewsCount[0]?.total || '0'),
         }
       }
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('Erreur getShopStats:', error)
       return {
-        products: { total: 0, active: 0 },
+        products: { total: 0 },
         orders: { total: 0, completed: 0 },
         revenue: { total: 0 },
         reviews: { average: '0.0', total: 0 }
