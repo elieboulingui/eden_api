@@ -300,4 +300,4 @@ private getShopDisplayName(merchant: User): string {
 
 private getShopImage(merchant: User): string | null {
   return merchant.shop_image || merchant.avatar || null
-}
+}}
