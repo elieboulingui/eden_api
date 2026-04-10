@@ -2,7 +2,8 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import db from '@adonisjs/lucid/services/db'
-import Product from '#models/product' // ✅ Correction du chemin d'import
+// app/controllers/merchants_controller.ts
+import Product from '#models/Product'  // ✅ Avec P majuscule // ✅ Correction du chemin d'import
 
 export default class MerchantsController {
   
