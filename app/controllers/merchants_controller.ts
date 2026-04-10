@@ -225,8 +225,8 @@ export default class MerchantsController {
     }
   }
 
-  // ✅ VERSION CORRIGÉE ET SIMPLIFIÉE DE all()
-  async all({ request, response }: HttpContext) {
+  // ✅ VERSION CORRIGÉE - request n'est pas utilisé
+  async all({ response }: HttpContext) {
     try {
       console.log('Début all merchants')
       
@@ -324,11 +324,11 @@ export default class MerchantsController {
         total: formattedMerchants.length
       })
     } catch (error) {
-      console.error('Erreur all merchants:', error)
-      console.error('Stack trace:', error.stack)
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+      console.error('Erreur all merchants:', errorMessage)
       return response.status(500).json({ 
         success: false, 
-        message: 'Erreur lors de la récupération des marchands: ' + error.message,
+        message: `Erreur lors de la récupération des marchands: ${errorMessage}`,
         data: [] 
       })
     }
