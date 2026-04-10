@@ -2,7 +2,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import db from '@adonisjs/lucid/services/db'
-import Product from '#models/Product'
 
 export default class MerchantsController {
   
@@ -94,9 +93,6 @@ export default class MerchantsController {
         .where('id', params.id)
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
         .preload('wallet')
-        .preload('products', (query) => {
-          query.where('status', 'active').orderBy('created_at', 'desc')
-        })
         .first()
 
       if (!merchant) {
@@ -105,6 +101,13 @@ export default class MerchantsController {
           message: 'Marchand non trouvé',
         })
       }
+
+      // ✅ Récupérer les produits du marchand (user_id = merchant.id)
+      const products = await db
+        .from('products')
+        .where('user_id', merchant.id)
+        .where('status', 'active')
+        .orderBy('created_at', 'desc')
 
       const stats = await this.getShopStats(merchant.id)
 
@@ -121,7 +124,7 @@ export default class MerchantsController {
             image: merchant.shop_image || merchant.avatar,
             stats: stats,
           },
-          products: merchant.products.map(p => ({
+          products: products.map(p => ({
             id: p.id,
             name: p.name,
             price: p.price,
@@ -247,56 +250,81 @@ export default class MerchantsController {
     }
   }
 
-  // ✅ GET /api/merchants/all - TOUS les marchands avec leurs produits (sans filtrage de doublons)
+  // ✅ GET /api/merchants/all - TOUS les marchands avec leurs produits
   async all({ response }: HttpContext) {
     try {
-      // Récupérer tous les marchands avec leurs produits
-      const merchants = await User.query()
+      console.log('=== DÉBUT all merchants ===')
+      
+      // Étape 1 : Récupérer tous les utilisateurs avec le rôle marchand
+      const merchants = await db
+        .from('users')
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
         .select(['id', 'full_name', 'shop_name', 'shop_image', 'avatar', 'email', 'created_at'])
-        .preload('products', (productsQuery) => {
-          productsQuery
-            .where('status', 'active')
-            .orderBy('created_at', 'desc')
-        })
         .orderBy('shop_name', 'asc')
         .orderBy('full_name', 'asc')
-
-      // Formater la réponse avec les produits
-      const formattedMerchants = merchants.map(merchant => ({
-        id: merchant.id,
-        name: merchant.shop_name || merchant.full_name || 'Marchand',
-        image: merchant.shop_image || merchant.avatar || null,
-        email: merchant.email,
-        created_at: merchant.created_at,
-        products: merchant.products.map(product => ({
-          id: product.id,
-          name: product.name,
-          price: product.price,
-          description: product.description,
-          image_url: product.image_url,
-          stock: product.stock,
-          rating: product.rating,
-          status: product.status,
-          isNew: product.isNew,
-          isOnSale: product.isOnSale,
-          category_id: product.category_id,
-          created_at: product.created_at,
-          updated_at: product.updated_at,
-        })),
-        products_count: merchant.products.length
-      }))
-
+      
+      console.log(`✓ ${merchants.length} marchands trouvés`)
+      
+      if (merchants.length === 0) {
+        return response.status(200).json({
+          success: true,
+          data: [],
+          total: 0
+        })
+      }
+      
+      // Étape 2 : Pour chaque marchand, récupérer ses produits
+      const formattedMerchants = []
+      
+      for (const merchant of merchants) {
+        // ✅ Récupérer les produits de ce marchand (user_id = merchant.id)
+        const products = await db
+          .from('products')
+          .where('user_id', merchant.id)
+          .where('status', 'active')
+          .select('*')
+          .orderBy('created_at', 'desc')
+        
+        formattedMerchants.push({
+          id: merchant.id,
+          name: merchant.shop_name || merchant.full_name || 'Marchand',
+          image: merchant.shop_image || merchant.avatar || null,
+          email: merchant.email,
+          created_at: merchant.created_at,
+          products: products.map(p => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            description: p.description,
+            image_url: p.image_url,
+            stock: p.stock,
+            rating: p.rating,
+            status: p.status,
+            isNew: p.isNew,
+            isOnSale: p.isOnSale,
+            category_id: p.category_id,
+            created_at: p.created_at,
+            updated_at: p.updated_at,
+          })),
+          products_count: products.length
+        })
+      }
+      
+      console.log(`=== FIN all merchants - ${formattedMerchants.length} marchands formatés ===`)
+      
       return response.status(200).json({
         success: true,
         data: formattedMerchants,
         total: formattedMerchants.length
       })
+      
     } catch (error) {
-      console.error('Erreur all merchants:', error)
+      console.error('=== ERREUR all merchants ===')
+      console.error('Message:', error.message)
+      
       return response.status(500).json({ 
         success: false, 
-        message: 'Erreur lors de la récupération des marchands',
+        message: `Erreur: ${error.message}`,
         data: [] 
       })
     }
@@ -305,7 +333,8 @@ export default class MerchantsController {
   // ✅ GET /api/merchants/:id/stats - Statistiques d'un marchand
   async stats({ params, response }: HttpContext) {
     try {
-      const merchant = await User.query()
+      const merchant = await db
+        .from('users')
         .where('id', params.id)
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
         .first()
@@ -345,7 +374,8 @@ export default class MerchantsController {
       const limit = request.input('limit', 20)
       const status = request.input('status', 'active')
 
-      const merchant = await User.query()
+      const merchant = await db
+        .from('users')
         .where('id', merchantId)
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
         .first()
@@ -357,15 +387,24 @@ export default class MerchantsController {
         })
       }
 
-      const productsQuery = Product.query()
+      // Pagination manuelle
+      const offset = (page - 1) * limit
+      
+      let productsQuery = db
+        .from('products')
         .where('user_id', merchantId)
         .orderBy('created_at', 'desc')
 
       if (status !== 'all') {
-        productsQuery.where('status', status)
+        productsQuery = productsQuery.where('status', status)
       }
 
-      const products = await productsQuery.paginate(page, limit)
+      const products = await productsQuery.limit(limit).offset(offset)
+
+      const totalCount = await db
+        .from('products')
+        .where('user_id', merchantId)
+        .count('* as total')
 
       const formattedProducts = products.map(p => ({
         id: p.id,
@@ -400,10 +439,10 @@ export default class MerchantsController {
           products: formattedProducts,
         },
         meta: {
-          total: products.total,
-          per_page: products.perPage,
-          current_page: products.currentPage,
-          last_page: products.lastPage,
+          total: parseInt(totalCount[0]?.total || '0'),
+          per_page: limit,
+          current_page: page,
+          last_page: Math.ceil(parseInt(totalCount[0]?.total || '0') / limit)
         }
       })
     } catch (error) {
@@ -431,29 +470,29 @@ export default class MerchantsController {
 
       const ordersCount = await db
         .from('orders')
-        .where('merchant_id', merchantId)
+        .where('user_id', merchantId)
         .count('* as total')
 
       const completedOrdersCount = await db
         .from('orders')
-        .where('merchant_id', merchantId)
+        .where('user_id', merchantId)
         .where('status', 'completed')
         .count('* as total')
 
       const totalRevenue = await db
         .from('orders')
-        .where('merchant_id', merchantId)
+        .where('user_id', merchantId)
         .where('status', 'completed')
         .sum('total_amount as total')
 
       const averageRating = await db
         .from('reviews')
-        .where('merchant_id', merchantId)
+        .where('user_id', merchantId)
         .avg('rating as average')
 
       const reviewsCount = await db
         .from('reviews')
-        .where('merchant_id', merchantId)
+        .where('user_id', merchantId)
         .count('* as total')
 
       return {
