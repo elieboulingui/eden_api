@@ -208,40 +208,78 @@ export default class MerchantsController {
       return response.status(500).json({ success: false, data: [] })
     }
   }
-
-  async all({ response }: HttpContext) {
-    try {
-      const merchants = await User.query()
-        .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .select(['id', 'full_name', 'shop_name', 'shop_image', 'avatar', 'email'])
-        .orderBy('shop_name', 'asc')
-        .orderBy('full_name', 'asc')
-        .orderBy('created_at', 'desc')
-
-      // ✅ Filtrer les doublons par user_id
-      const uniqueMerchants = this.removeDuplicatesById(merchants)
-
-      const formattedMerchants = uniqueMerchants.map(m => ({
-        id: m.id,
-        name: this.getShopDisplayName(m),
-        image: this.getShopImage(m),
-      }))
-
-      return response.status(200).json({
-        success: true,
-        data: formattedMerchants,
-        total: formattedMerchants.length
+async all({ response }: HttpContext) {
+  try {
+    // ✅ Utiliser withCount pour avoir le total sans charger tous les produits
+    const merchants = await User.query()
+      .whereIn('role', ['merchant', 'marchant', 'marchand'])
+      .select(['id', 'full_name', 'shop_name', 'shop_image', 'avatar', 'email'])
+      .preload('products', (productsQuery) => {
+        productsQuery
+          .select([
+            'id',
+            'name',
+            'price',
+            'image_url',
+            'stock',
+            'rating',
+            'status',
+            'user_id',
+            'created_at'
+          ])
+          .where('status', 'active')
+          .orderBy('created_at', 'desc')
+          .limit(5) // Seulement les 5 derniers produits
       })
-    } catch (error) {
-      console.error('Erreur all merchants:', error)
-      return response.status(500).json({ 
-        success: false, 
-        message: 'Erreur lors de la récupération des marchands',
-        data: [] 
+      .withCount('products', (query) => {
+        query.where('status', 'active').as('active_products_count')
       })
-    }
+      .withCount('products', (query) => {
+        query.where('status', 'inactive').as('inactive_products_count')
+      })
+      .withCount('products', (query) => {
+        query.where('stock', 0).as('out_of_stock_count')
+      })
+      .orderBy('shop_name', 'asc')
+      .orderBy('full_name', 'asc')
+
+    const formattedMerchants = merchants.map(m => ({
+      id: m.id,
+      name: this.getShopDisplayName(m),
+      image: this.getShopImage(m),
+      email: m.email,
+      // ✅ Derniers produits
+      latest_products: m.products.map(p => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        image_url: p.image_url,
+        stock: p.stock,
+        rating: p.rating,
+        created_at: p.created_at,
+      })),
+      // ✅ Statistiques des produits
+      products_stats: {
+        total_active: m.$extras.active_products_count || 0,
+        total_inactive: m.$extras.inactive_products_count || 0,
+        out_of_stock: m.$extras.out_of_stock_count || 0,
+      }
+    }))
+
+    return response.status(200).json({
+      success: true,
+      data: formattedMerchants,
+      total: formattedMerchants.length
+    })
+  } catch (error) {
+    console.error('Erreur all merchants:', error)
+    return response.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors de la récupération des marchands',
+      data: [] 
+    })
   }
-
+}
   async stats({ params, response }: HttpContext) {
     try {
       const merchant = await User.query()
