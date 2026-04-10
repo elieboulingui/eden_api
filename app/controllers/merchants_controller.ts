@@ -5,11 +5,8 @@ import db from '@adonisjs/lucid/services/db'
 
 export default class MerchantsController {
 
-  // ✅ Helper pour identifier les marchands (peu importe l'orthographe)
-  private isMerchantRole(role: string): boolean {
-    const merchantRoles = ['merchant', 'marchant', 'marchand']
-    return merchantRoles.includes(role?.toLowerCase() || '')
-  }
+  // ✅ Supprimer cette méthode
+  // private isMerchantRole(role: string): boolean { ... }
 
   async index({ request, response }: HttpContext) {
     try {
@@ -18,7 +15,7 @@ export default class MerchantsController {
       const status = request.input('status')
       const search = request.input('search')
 
-      // ✅ Filtrer tous les rôles possibles de marchand
+      // ✅ Utiliser directement whereIn
       let query = User.query()
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
         .preload('wallet')
@@ -104,7 +101,6 @@ export default class MerchantsController {
         return response.status(404).json({
           success: false,
           message: 'Marchand non trouvé',
-          data: null
         })
       }
 
@@ -138,7 +134,6 @@ export default class MerchantsController {
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur',
-        data: null
       })
     }
   }
@@ -161,17 +156,8 @@ export default class MerchantsController {
         data: merchants.map(m => ({
           id: m.id,
           full_name: m.full_name,
-          role: m.role,
-          shop: {
-            name: m.shop_name || m.full_name,
-            image: m.shop_image || m.avatar
-          },
-          wallet: m.wallet ? {
-            id: m.wallet.id,
-            balance: m.wallet.balance,
-            currency: m.wallet.currency,
-            status: m.wallet.status
-          } : null,
+          shop: { name: m.shop_name || m.full_name, image: m.shop_image || m.avatar },
+          wallet: m.wallet ? { status: m.wallet.status } : null,
         })),
         meta: {
           total: merchants.total,
@@ -180,12 +166,7 @@ export default class MerchantsController {
         },
       })
     } catch (error) {
-      console.error('Erreur:', error)
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur serveur',
-        data: []
-      })
+      return response.status(500).json({ success: false, data: [] })
     }
   }
 
@@ -219,11 +200,7 @@ export default class MerchantsController {
         data: merchants.map(m => ({
           id: m.id,
           full_name: m.full_name,
-          role: m.role,
-          shop: {
-            name: m.shop_name || m.full_name,
-            image: m.shop_image || m.avatar
-          },
+          shop: { name: m.shop_name || m.full_name, image: m.shop_image || m.avatar },
         })),
         meta: {
           total: merchants.total,
@@ -232,12 +209,7 @@ export default class MerchantsController {
         },
       })
     } catch (error) {
-      console.error('Erreur:', error)
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur serveur',
-        data: []
-      })
+      return response.status(500).json({ success: false, data: [] })
     }
   }
 
@@ -245,7 +217,7 @@ export default class MerchantsController {
     try {
       const merchants = await User.query()
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .select(['id', 'full_name', 'role', 'shop_name', 'shop_image', 'avatar'])
+        .select(['id', 'full_name', 'shop_name', 'shop_image', 'avatar'])
         .orderBy('shop_name', 'asc')
 
       return response.status(200).json({
@@ -258,12 +230,7 @@ export default class MerchantsController {
         total: merchants.length,
       })
     } catch (error) {
-      console.error('Erreur:', error)
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur serveur',
-        data: []
-      })
+      return response.status(500).json({ success: false, data: [] })
     }
   }
 
@@ -288,12 +255,7 @@ export default class MerchantsController {
         data: stats,
       })
     } catch (error) {
-      console.error('Erreur:', error)
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur serveur',
-        data: null
-      })
+      return response.status(500).json({ success: false, data: null })
     }
   }
 
@@ -327,7 +289,6 @@ export default class MerchantsController {
         average_rating: parseFloat(averageRating[0]?.average || '0').toFixed(1),
       }
     } catch (error) {
-      console.error('Erreur stats:', error)
       return {
         products_count: 0,
         orders_count: 0,
