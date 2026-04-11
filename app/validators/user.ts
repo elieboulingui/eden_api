@@ -1,4 +1,4 @@
-// validators/user.ts
+// app/validators/user.ts
 import vine from '@vinejs/vine'
 
 export const signupValidator = vine.compile(
@@ -18,22 +18,22 @@ export const signupValidator = vine.compile(
 
     // 🌍 pays
     country: vine.string().trim().minLength(2).maxLength(100).optional(),
-  }).superRefine((data, field) => {
+  }).custom((value, field) => {
     // 🔥 Si marchand → validations obligatoires
-    if (data.role === 'merchant') {
-      if (!data.country) {
+    if (value.role === 'merchant') {
+      if (!value.country) {
         field.report(
           'Le pays est obligatoire pour un marchand',
           'country',
-          field
+          'country.required'
         )
       }
 
-      if (!data.shop_name) {
+      if (!value.shop_name) {
         field.report(
           'Le nom de la boutique est obligatoire pour un marchand',
           'shop_name',
-          field
+          'shop_name.required'
         )
       }
     }
