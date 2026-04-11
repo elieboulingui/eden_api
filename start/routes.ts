@@ -247,22 +247,22 @@ router.group(() => {
   // AVIS (REVIEWS)
   // ----------------------------------------------------------
   // Routes publiques
+  // Routes publiques (pas besoin d'auth)
   router.get('/reviews/product/:productId', [ReviewsController, 'getProductReviews'])
   router.get('/reviews/merchant/:merchantId', [ReviewsController, 'getMerchantReviews'])
+  router.get('/reviews/user/:userId', [ReviewsController, 'myReviews'])  // ✅ Modifié
+  router.post('/reviews/:id/helpful', [ReviewsController, 'markHelpful'])  // ✅ Plus besoin d'auth
 
-  // Routes avec actions
+  // Routes avec actions (userId passé dans le body)
   router.post('/reviews', [ReviewsController, 'store'])
-  router.post('/reviews/:id/helpful', [ReviewsController, 'markHelpful'])
   router.put('/reviews/:id', [ReviewsController, 'update'])
   router.delete('/reviews/:id', [ReviewsController, 'destroy'])
-  router.get('/reviews/my', [ReviewsController, 'myReviews'])
 
-  // Routes admin
+  // Routes admin (isAdmin dans le body ou pas de vérification)
   router.get('/reviews', [ReviewsController, 'index'])
   router.get('/reviews/:id', [ReviewsController, 'show'])
   router.patch('/reviews/:id/approve', [ReviewsController, 'approve'])
   router.patch('/reviews/:id/reject', [ReviewsController, 'reject'])
-
   // ----------------------------------------------------------
   // BLOG ADMIN
   // ----------------------------------------------------------

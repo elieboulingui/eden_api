@@ -1,7 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Review from '#models/review'
 import Product from '#models/Product'
-import User from '#models/user'
 
 export default class ReviewsController {
   /**
@@ -20,7 +19,6 @@ export default class ReviewsController {
         })
         .orderBy('created_at', 'desc')
 
-      // Calculer la note moyenne
       const avgResult = await Review.query()
         .where('product_id', productId)
         .where('status', 'approved')
@@ -69,7 +67,6 @@ export default class ReviewsController {
         })
         .orderBy('created_at', 'desc')
 
-      // Calculer la note moyenne du marchand
       const avgResult = await Review.query()
         .where('merchant_id', merchantId)
         .where('status', 'approved')
@@ -99,27 +96,29 @@ export default class ReviewsController {
 
   /**
    * Récupérer tous les avis (admin)
-   * GET /api/reviews
+   * GET /api/reviews?userId=xxx
    */
-  async index({ request, response, auth }: HttpContext) {
+  async index({ request, response }: HttpContext) {
     try {
-      const user = auth.user
-
-      if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
-        return response.forbidden({
-          success: false,
-          message: 'Accès non autorisé'
-        })
-      }
-
+      const userId = request.input('userId')
       const page = request.input('page', 1)
       const limit = request.input('limit', 20)
       const status = request.input('status')
+
+      // Vérifier si l'utilisateur est admin (via un champ dans la requête ou autre)
+      const isAdmin = request.input('isAdmin') === 'true'
 
       const query = Review.query()
         .preload('user', (q) => q.select('id', 'full_name', 'email', 'avatar'))
         .preload('product', (q) => q.select('id', 'name', 'image_url'))
         .orderBy('created_at', 'desc')
+
+      if (!isAdmin) {
+        // Si pas admin, filtrer par utilisateur
+        if (userId) {
+          query.where('user_id', userId)
+        }
+      }
 
       if (status) {
         query.where('status', status)
@@ -180,20 +179,22 @@ export default class ReviewsController {
   /**
    * Créer un nouvel avis
    * POST /api/reviews
+   * Body: { userId, product_id, rating, title?, comment? }
    */
-  async store({ request, response, auth }: HttpContext) {
+  async store({ request, response }: HttpContext) {
     try {
-      const user = auth.user
-      if (!user) {
-        return response.unauthorized({
+      const { userId, product_id, rating, title, comment } = request.only([
+        'userId', 'product_id', 'rating', 'title', 'comment'
+      ])
+
+      // Validation
+      if (!userId) {
+        return response.badRequest({
           success: false,
-          message: 'Utilisateur non authentifié'
+          message: 'L\'ID de l\'utilisateur est requis'
         })
       }
 
-      const { product_id, rating, title, comment } = request.only(['product_id', 'rating', 'title', 'comment'])
-
-      // Validation
       if (!product_id || !rating) {
         return response.badRequest({
           success: false,
@@ -219,7 +220,7 @@ export default class ReviewsController {
 
       // Vérifier si l'utilisateur a déjà donné un avis pour ce produit
       const existingReview = await Review.query()
-        .where('user_id', user.id)
+        .where('user_id', userId)
         .where('product_id', product_id)
         .first()
 
@@ -230,19 +231,16 @@ export default class ReviewsController {
         })
       }
 
-      // Vérifier si l'utilisateur a acheté ce produit (optionnel)
-      const hasPurchased = false // À implémenter avec votre logique de commandes
-
       // Créer l'avis
       const review = await Review.create({
-        user_id: user.id,
+        user_id: userId,
         product_id: product_id,
         merchant_id: product.user_id || null,
         rating: rating,
         title: title || null,
         comment: comment || null,
-        status: 'approved', // ou 'pending' selon votre logique
-        is_verified_purchase: hasPurchased,
+        status: 'approved',
+        is_verified_purchase: false,
         helpful_count: 0,
       })
 
@@ -269,12 +267,14 @@ export default class ReviewsController {
   /**
    * Mettre à jour un avis
    * PUT /api/reviews/:id
+   * Body: { userId, rating?, title?, comment? }
    */
-  async update({ params, request, response, auth }: HttpContext) {
+  async update({ params, request, response }: HttpContext) {
     try {
-      const user = auth.user
       const { id } = params
-      const { rating, title, comment } = request.only(['rating', 'title', 'comment'])
+      const { userId, rating, title, comment, isAdmin } = request.only([
+        'userId', 'rating', 'title', 'comment', 'isAdmin'
+      ])
 
       const review = await Review.find(id)
 
@@ -286,7 +286,7 @@ export default class ReviewsController {
       }
 
       // Vérifier les permissions
-      if (review.user_id !== user?.id && user?.role !== 'admin' && user?.role !== 'superadmin') {
+      if (review.user_id !== userId && !isAdmin) {
         return response.forbidden({
           success: false,
           message: 'Vous n\'êtes pas autorisé à modifier cet avis'
@@ -326,11 +326,12 @@ export default class ReviewsController {
   /**
    * Supprimer un avis
    * DELETE /api/reviews/:id
+   * Body: { userId, isAdmin? }
    */
-  async destroy({ params, response, auth }: HttpContext) {
+  async destroy({ params, request, response }: HttpContext) {
     try {
-      const user = auth.user
       const { id } = params
+      const { userId, isAdmin } = request.only(['userId', 'isAdmin'])
 
       const review = await Review.find(id)
 
@@ -342,7 +343,7 @@ export default class ReviewsController {
       }
 
       // Vérifier les permissions
-      if (review.user_id !== user?.id && user?.role !== 'admin' && user?.role !== 'superadmin') {
+      if (review.user_id !== userId && !isAdmin) {
         return response.forbidden({
           success: false,
           message: 'Vous n\'êtes pas autorisé à supprimer cet avis'
@@ -369,17 +370,8 @@ export default class ReviewsController {
    * Voter pour un avis (utile)
    * POST /api/reviews/:id/helpful
    */
-  async markHelpful({ params, response, auth }: HttpContext) {
+  async markHelpful({ params, response }: HttpContext) {
     try {
-      const user = auth.user
-
-      if (!user) {
-        return response.unauthorized({
-          success: false,
-          message: 'Vous devez être connecté pour voter'
-        })
-      }
-
       const review = await Review.find(params.id)
 
       if (!review) {
@@ -389,7 +381,6 @@ export default class ReviewsController {
         })
       }
 
-      // Incrémenter le compteur
       review.helpful_count = (review.helpful_count || 0) + 1
       await review.save()
 
@@ -412,17 +403,8 @@ export default class ReviewsController {
    * Approuver un avis (admin)
    * PATCH /api/reviews/:id/approve
    */
-  async approve({ params, response, auth }: HttpContext) {
+  async approve({ params, response }: HttpContext) {
     try {
-      const user = auth.user
-
-      if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
-        return response.forbidden({
-          success: false,
-          message: 'Accès non autorisé'
-        })
-      }
-
       const review = await Review.find(params.id)
 
       if (!review) {
@@ -453,17 +435,8 @@ export default class ReviewsController {
    * Rejeter un avis (admin)
    * PATCH /api/reviews/:id/reject
    */
-  async reject({ params, response, auth }: HttpContext) {
+  async reject({ params, response }: HttpContext) {
     try {
-      const user = auth.user
-
-      if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
-        return response.forbidden({
-          success: false,
-          message: 'Accès non autorisé'
-        })
-      }
-
       const review = await Review.find(params.id)
 
       if (!review) {
@@ -491,22 +464,15 @@ export default class ReviewsController {
   }
 
   /**
-   * Récupérer les avis de l'utilisateur connecté
-   * GET /api/reviews/my
+   * Récupérer les avis d'un utilisateur
+   * GET /api/reviews/user/:userId
    */
-  async myReviews({ response, auth }: HttpContext) {
+  async myReviews({ params, response }: HttpContext) {
     try {
-      const user = auth.user
-
-      if (!user) {
-        return response.unauthorized({
-          success: false,
-          message: 'Utilisateur non authentifié'
-        })
-      }
+      const userId = params.userId
 
       const reviews = await Review.query()
-        .where('user_id', user.id)
+        .where('user_id', userId)
         .preload('product', (query) => {
           query.select('id', 'name', 'image_url', 'price')
         })
