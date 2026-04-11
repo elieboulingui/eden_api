@@ -115,6 +115,17 @@ export type ScannedRoutes = {
     'merchants.search': { paramsTuple?: []; params?: {} }
     'merchants.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'merchants.stats': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.get_product_reviews': { paramsTuple: [ParamValue]; params: {'productId': ParamValue} }
+    'reviews.get_merchant_reviews': { paramsTuple: [ParamValue]; params: {'merchantId': ParamValue} }
+    'reviews.my_reviews': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'reviews.mark_helpful': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.store': { paramsTuple?: []; params?: {} }
+    'reviews.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.index': { paramsTuple?: []; params?: {} }
+    'reviews.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.approve': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.reject': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'admin.posts.index': { paramsTuple?: []; params?: {} }
     'admin.posts.stats': { paramsTuple?: []; params?: {} }
     'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -178,6 +189,11 @@ export type ScannedRoutes = {
     'merchants.search': { paramsTuple?: []; params?: {} }
     'merchants.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'merchants.stats': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.get_product_reviews': { paramsTuple: [ParamValue]; params: {'productId': ParamValue} }
+    'reviews.get_merchant_reviews': { paramsTuple: [ParamValue]; params: {'merchantId': ParamValue} }
+    'reviews.my_reviews': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'reviews.index': { paramsTuple?: []; params?: {} }
+    'reviews.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'admin.posts.index': { paramsTuple?: []; params?: {} }
     'admin.posts.stats': { paramsTuple?: []; params?: {} }
     'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -238,6 +254,11 @@ export type ScannedRoutes = {
     'merchants.search': { paramsTuple?: []; params?: {} }
     'merchants.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'merchants.stats': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.get_product_reviews': { paramsTuple: [ParamValue]; params: {'productId': ParamValue} }
+    'reviews.get_merchant_reviews': { paramsTuple: [ParamValue]; params: {'merchantId': ParamValue} }
+    'reviews.my_reviews': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'reviews.index': { paramsTuple?: []; params?: {} }
+    'reviews.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'admin.posts.index': { paramsTuple?: []; params?: {} }
     'admin.posts.stats': { paramsTuple?: []; params?: {} }
     'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -274,6 +295,8 @@ export type ScannedRoutes = {
     'merchant.products.store': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.categories.store': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.coupons.store': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'reviews.mark_helpful': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.store': { paramsTuple?: []; params?: {} }
     'admin.posts.store': { paramsTuple?: []; params?: {} }
   }
   PUT: {
@@ -290,6 +313,7 @@ export type ScannedRoutes = {
     'merchant.products.update': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
     'merchant.categories.update': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
     'merchant.coupons.update': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
+    'reviews.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'admin.posts.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   DELETE: {
@@ -304,10 +328,13 @@ export type ScannedRoutes = {
     'merchant.products.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
     'merchant.categories.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
     'merchant.coupons.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
+    'reviews.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'admin.posts.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   PATCH: {
     'pubs.toggle': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.approve': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.reject': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
 }
 declare module '@adonisjs/core/types/http' {

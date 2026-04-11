@@ -30,7 +30,7 @@ export default class Review extends BaseModel {
   declare comment: string | null
 
   @column()
-  declare status: string // 'pending', 'approved', 'rejected'
+  declare status: string
 
   @column()
   declare is_verified_purchase: boolean
@@ -44,10 +44,14 @@ export default class Review extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updated_at: DateTime
 
-  @belongsTo(() => User)
+  @belongsTo(() => User, {
+    foreignKey: 'user_id',
+  })
   declare user: BelongsTo<typeof User>
 
-  @belongsTo(() => Product)
+  @belongsTo(() => Product, {
+    foreignKey: 'product_id',
+  })
   declare product: BelongsTo<typeof Product>
 
   @beforeCreate()
@@ -55,15 +59,8 @@ export default class Review extends BaseModel {
     if (!review.id) {
       review.id = randomUUID()
     }
-    // Valeurs par défaut
-    if (review.status === undefined) {
-      review.status = 'pending'
-    }
-    if (review.helpful_count === undefined) {
-      review.helpful_count = 0
-    }
-    if (review.is_verified_purchase === undefined) {
-      review.is_verified_purchase = false
-    }
+    review.status = review.status ?? 'pending'
+    review.helpful_count = review.helpful_count ?? 0
+    review.is_verified_purchase = review.is_verified_purchase ?? false
   }
 }

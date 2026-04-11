@@ -14,6 +14,7 @@ export const controllers = {
   Favorites: () => import('#controllers/favorites_controller'),
   HealthChecks: () => import('#controllers/health_checks_controller'),
   MerchantDashboard: () => import('#controllers/merchant_dashboard_controller'),
+  Merchants: () => import('#controllers/merchants_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
   NewAccountControllers: () => import('#controllers/new_account_controllers'),
   Newsletter: () => import('#controllers/newsletter_controller'),
@@ -29,5 +30,4 @@ export const controllers = {
   SessionControllers: () => import('#controllers/session_controllers'),
   Testimonials: () => import('#controllers/testimonials_controller'),
   Users: () => import('#controllers/users_controller'),
-  Merchants: () => import('#controllers/merchants_controller'),
 }
