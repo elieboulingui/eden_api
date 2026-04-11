@@ -46,13 +46,21 @@ export default class BlockUnauthorizedOriginMiddleware {
     if (!origin) {
       // Vérifier si le referer vient d'une origine autorisée
       if (referer) {
-        const refererUrl = new URL(referer)
-        const refererOrigin = `${refererUrl.protocol}//${refererUrl.host}`
+        try {
+          const refererUrl = new URL(referer)
+          const refererOrigin = `${refererUrl.protocol}//${refererUrl.host}`
 
-        if (!this.allowedOrigins.has(refererOrigin)) {
+          if (!this.allowedOrigins.has(refererOrigin)) {
+            return response.status(403).json({
+              error: 'Forbidden',
+              message: 'Access denied: Invalid referer'
+            })
+          }
+        } catch (error) {
+          // URL invalide dans le referer
           return response.status(403).json({
             error: 'Forbidden',
-            message: 'Access denied: Invalid referer'
+            message: 'Access denied: Invalid referer format'
           })
         }
       } else {
@@ -65,7 +73,7 @@ export default class BlockUnauthorizedOriginMiddleware {
     }
 
     // 3. Vérifier si l'origine est autorisée
-    if (!this.allowedOrigins.has(origin)) {
+    if (origin && !this.allowedOrigins.has(origin)) {
       return response.status(403).json({
         error: 'Forbidden',
         message: `Origin ${origin} is not allowed`
@@ -74,7 +82,7 @@ export default class BlockUnauthorizedOriginMiddleware {
 
     // 4. Ajouter un header personnalisé obligatoire (protection supplémentaire)
     const customHeader = request.header('x-application-name')
-    if (!customHeader || customHeader !== 'paradis-alimentaires-app') {
+    if (customHeader !== 'paradis-alimentaires-app') {
       return response.status(403).json({
         error: 'Forbidden',
         message: 'Invalid application header'
@@ -82,7 +90,9 @@ export default class BlockUnauthorizedOriginMiddleware {
     }
 
     // Configuration CORS pour l'origine autorisée
-    response.header('Access-Control-Allow-Origin', origin)
+    if (origin) {
+      response.header('Access-Control-Allow-Origin', origin)
+    }
     response.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS')
     response.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Application-Name')
     response.header('Access-Control-Allow-Credentials', 'true')
