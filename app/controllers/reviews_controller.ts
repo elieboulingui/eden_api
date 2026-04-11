@@ -1,8 +1,186 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Review from '#models/review'
 import Product from '#models/Product'
+import User from '#models/user'
 
 export default class ReviewsController {
+  /**
+   * Récupérer tous les avis d'un produit
+   * GET /api/reviews/product/:productId
+   */
+  async getProductReviews({ params, response }: HttpContext) {
+    try {
+      const productId = params.productId
+
+      const reviews = await Review.query()
+        .where('product_id', productId)
+        .where('status', 'approved')
+        .preload('user', (query) => {
+          query.select('id', 'full_name', 'email', 'avatar')
+        })
+        .orderBy('created_at', 'desc')
+
+      // Calculer la note moyenne
+      const avgResult = await Review.query()
+        .where('product_id', productId)
+        .where('status', 'approved')
+        .avg('rating as average')
+
+      const averageRating = avgResult[0]?.$extras?.average
+        ? Number.parseFloat(avgResult[0].$extras.average)
+        : 0
+
+      const totalReviews = reviews.length
+
+      return response.ok({
+        success: true,
+        data: reviews,
+        meta: {
+          averageRating: Math.round(averageRating * 10) / 10,
+          totalReviews
+        }
+      })
+    } catch (error: any) {
+      console.error('Erreur getProductReviews:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la récupération des avis',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Récupérer tous les avis d'un marchand
+   * GET /api/reviews/merchant/:merchantId
+   */
+  async getMerchantReviews({ params, response }: HttpContext) {
+    try {
+      const merchantId = params.merchantId
+
+      const reviews = await Review.query()
+        .where('merchant_id', merchantId)
+        .where('status', 'approved')
+        .preload('user', (query) => {
+          query.select('id', 'full_name', 'email', 'avatar')
+        })
+        .preload('product', (query) => {
+          query.select('id', 'name', 'image_url', 'price')
+        })
+        .orderBy('created_at', 'desc')
+
+      // Calculer la note moyenne du marchand
+      const avgResult = await Review.query()
+        .where('merchant_id', merchantId)
+        .where('status', 'approved')
+        .avg('rating as average')
+
+      const averageRating = avgResult[0]?.$extras?.average
+        ? Number.parseFloat(avgResult[0].$extras.average)
+        : 0
+
+      return response.ok({
+        success: true,
+        data: reviews,
+        meta: {
+          averageRating: Math.round(averageRating * 10) / 10,
+          totalReviews: reviews.length
+        }
+      })
+    } catch (error: any) {
+      console.error('Erreur getMerchantReviews:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la récupération des avis du marchand',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Récupérer tous les avis (admin)
+   * GET /api/reviews
+   */
+  async index({ request, response, auth }: HttpContext) {
+    try {
+      const user = auth.user
+
+      if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+        return response.forbidden({
+          success: false,
+          message: 'Accès non autorisé'
+        })
+      }
+
+      const page = request.input('page', 1)
+      const limit = request.input('limit', 20)
+      const status = request.input('status')
+
+      const query = Review.query()
+        .preload('user', (q) => q.select('id', 'full_name', 'email', 'avatar'))
+        .preload('product', (q) => q.select('id', 'name', 'image_url'))
+        .orderBy('created_at', 'desc')
+
+      if (status) {
+        query.where('status', status)
+      }
+
+      const reviews = await query.paginate(page, limit)
+
+      return response.ok({
+        success: true,
+        data: reviews
+      })
+    } catch (error: any) {
+      console.error('Erreur index:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la récupération des avis',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Récupérer un avis spécifique
+   * GET /api/reviews/:id
+   */
+  async show({ params, response }: HttpContext) {
+    try {
+      const review = await Review.find(params.id)
+
+      if (!review) {
+        return response.notFound({
+          success: false,
+          message: 'Avis non trouvé'
+        })
+      }
+
+      await review.load('user', (query) => {
+        query.select('id', 'full_name', 'email', 'avatar')
+      })
+      await review.load('product', (query) => {
+        query.select('id', 'name', 'image_url', 'price')
+      })
+
+      return response.ok({
+        success: true,
+        data: review
+      })
+    } catch (error: any) {
+      console.error('Erreur show:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la récupération de l\'avis',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Créer un nouvel avis
+   * POST /api/reviews
+   */
   async store({ request, response, auth }: HttpContext) {
     try {
       const user = auth.user
@@ -13,17 +191,24 @@ export default class ReviewsController {
         })
       }
 
-      const { product_id, rating, comment } = request.only(['product_id', 'rating', 'comment'])
+      const { product_id, rating, title, comment } = request.only(['product_id', 'rating', 'title', 'comment'])
 
-      // Validate required fields
+      // Validation
       if (!product_id || !rating) {
         return response.badRequest({
           success: false,
-          message: 'Product ID and rating are required'
+          message: 'L\'ID du produit et la note sont requis'
         })
       }
 
-      // Récupérer le produit pour obtenir l'ID du marchand
+      if (rating < 1 || rating > 5) {
+        return response.badRequest({
+          success: false,
+          message: 'La note doit être comprise entre 1 et 5'
+        })
+      }
+
+      // Vérifier si le produit existe
       const product = await Product.find(product_id)
       if (!product) {
         return response.notFound({
@@ -32,16 +217,37 @@ export default class ReviewsController {
         })
       }
 
-      // Convert user_id to string if needed
-      const merchantId = product.user_id ? product.user_id.toString() : null
+      // Vérifier si l'utilisateur a déjà donné un avis pour ce produit
+      const existingReview = await Review.query()
+        .where('user_id', user.id)
+        .where('product_id', product_id)
+        .first()
 
-      // Créer l'avis avec l'ID du marchand
+      if (existingReview) {
+        return response.badRequest({
+          success: false,
+          message: 'Vous avez déjà donné votre avis sur ce produit'
+        })
+      }
+
+      // Vérifier si l'utilisateur a acheté ce produit (optionnel)
+      const hasPurchased = false // À implémenter avec votre logique de commandes
+
+      // Créer l'avis
       const review = await Review.create({
         user_id: user.id,
         product_id: product_id,
-        merchant_id: merchantId, // Convert to string
+        merchant_id: product.user_id || null,
         rating: rating,
+        title: title || null,
         comment: comment || null,
+        status: 'approved', // ou 'pending' selon votre logique
+        is_verified_purchase: hasPurchased,
+        helpful_count: 0,
+      })
+
+      await review.load('user', (query) => {
+        query.select('id', 'full_name', 'email', 'avatar')
       })
 
       return response.created({
@@ -51,49 +257,27 @@ export default class ReviewsController {
       })
 
     } catch (error: any) {
-      console.error('Error creating review:', error)
+      console.error('Erreur store:', error)
       return response.internalServerError({
         success: false,
         message: 'Erreur lors de la création de l\'avis',
-        error: error.message,
-      })
-    }
-  }
-
-  // Optional: Add method to get reviews for a product
-  async index({ params, response }: HttpContext) {
-    try {
-      const { product_id } = params
-      
-      const reviews = await Review.query()
-        .where('product_id', product_id)
-        .preload('user', (query) => {
-          query.select('id', 'full_name', 'avatar')
-        })
-        .orderBy('created_at', 'desc')
-
-      return response.ok({
-        success: true,
-        data: reviews
-      })
-    } catch (error: any) {
-      return response.internalServerError({
-        success: false,
-        message: 'Erreur lors de la récupération des avis',
         error: error.message
       })
     }
   }
 
-  // Optional: Add method to update a review
+  /**
+   * Mettre à jour un avis
+   * PUT /api/reviews/:id
+   */
   async update({ params, request, response, auth }: HttpContext) {
     try {
       const user = auth.user
       const { id } = params
-      const { rating, comment } = request.only(['rating', 'comment'])
+      const { rating, title, comment } = request.only(['rating', 'title', 'comment'])
 
       const review = await Review.find(id)
-      
+
       if (!review) {
         return response.notFound({
           success: false,
@@ -101,16 +285,27 @@ export default class ReviewsController {
         })
       }
 
-      // Check if the review belongs to the user
-      if (review.user_id !== user?.id) {
+      // Vérifier les permissions
+      if (review.user_id !== user?.id && user?.role !== 'admin' && user?.role !== 'superadmin') {
         return response.forbidden({
           success: false,
           message: 'Vous n\'êtes pas autorisé à modifier cet avis'
         })
       }
 
-      review.rating = rating || review.rating
-      review.comment = comment !== undefined ? comment : review.comment
+      if (rating !== undefined) {
+        if (rating < 1 || rating > 5) {
+          return response.badRequest({
+            success: false,
+            message: 'La note doit être comprise entre 1 et 5'
+          })
+        }
+        review.rating = rating
+      }
+
+      if (title !== undefined) review.title = title
+      if (comment !== undefined) review.comment = comment
+
       await review.save()
 
       return response.ok({
@@ -119,6 +314,7 @@ export default class ReviewsController {
         message: 'Avis mis à jour avec succès'
       })
     } catch (error: any) {
+      console.error('Erreur update:', error)
       return response.internalServerError({
         success: false,
         message: 'Erreur lors de la mise à jour de l\'avis',
@@ -127,14 +323,17 @@ export default class ReviewsController {
     }
   }
 
-  // Optional: Add method to delete a review
+  /**
+   * Supprimer un avis
+   * DELETE /api/reviews/:id
+   */
   async destroy({ params, response, auth }: HttpContext) {
     try {
       const user = auth.user
       const { id } = params
 
       const review = await Review.find(id)
-      
+
       if (!review) {
         return response.notFound({
           success: false,
@@ -142,7 +341,7 @@ export default class ReviewsController {
         })
       }
 
-      // Check if the review belongs to the user or user is admin
+      // Vérifier les permissions
       if (review.user_id !== user?.id && user?.role !== 'admin' && user?.role !== 'superadmin') {
         return response.forbidden({
           success: false,
@@ -157,9 +356,171 @@ export default class ReviewsController {
         message: 'Avis supprimé avec succès'
       })
     } catch (error: any) {
+      console.error('Erreur destroy:', error)
       return response.internalServerError({
         success: false,
         message: 'Erreur lors de la suppression de l\'avis',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Voter pour un avis (utile)
+   * POST /api/reviews/:id/helpful
+   */
+  async markHelpful({ params, response, auth }: HttpContext) {
+    try {
+      const user = auth.user
+
+      if (!user) {
+        return response.unauthorized({
+          success: false,
+          message: 'Vous devez être connecté pour voter'
+        })
+      }
+
+      const review = await Review.find(params.id)
+
+      if (!review) {
+        return response.notFound({
+          success: false,
+          message: 'Avis non trouvé'
+        })
+      }
+
+      // Incrémenter le compteur
+      review.helpful_count = (review.helpful_count || 0) + 1
+      await review.save()
+
+      return response.ok({
+        success: true,
+        message: 'Vote enregistré',
+        helpful_count: review.helpful_count
+      })
+    } catch (error: any) {
+      console.error('Erreur markHelpful:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors du vote',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Approuver un avis (admin)
+   * PATCH /api/reviews/:id/approve
+   */
+  async approve({ params, response, auth }: HttpContext) {
+    try {
+      const user = auth.user
+
+      if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+        return response.forbidden({
+          success: false,
+          message: 'Accès non autorisé'
+        })
+      }
+
+      const review = await Review.find(params.id)
+
+      if (!review) {
+        return response.notFound({
+          success: false,
+          message: 'Avis non trouvé'
+        })
+      }
+
+      review.status = 'approved'
+      await review.save()
+
+      return response.ok({
+        success: true,
+        message: 'Avis approuvé avec succès'
+      })
+    } catch (error: any) {
+      console.error('Erreur approve:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de l\'approbation de l\'avis',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Rejeter un avis (admin)
+   * PATCH /api/reviews/:id/reject
+   */
+  async reject({ params, response, auth }: HttpContext) {
+    try {
+      const user = auth.user
+
+      if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+        return response.forbidden({
+          success: false,
+          message: 'Accès non autorisé'
+        })
+      }
+
+      const review = await Review.find(params.id)
+
+      if (!review) {
+        return response.notFound({
+          success: false,
+          message: 'Avis non trouvé'
+        })
+      }
+
+      review.status = 'rejected'
+      await review.save()
+
+      return response.ok({
+        success: true,
+        message: 'Avis rejeté'
+      })
+    } catch (error: any) {
+      console.error('Erreur reject:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors du rejet de l\'avis',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Récupérer les avis de l'utilisateur connecté
+   * GET /api/reviews/my
+   */
+  async myReviews({ response, auth }: HttpContext) {
+    try {
+      const user = auth.user
+
+      if (!user) {
+        return response.unauthorized({
+          success: false,
+          message: 'Utilisateur non authentifié'
+        })
+      }
+
+      const reviews = await Review.query()
+        .where('user_id', user.id)
+        .preload('product', (query) => {
+          query.select('id', 'name', 'image_url', 'price')
+        })
+        .orderBy('created_at', 'desc')
+
+      return response.ok({
+        success: true,
+        data: reviews
+      })
+    } catch (error: any) {
+      console.error('Erreur myReviews:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la récupération de vos avis',
         error: error.message
       })
     }

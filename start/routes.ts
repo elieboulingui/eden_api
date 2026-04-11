@@ -20,6 +20,7 @@ import OrdersController from '#controllers/OrdersController'
 import DashboardViewController from '#controllers/dashboard_view_controller'
 import NewsletterController from '#controllers/newsletter_controller'
 import PushSubscriptionsController from '#controllers/push_subscriptions_controller'
+import ReviewsController from '#controllers/reviews_controller'
 
 // Lazy imports
 const BlogController = () => import('#controllers/blog_controller')
@@ -148,13 +149,9 @@ router.group(() => {
   router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice']).as('orders.invoice')
   router.put('/orders/:orderId/status', [OrdersController, 'updateStatus']).as('orders.status.update')
 
-  // ✅ API PONT VERS MYPVIT - Récupérer les données sans ID (pour test/debug)
+  // API PONT VERS MYPVIT
   router.get('/give-all-without-id', [OrdersController, 'giveAllWithoutId']).as('payment.without-id')
-
-  // ✅ API pour vérifier le statut d'un paiement par reference_id
   router.get('/payment/status/:referenceId', [OrdersController, 'checkPaymentStatus']).as('payment.status')
-
-  // Alias pour compatibilité
   router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus']).as('orders.payment-status')
 
   // ----------------------------------------------------------
@@ -238,24 +235,33 @@ router.group(() => {
   // MARCHANDS (LISTE PUBLIQUE)
   // ----------------------------------------------------------
   router.group(() => {
-    // Récupérer tous les marchands (avec pagination)
     router.get('/', [MerchantsController, 'index'])
-
-    // Récupérer tous les marchands sans pagination (pour les selects)
     router.get('/all', [MerchantsController, 'all'])
-
-    // Récupérer les marchands actifs
     router.get('/active', [MerchantsController, 'active'])
-
-    // Rechercher des marchands
     router.get('/search', [MerchantsController, 'search'])
-
-    // Récupérer un marchand spécifique
     router.get('/:id', [MerchantsController, 'show'])
-
-    // Récupérer les statistiques d'un marchand
     router.get('/:id/stats', [MerchantsController, 'stats'])
   }).prefix('/merchants')
+
+  // ----------------------------------------------------------
+  // AVIS (REVIEWS)
+  // ----------------------------------------------------------
+  // Routes publiques
+  router.get('/reviews/product/:productId', [ReviewsController, 'getProductReviews'])
+  router.get('/reviews/merchant/:merchantId', [ReviewsController, 'getMerchantReviews'])
+
+  // Routes avec actions
+  router.post('/reviews', [ReviewsController, 'store'])
+  router.post('/reviews/:id/helpful', [ReviewsController, 'markHelpful'])
+  router.put('/reviews/:id', [ReviewsController, 'update'])
+  router.delete('/reviews/:id', [ReviewsController, 'destroy'])
+  router.get('/reviews/my', [ReviewsController, 'myReviews'])
+
+  // Routes admin
+  router.get('/reviews', [ReviewsController, 'index'])
+  router.get('/reviews/:id', [ReviewsController, 'show'])
+  router.patch('/reviews/:id/approve', [ReviewsController, 'approve'])
+  router.patch('/reviews/:id/reject', [ReviewsController, 'reject'])
 
   // ----------------------------------------------------------
   // BLOG ADMIN
@@ -269,4 +275,4 @@ router.group(() => {
     router.delete('/posts/:id', [BlogController, 'destroy']).as('admin.posts.destroy')
   }).prefix('/blog/admin')
 
-}).prefix('/api') // ✅ Fin du groupe API
+}).prefix('/api')
