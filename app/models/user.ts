@@ -49,6 +49,9 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column()
   declare address: string | null
 
+  @column()
+  declare country: string | null
+
   @column.dateTime({ autoCreate: true })
   declare created_at: DateTime
 

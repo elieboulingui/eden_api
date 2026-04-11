@@ -396,12 +396,10 @@ export class ProductSchema extends BaseModel {
   declare id: string
   @column()
   declare imageUrl: string | null
-
   @column()
   declare isNew: boolean | null
   @column()
   declare isOnSale: boolean | null
-
   @column()
   declare name: string
   @column()
@@ -607,12 +605,14 @@ export class TransactionSchema extends BaseModel {
 }
 
 export class UserSchema extends BaseModel {
-  static $columns = ['address', 'avatar', 'createdAt', 'email', 'fullName', 'id', 'password', 'phone', 'role', 'shopImage', 'shopName', 'updatedAt'] as const
+  static $columns = ['address', 'avatar', 'country', 'createdAt', 'email', 'fullName', 'id', 'password', 'phone', 'role', 'shopImage', 'shopName', 'updatedAt'] as const
   $columns = UserSchema.$columns
   @column()
   declare address: string | null
   @column()
   declare avatar: string | null
+  @column()
+  declare country: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime | null
   @column()

@@ -9,13 +9,34 @@ export const signupValidator = vine.compile(
 
     password: vine.string().minLength(8),
 
-    // ✅ on garde UNE seule version propre
+    // rôle
     role: vine.enum(['client', 'merchant']).optional(),
 
-    // ✅ Champs boutique (optionnels sauf si merchant)
+    // boutique
     shop_name: vine.string().trim().minLength(2).maxLength(255).optional(),
-
     shop_image: vine.string().trim().url().optional(),
+
+    // 🌍 pays
+    country: vine.string().trim().minLength(2).maxLength(100).optional(),
+  }).superRefine((data, field) => {
+    // 🔥 Si marchand → validations obligatoires
+    if (data.role === 'merchant') {
+      if (!data.country) {
+        field.report(
+          'Le pays est obligatoire pour un marchand',
+          'country',
+          field
+        )
+      }
+
+      if (!data.shop_name) {
+        field.report(
+          'Le nom de la boutique est obligatoire pour un marchand',
+          'shop_name',
+          field
+        )
+      }
+    }
   })
 )
 

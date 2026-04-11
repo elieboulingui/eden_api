@@ -24,7 +24,6 @@ export default class NewAccountController {
       // 2. Vérifier email existant
       const existingUser = await User.findBy('email', payload.email)
       if (existingUser) {
-        console.log('⚠️ Email déjà utilisé:', payload.email)
         return response.status(400).json({
           success: false,
           message: 'Cet email est déjà utilisé',
@@ -33,6 +32,15 @@ export default class NewAccountController {
 
       // 3. Normaliser le rôle
       const role = payload.role || 'client'
+
+      // 🔥 Sécurité supplémentaire (même si validator déjà OK)
+      if (role === 'merchant' && !payload.country) {
+        return response.status(400).json({
+          success: false,
+          message: 'Le pays est obligatoire pour les marchands',
+        })
+      }
+
       // 4. Création utilisateur
       const user = await User.create({
         full_name: payload.full_name,
@@ -40,7 +48,10 @@ export default class NewAccountController {
         password: payload.password,
         role,
 
-        // 🔥 Champs boutique uniquement si marchand
+        // 🔥 Pays uniquement pour marchand
+        country: role === 'merchant' ? payload.country : null,
+
+        // 🔥 Boutique uniquement pour marchand
         shop_name: role === 'merchant' ? payload.shop_name : null,
         shop_image: role === 'merchant' ? payload.shop_image : null,
       })
@@ -73,8 +84,8 @@ export default class NewAccountController {
           full_name: user.full_name,
           email: user.email,
           role: user.role,
+          country: user.country, // ✅ ajouté
 
-          // 🔥 Infos boutique
           shop_name: user.shop_name,
           shop_image: user.shop_image,
         },

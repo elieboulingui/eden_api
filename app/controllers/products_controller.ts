@@ -1,13 +1,18 @@
 // app/controllers/products_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
-import Product from '#models/Product'  // Changé: product -> Product (majuscule)
+import Product from '#models/Product'
 
 export default class ProductsController {
 
-  // Récupérer tous les produits
+  // 🔥 Récupérer tous les produits + pays du vendeur
   async index({ response }: HttpContext) {
     try {
-      const products = await Product.all()
+      const products = await Product
+        .query()
+        .preload('user', (query) => {
+          query.select(['id', 'full_name', 'country'])
+        })
+
       return response.status(200).json({
         success: true,
         data: products,
@@ -22,11 +27,21 @@ export default class ProductsController {
     }
   }
 
-  // Récupérer un produit spécifique
+  // 🔥 Récupérer un produit + pays du vendeur
   async show({ params, response }: HttpContext) {
     try {
-      const product = await Product.findOrFail(params.id)
-      return response.status(200).json({ success: true, data: product })
+      const product = await Product
+        .query()
+        .where('id', params.id)
+        .preload('user', (query) => {
+          query.select(['id', 'full_name', 'country'])
+        })
+        .firstOrFail()
+
+      return response.status(200).json({
+        success: true,
+        data: product
+      })
     } catch {
       return response.status(404).json({
         success: false,
@@ -35,7 +50,7 @@ export default class ProductsController {
     }
   }
 
-  // Créer un produit
+  // 🔥 Créer un produit
   async store({ request, response }: HttpContext) {
     try {
       const data = request.only([
@@ -53,6 +68,11 @@ export default class ProductsController {
 
       const product = await Product.create(data)
 
+      // 🔥 Recharge avec le pays
+      await product.load('user', (query) => {
+        query.select(['id', 'full_name', 'country'])
+      })
+
       return response.status(201).json({
         success: true,
         message: 'Produit créé avec succès',
@@ -67,7 +87,7 @@ export default class ProductsController {
     }
   }
 
-  // Mettre à jour un produit
+  // 🔥 Mettre à jour
   async update({ params, request, response }: HttpContext) {
     try {
       const product = await Product.findOrFail(params.id)
@@ -96,6 +116,11 @@ export default class ProductsController {
       product.merge(data)
       await product.save()
 
+      // 🔥 Charger le pays
+      await product.load('user', (query) => {
+        query.select(['id', 'full_name', 'country'])
+      })
+
       return response.status(200).json({
         success: true,
         message: 'Produit mis à jour avec succès',
@@ -110,7 +135,7 @@ export default class ProductsController {
     }
   }
 
-  // Supprimer un produit
+  // 🔥 Supprimer
   async destroy({ params, request, response }: HttpContext) {
     try {
       const product = await Product.findOrFail(params.id)
