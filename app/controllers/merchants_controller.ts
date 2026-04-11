@@ -4,7 +4,7 @@ import User from '#models/user'
 import db from '@adonisjs/lucid/services/db'
 
 export default class MerchantsController {
-  
+
   // ✅ GET /api/merchants - Liste paginée des marchands
   async index({ request, response }: HttpContext) {
     try {
@@ -24,6 +24,7 @@ export default class MerchantsController {
           'avatar',
           'shop_name',
           'shop_image',
+          'country', // ✅ Ajout du pays
           'created_at',
           'updated_at'
         ])
@@ -51,6 +52,7 @@ export default class MerchantsController {
         email: merchant.email,
         avatar: merchant.avatar,
         role: merchant.role,
+        country: merchant.country, // ✅ Ajout du pays
         shop: {
           name: merchant.shop_name || merchant.full_name,
           image: merchant.shop_image || merchant.avatar,
@@ -118,6 +120,7 @@ export default class MerchantsController {
           email: merchant.email,
           avatar: merchant.avatar,
           role: merchant.role,
+          country: merchant.country, // ✅ Ajout du pays
           shop: {
             name: merchant.shop_name || merchant.full_name,
             image: merchant.shop_image || merchant.avatar,
@@ -174,9 +177,10 @@ export default class MerchantsController {
         data: merchants.map(m => ({
           id: m.id,
           full_name: m.full_name,
-          shop: { 
-            name: m.shop_name || m.full_name, 
-            image: m.shop_image || m.avatar 
+          country: m.country, // ✅ Ajout du pays
+          shop: {
+            name: m.shop_name || m.full_name,
+            image: m.shop_image || m.avatar
           },
           wallet: m.wallet ? { status: m.wallet.status } : null,
         })),
@@ -188,10 +192,10 @@ export default class MerchantsController {
       })
     } catch (error: any) {
       console.error('Erreur active merchants:', error)
-      return response.status(500).json({ 
-        success: false, 
+      return response.status(500).json({
+        success: false,
         message: 'Erreur serveur',
-        data: [] 
+        data: []
       })
     }
   }
@@ -227,9 +231,10 @@ export default class MerchantsController {
         data: merchants.map(m => ({
           id: m.id,
           full_name: m.full_name,
-          shop: { 
-            name: m.shop_name || m.full_name, 
-            image: m.shop_image || m.avatar 
+          country: m.country, // ✅ Ajout du pays
+          shop: {
+            name: m.shop_name || m.full_name,
+            image: m.shop_image || m.avatar
           },
         })),
         meta: {
@@ -240,10 +245,10 @@ export default class MerchantsController {
       })
     } catch (error: any) {
       console.error('Erreur search merchants:', error)
-      return response.status(500).json({ 
-        success: false, 
+      return response.status(500).json({
+        success: false,
         message: 'Erreur serveur',
-        data: [] 
+        data: []
       })
     }
   }
@@ -252,17 +257,17 @@ export default class MerchantsController {
   async all({ response }: HttpContext) {
     try {
       console.log('=== DÉBUT all merchants ===')
-      
+
       // Étape 1 : Récupérer tous les utilisateurs avec le rôle marchand
       const merchants = await db
         .from('users')
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .select(['id', 'full_name', 'shop_name', 'shop_image', 'avatar', 'email', 'created_at'])
+        .select(['id', 'full_name', 'shop_name', 'shop_image', 'avatar', 'email', 'country', 'created_at']) // ✅ Ajout de country
         .orderBy('shop_name', 'asc')
         .orderBy('full_name', 'asc')
-      
+
       console.log(`✓ ${merchants.length} marchands trouvés`)
-      
+
       if (merchants.length === 0) {
         return response.status(200).json({
           success: true,
@@ -270,10 +275,10 @@ export default class MerchantsController {
           total: 0
         })
       }
-      
+
       // Étape 2 : Pour chaque marchand, récupérer ses produits
       const formattedMerchants = []
-      
+
       for (const merchant of merchants) {
         // ✅ Récupérer TOUS les produits de ce marchand (sans filtre status)
         const products = await db
@@ -281,12 +286,13 @@ export default class MerchantsController {
           .where('user_id', merchant.id)
           .select('*')
           .orderBy('created_at', 'desc')
-        
+
         formattedMerchants.push({
           id: merchant.id,
           name: merchant.shop_name || merchant.full_name || 'Marchand',
           image: merchant.shop_image || merchant.avatar || null,
           email: merchant.email,
+          country: merchant.country, // ✅ Ajout du pays
           created_at: merchant.created_at,
           products: products.map(p => ({
             id: p.id,
@@ -305,23 +311,23 @@ export default class MerchantsController {
           products_count: products.length
         })
       }
-      
+
       console.log(`=== FIN all merchants - ${formattedMerchants.length} marchands formatés ===`)
-      
+
       return response.status(200).json({
         success: true,
         data: formattedMerchants,
         total: formattedMerchants.length
       })
-      
+
     } catch (error: any) {
       console.error('=== ERREUR all merchants ===')
       console.error('Message:', error.message)
-      
-      return response.status(500).json({ 
-        success: false, 
+
+      return response.status(500).json({
+        success: false,
         message: `Erreur: ${error.message}`,
-        data: [] 
+        data: []
       })
     }
   }
@@ -349,15 +355,16 @@ export default class MerchantsController {
         data: {
           merchant_id: merchant.id,
           merchant_name: merchant.shop_name || merchant.full_name,
+          country: merchant.country, // ✅ Ajout du pays
           ...stats
         },
       })
     } catch (error: any) {
       console.error('Erreur stats merchant:', error)
-      return response.status(500).json({ 
-        success: false, 
+      return response.status(500).json({
+        success: false,
         message: 'Erreur serveur',
-        data: null 
+        data: null
       })
     }
   }
@@ -384,7 +391,7 @@ export default class MerchantsController {
 
       // Pagination manuelle
       const offset = (page - 1) * limit
-      
+
       const products = await db
         .from('products')
         .where('user_id', merchantId)
@@ -425,6 +432,7 @@ export default class MerchantsController {
             name: merchant.shop_name || merchant.full_name,
             image: merchant.shop_image || merchant.avatar,
             email: merchant.email,
+            country: merchant.country, // ✅ Ajout du pays
           },
           products: formattedProducts,
         },
