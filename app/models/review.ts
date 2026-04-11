@@ -1,4 +1,3 @@
-// app/models/review.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
@@ -19,13 +18,25 @@ export default class Review extends BaseModel {
   declare product_id: number
 
   @column()
-  declare merchant_id: string | null  // Change to accept null
+  declare merchant_id: string | null
 
   @column()
   declare rating: number
 
   @column()
+  declare title: string | null
+
+  @column()
   declare comment: string | null
+
+  @column()
+  declare status: string // 'pending', 'approved', 'rejected'
+
+  @column()
+  declare is_verified_purchase: boolean
+
+  @column()
+  declare helpful_count: number
 
   @column.dateTime({ autoCreate: true })
   declare created_at: DateTime
@@ -43,6 +54,16 @@ export default class Review extends BaseModel {
   static async generateUuid(review: Review) {
     if (!review.id) {
       review.id = randomUUID()
+    }
+    // Valeurs par défaut
+    if (review.status === undefined) {
+      review.status = 'pending'
+    }
+    if (review.helpful_count === undefined) {
+      review.helpful_count = 0
+    }
+    if (review.is_verified_purchase === undefined) {
+      review.is_verified_purchase = false
     }
   }
 }

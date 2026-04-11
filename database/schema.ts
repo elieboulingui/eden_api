@@ -528,20 +528,28 @@ export class PushSubscriptionSchema extends BaseModel {
 }
 
 export class ReviewSchema extends BaseModel {
-  static $columns = ['comment', 'createdAt', 'id', 'merchantId', 'productId', 'rating', 'updatedAt', 'userId'] as const
+  static $columns = ['comment', 'createdAt', 'helpfulCount', 'id', 'isVerifiedPurchase', 'merchantId', 'productId', 'rating', 'status', 'title', 'updatedAt', 'userId'] as const
   $columns = ReviewSchema.$columns
   @column()
   declare comment: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime | null
+  @column()
+  declare helpfulCount: number
   @column({ isPrimary: true })
   declare id: string
+  @column()
+  declare isVerifiedPurchase: boolean
   @column()
   declare merchantId: string | null
   @column()
   declare productId: string
   @column()
   declare rating: number
+  @column()
+  declare status: string
+  @column()
+  declare title: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()

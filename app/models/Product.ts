@@ -6,7 +6,7 @@ import crypto from 'node:crypto'
 import User from './user.js'
 import Category from './categories.js'
 import Review from './review.js'  // ✅ Ajouter l'import
-import OrderItem from './order_item.js'  // ✅ Pour les ventes
+import OrderItem from './OrderItem.js'
 
 export default class Product extends BaseModel {
   static table = 'products'
