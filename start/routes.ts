@@ -129,6 +129,8 @@ router.group(() => {
   router.get('/cart/:userId', [CartController, 'getCart']).as('cart.get')
   router.post('/cart/show', [CartController, 'show']).as('cart.show')
   router.post('/cart/add', [CartController, 'add']).as('cart.add')
+  // Route pour mettre à jour un item spécifique
+Route.put('/cart/update-item', '#controllers/cart_controller.updateItem')
   router.put('/cart/update', [CartController, 'update']).as('cart.update')
   router.delete('/cart/item/:itemId', [CartController, 'deleteItem']).as('cart.item.delete')
   router.delete('/cart/clear', [CartController, 'clear']).as('cart.clear')
