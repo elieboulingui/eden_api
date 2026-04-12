@@ -14,9 +14,13 @@ export const signupValidator = vine.compile(
 
     // ✅ Champs boutique (optionnels sauf si merchant)
     country: vine.string().trim().minLength(2).maxLength(255).optional(),
+
     shop_name: vine.string().trim().minLength(2).maxLength(255).optional(),
 
     shop_image: vine.string().trim().url().optional(),
+
+    // ✅ Adresse (optionnel pour tous)
+    address: vine.string().trim().minLength(2).maxLength(255).optional(),
   })
 )
 
