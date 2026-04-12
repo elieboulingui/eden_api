@@ -1,7 +1,7 @@
 // app/controllers/OtpController.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import OtpService from '#services/OtpService'
-import User from '#models/User'
+import User from '#models/user'
 import { randomBytes } from 'node:crypto'
 import env from '#start/env'
 
