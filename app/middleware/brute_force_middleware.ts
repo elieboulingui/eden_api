@@ -1,37 +1,49 @@
 // app/middleware/brute_force_middleware.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
-import cache from '@adonisjs/cache/services/main'
+
+// Stockage en mémoire (simple Map)
+const ipRequests = new Map<string, { count: number; resetAt: number }>()
 
 export default class BruteForceMiddleware {
   async handle({ request, response }: HttpContext, next: NextFn) {
     const ip = request.ip()
-    const path = request.url()
+    const now = Date.now()
+    const windowMs = 15 * 60 * 1000 // 15 minutes
 
-    // Clé pour le rate limiting par IP
-    const key = `brute_force:${ip}`
+    // Nettoyer les anciennes entrées
+    const record = ipRequests.get(ip)
 
-    // Incrémenter le compteur
-    const attempts = await cache.increment(key, 1)
-
-    // Définir l'expiration à 15 minutes
-    if (attempts === 1) {
-      await cache.expire(key, 900)
+    if (record && record.resetAt < now) {
+      ipRequests.delete(ip)
     }
 
+    // Obtenir ou créer l'enregistrement
+    const current = ipRequests.get(ip) || { count: 0, resetAt: now + windowMs }
+
+    // Incrémenter le compteur
+    current.count += 1
+    ipRequests.set(ip, current)
+
     // Blocage après 100 requêtes
-    if (attempts > 100) {
+    if (current.count > 100) {
       return response.status(429).json({
         success: false,
         message: 'Trop de requêtes. IP temporairement bloquée.',
-        error: 'IP_BLOCKED'
+        error: 'IP_BLOCKED',
+        retryAfter: Math.ceil((current.resetAt - now) / 1000)
       })
     }
 
-    // Ralentir après 50 requêtes
-    if (attempts > 50) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
+    // Ralentir après 50 requêtes (ajouter 500ms de délai)
+    if (current.count > 50) {
+      await new Promise(resolve => setTimeout(resolve, 500))
     }
+
+    // Ajouter des headers de rate limit
+    response.header('X-RateLimit-Limit', '100')
+    response.header('X-RateLimit-Remaining', String(100 - current.count))
+    response.header('X-RateLimit-Reset', String(Math.ceil(current.resetAt / 1000)))
 
     return next()
   }
