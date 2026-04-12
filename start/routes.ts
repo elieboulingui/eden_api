@@ -108,7 +108,6 @@ router.group(() => {
   // ----------------------------------------------------------
   // CATÉGORIES
   // ----------------------------------------------------------
-
   router.post('/contact', [ContactsController, 'store'])
   router.get('/categories', [CategoriesController, 'index']).as('categories.index')
   router.get('/categories/:name', [CategoriesController, 'show']).as('categories.show')
@@ -126,15 +125,13 @@ router.group(() => {
   // ----------------------------------------------------------
   // PANIER
   // ----------------------------------------------------------
-// ----------------------------------------------------------
-// Routes pour le panier
-router.get('/cart/:userId', '#controllers/cart_controller.getCart').as('cart.get')
-router.post('/cart/show', '#controllers/cart_controller.show').as('cart.show')
-router.post('/cart/add', '#controllers/cart_controller.add').as('cart.add')
-router.put('/cart/update-item', '#controllers/cart_controller.updateItem').as('cart.updateItem')
-router.put('/cart/update', '#controllers/cart_controller.update').as('cart.update')
-router.delete('/cart/item/:itemId', '#controllers/cart_controller.deleteItem').as('cart.item.delete')
-router.delete('/cart/clear', '#controllers/cart_controller.clear').as('cart.clear')
+  router.get('/cart/:userId', [CartController, 'getCart']).as('cart.get')
+  router.post('/cart/show', [CartController, 'show']).as('cart.show')
+  router.post('/cart/add', [CartController, 'add']).as('cart.add')
+  router.put('/cart/update-item', [CartController, 'updateItem']).as('cart.updateItem')
+  router.put('/cart/update', [CartController, 'update']).as('cart.update')
+  router.delete('/cart/item/:itemId', [CartController, 'deleteItem']).as('cart.item.delete')
+  router.delete('/cart/clear', [CartController, 'clear']).as('cart.clear')
 
   // ----------------------------------------------------------
   // FAVORIS
@@ -252,23 +249,23 @@ router.delete('/cart/clear', '#controllers/cart_controller.clear').as('cart.clea
   // ----------------------------------------------------------
   // AVIS (REVIEWS)
   // ----------------------------------------------------------
-  // Routes publiques
   // Routes publiques (pas besoin d'auth)
   router.get('/reviews/product/:productId', [ReviewsController, 'getProductReviews'])
   router.get('/reviews/merchant/:merchantId', [ReviewsController, 'getMerchantReviews'])
-  router.get('/reviews/user/:userId', [ReviewsController, 'myReviews'])  // ✅ Modifié
-  router.post('/reviews/:id/helpful', [ReviewsController, 'markHelpful'])  // ✅ Plus besoin d'auth
+  router.get('/reviews/user/:userId', [ReviewsController, 'myReviews'])
+  router.post('/reviews/:id/helpful', [ReviewsController, 'markHelpful'])
 
   // Routes avec actions (userId passé dans le body)
   router.post('/reviews', [ReviewsController, 'store'])
   router.put('/reviews/:id', [ReviewsController, 'update'])
   router.delete('/reviews/:id', [ReviewsController, 'destroy'])
 
-  // Routes admin (isAdmin dans le body ou pas de vérification)
+  // Routes admin
   router.get('/reviews', [ReviewsController, 'index'])
   router.get('/reviews/:id', [ReviewsController, 'show'])
   router.patch('/reviews/:id/approve', [ReviewsController, 'approve'])
   router.patch('/reviews/:id/reject', [ReviewsController, 'reject'])
+
   // ----------------------------------------------------------
   // BLOG ADMIN
   // ----------------------------------------------------------
