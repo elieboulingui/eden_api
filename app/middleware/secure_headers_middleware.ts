@@ -19,6 +19,7 @@ export default class SecureHeadersMiddleware {
     if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
       const origin = request.header('Origin')
       const referer = request.header('Referer')
+
       const allowedOrigins = [
         'http://localhost',
         'http://localhost:3000',
@@ -27,12 +28,25 @@ export default class SecureHeadersMiddleware {
         'https://ecomerce-api-aotc.onrender.com'
       ]
 
+      // Vérifier l'Origin
       if (origin && !allowedOrigins.includes(origin)) {
         return response.status(403).json({
           success: false,
           message: 'Origine non autorisée',
           error: 'INVALID_ORIGIN'
         })
+      }
+
+      // ✅ Vérifier aussi le Referer pour plus de sécurité
+      if (referer) {
+        const isRefererAllowed = allowedOrigins.some(allowed => referer.startsWith(allowed))
+        if (!isRefererAllowed) {
+          return response.status(403).json({
+            success: false,
+            message: 'Referer non autorisé',
+            error: 'INVALID_REFERER'
+          })
+        }
       }
     }
 
@@ -41,6 +55,10 @@ export default class SecureHeadersMiddleware {
     response.header('X-Frame-Options', 'DENY')
     response.header('X-XSS-Protection', '1; mode=block')
     response.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+
+    // Headers supplémentaires
+    response.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+    response.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
 
     return next()
   }
