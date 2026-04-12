@@ -50,7 +50,6 @@ export default class CartController {
 
       if (cartItem) {
         const newQuantity = cartItem.quantity + quantity
-        // ✅ Vérifier le stock pour la quantité totale
         if (product.stock < newQuantity) {
           return response.badRequest({ 
             success: false, 
@@ -141,7 +140,7 @@ export default class CartController {
         return response.notFound({ success: false, message: 'Panier non trouvé' })
       }
 
-      // ✅ Vérifier le stock pour chaque item
+      // Vérifier le stock pour chaque item
       for (const item of items) {
         const product = await Product.find(item.product_id)
         if (!product) {
@@ -210,7 +209,7 @@ export default class CartController {
         return response.notFound({ success: false, message: 'Produit non trouvé dans le panier' })
       }
 
-      // ✅ Vérification du stock
+      // Vérification du stock
       if (cartItem.product && quantity > cartItem.product.stock) {
         return response.badRequest({ 
           success: false, 
