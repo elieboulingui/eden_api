@@ -109,7 +109,7 @@ router.group(() => {
   // CATÉGORIES
   // ----------------------------------------------------------
 
-  router.post('/api/contact', [ContactsController, 'store'])
+  router.post('/contact', [ContactsController, 'store'])
   router.get('/categories', [CategoriesController, 'index']).as('categories.index')
   router.get('/categories/:name', [CategoriesController, 'show']).as('categories.show')
   router.post('/categories', [CategoriesController, 'store']).as('categories.store')
