@@ -2,7 +2,7 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import User from '#models/User'
+import User from '#models/user'
 import { randomUUID } from 'node:crypto'
 
 export default class Otp extends BaseModel {

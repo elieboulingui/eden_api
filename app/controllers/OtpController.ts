@@ -3,7 +3,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import OtpService from '#services/OtpService'
 import User from '#models/user'
 import env from '#start/env'
-import jwt from 'jsonwebtoken'
+import jwt, { type Secret } from 'jsonwebtoken'
 
 export default class OtpController {
 
