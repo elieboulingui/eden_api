@@ -30,4 +30,5 @@ export const controllers = {
   SessionControllers: () => import('#controllers/session_controllers'),
   Testimonials: () => import('#controllers/testimonials_controller'),
   Users: () => import('#controllers/users_controller'),
+  Contacts: () => import('#controllers/contacts_controller'),
 }

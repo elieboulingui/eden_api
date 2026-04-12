@@ -128,6 +128,25 @@ export class CategorySchema extends BaseModel {
   declare userId: string
 }
 
+export class ContactSchema extends BaseModel {
+  static $columns = ['createdAt', 'email', 'id', 'message', 'name', 'subject', 'updatedAt'] as const
+  $columns = ContactSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare email: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare message: string
+  @column()
+  declare name: string
+  @column()
+  declare subject: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
 export class CouponSchema extends BaseModel {
   static $columns = ['code', 'createdAt', 'description', 'discount', 'id', 'maximumDiscountAmount', 'minimumOrderAmount', 'productId', 'status', 'type', 'updatedAt', 'usageLimit', 'usedCount', 'userId', 'userIds', 'validFrom', 'validUntil'] as const
   $columns = CouponSchema.$columns

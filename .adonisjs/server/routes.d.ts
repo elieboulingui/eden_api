@@ -36,6 +36,7 @@ export type ScannedRoutes = {
     'products.store': { paramsTuple?: []; params?: {} }
     'products.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'products.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'contacts.store': { paramsTuple?: []; params?: {} }
     'categories.index': { paramsTuple?: []; params?: {} }
     'categories.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
     'categories.store': { paramsTuple?: []; params?: {} }
@@ -275,6 +276,7 @@ export type ScannedRoutes = {
     'blog.submit': { paramsTuple?: []; params?: {} }
     'testimonials.store': { paramsTuple?: []; params?: {} }
     'products.store': { paramsTuple?: []; params?: {} }
+    'contacts.store': { paramsTuple?: []; params?: {} }
     'categories.store': { paramsTuple?: []; params?: {} }
     'categories.products.create': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'cart.show': { paramsTuple?: []; params?: {} }

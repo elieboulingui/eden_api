@@ -3,6 +3,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+const ContactsController = () => import('#controllers/contacts_controller')
 const MerchantsController = () => import('#controllers/merchants_controller')
 import PromotionsController from '#controllers/promotions_controller'
 import PubsController from '#controllers/pubs_controller'
@@ -107,6 +108,8 @@ router.group(() => {
   // ----------------------------------------------------------
   // CATÉGORIES
   // ----------------------------------------------------------
+
+  router.post('/api/contact', [ContactsController, 'store'])
   router.get('/categories', [CategoriesController, 'index']).as('categories.index')
   router.get('/categories/:name', [CategoriesController, 'show']).as('categories.show')
   router.post('/categories', [CategoriesController, 'store']).as('categories.store')
