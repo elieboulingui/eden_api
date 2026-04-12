@@ -1,7 +1,7 @@
 // app/services/OtpService.ts
 import { DateTime } from 'luxon'
 import Otp from '#models/Otp'
-import User from '#models/User'
+import User from '#models/user'
 import mail from '@adonisjs/mail/services/main'
 
 export default class OtpService {
@@ -315,4 +315,4 @@ export default class OtpService {
       </html>
     `
   }
-} 
+}
