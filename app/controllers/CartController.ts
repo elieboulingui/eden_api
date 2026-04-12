@@ -49,7 +49,15 @@ export default class CartController {
         .first()
 
       if (cartItem) {
-        cartItem.quantity += quantity
+        const newQuantity = cartItem.quantity + quantity
+        // ✅ Vérifier le stock pour la quantité totale
+        if (product.stock < newQuantity) {
+          return response.badRequest({ 
+            success: false, 
+            message: `Stock insuffisant. Maximum disponible: ${product.stock}` 
+          })
+        }
+        cartItem.quantity = newQuantity
         await cartItem.save()
       } else {
         cartItem = await CartItem.create({
@@ -118,7 +126,66 @@ export default class CartController {
   }
 
   /**
-   * Update quantity
+   * Update cart (batch update)
+   */
+  public async update({ request, response }: HttpContext) {
+    try {
+      const { userId, items } = request.body()
+
+      if (!userId) {
+        return response.badRequest({ success: false, message: 'Utilisateur non identifié' })
+      }
+
+      const cart = await Cart.query().where('user_id', userId).first()
+      if (!cart) {
+        return response.notFound({ success: false, message: 'Panier non trouvé' })
+      }
+
+      // ✅ Vérifier le stock pour chaque item
+      for (const item of items) {
+        const product = await Product.find(item.product_id)
+        if (!product) {
+          return response.badRequest({ 
+            success: false, 
+            message: `Produit ${item.product_id} non trouvé` 
+          })
+        }
+        if (product.stock < item.quantity) {
+          return response.badRequest({ 
+            success: false, 
+            message: `Stock insuffisant pour ${product.name}. Maximum: ${product.stock}` 
+          })
+        }
+      }
+
+      // Supprimer tous les items existants
+      await CartItem.query().where('cart_id', cart.id).delete()
+
+      // Créer les nouveaux items
+      for (const item of items) {
+        await CartItem.create({
+          cart_id: cart.id,
+          product_id: item.product_id,
+          quantity: item.quantity
+        })
+      }
+
+      return response.ok({ 
+        success: true, 
+        message: 'Panier mis à jour avec succès' 
+      })
+
+    } catch (error: any) {
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur update',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Update single item quantity
    */
   public async updateQuantity({ request, response }: HttpContext) {
     try {
@@ -136,20 +203,37 @@ export default class CartController {
       const cartItem = await CartItem.query()
         .where('cart_id', cart.id)
         .where('product_id', productId)
+        .preload('product')
         .first()
 
       if (!cartItem) {
         return response.notFound({ success: false, message: 'Produit non trouvé dans le panier' })
       }
 
+      // ✅ Vérification du stock
+      if (cartItem.product && quantity > cartItem.product.stock) {
+        return response.badRequest({ 
+          success: false, 
+          message: `Stock insuffisant. Seulement ${cartItem.product.stock} unité(s) disponible(s).` 
+        })
+      }
+
       if (quantity <= 0) {
         await cartItem.delete()
+        return response.ok({ 
+          success: true, 
+          message: 'Produit supprimé du panier',
+          data: { deleted: true }
+        })
       } else {
         cartItem.quantity = quantity
         await cartItem.save()
+        return response.ok({ 
+          success: true, 
+          message: 'Quantité mise à jour',
+          data: { quantity: cartItem.quantity }
+        })
       }
-
-      return response.ok({ success: true, message: 'Quantité mise à jour' })
 
     } catch (error: any) {
       return response.internalServerError({
@@ -220,46 +304,13 @@ export default class CartController {
     }
   }
 
-
-  const handleIncrement = (id: string, productId: string, currentQuantity: number) => {
-  const maxStock = productsStock[productId] || 0
-  
-  // Vérification côté frontend
-  if (currentQuantity >= maxStock) {
-    toast({
-      title: "Stock insuffisant",
-      description: `Seulement ${maxStock} unité(s) disponible(s)`,
-      variant: "destructive",
-    })
-    return
-  }
-
-  setUpdatingId(id)
-  
-  // Mettre à jour localement seulement
-  updateQuantity(id, currentQuantity + 1)
-  
-  setTimeout(() => setUpdatingId(null), 300)
-}
-
-const handleDecrement = (id: string, productId: string, currentQuantity: number) => {
-  if (currentQuantity <= 1) return
-  
-  setUpdatingId(id)
-  
-  // Mettre à jour localement seulement
-  updateQuantity(id, currentQuantity - 1)
-  
-  setTimeout(() => setUpdatingId(null), 300)
-}
-
   // ================= ALIAS POUR ROUTES =================
 
   public async show(ctx: HttpContext) {
     return this.getCart(ctx)
   }
 
-  public async update(ctx: HttpContext) {
+  public async updateItem(ctx: HttpContext) {
     return this.updateQuantity(ctx)
   }
 
