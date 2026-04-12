@@ -126,14 +126,15 @@ router.group(() => {
   // ----------------------------------------------------------
   // PANIER
   // ----------------------------------------------------------
-  router.get('/cart/:userId', [CartController, 'getCart']).as('cart.get')
-  router.post('/cart/show', [CartController, 'show']).as('cart.show')
-  router.post('/cart/add', [CartController, 'add']).as('cart.add')
-  // Route pour mettre à jour un item spécifique
-Route.put('/cart/update-item', '#controllers/cart_controller.updateItem')
-  router.put('/cart/update', [CartController, 'update']).as('cart.update')
-  router.delete('/cart/item/:itemId', [CartController, 'deleteItem']).as('cart.item.delete')
-  router.delete('/cart/clear', [CartController, 'clear']).as('cart.clear')
+// ----------------------------------------------------------
+// Routes pour le panier
+router.get('/cart/:userId', '#controllers/cart_controller.getCart').as('cart.get')
+router.post('/cart/show', '#controllers/cart_controller.show').as('cart.show')
+router.post('/cart/add', '#controllers/cart_controller.add').as('cart.add')
+router.put('/cart/update-item', '#controllers/cart_controller.updateItem').as('cart.updateItem')
+router.put('/cart/update', '#controllers/cart_controller.update').as('cart.update')
+router.delete('/cart/item/:itemId', '#controllers/cart_controller.deleteItem').as('cart.item.delete')
+router.delete('/cart/clear', '#controllers/cart_controller.clear').as('cart.clear')
 
   // ----------------------------------------------------------
   // FAVORIS
