@@ -1,7 +1,7 @@
 // app/controllers/OtpController.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import OtpService from '#services/OtpService'
-import User from '#models/User'
+import User from '#models/user'
 import env from '#start/env'
 import jwt from 'jsonwebtoken'
 
