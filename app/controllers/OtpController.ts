@@ -81,7 +81,7 @@ export default class OtpController {
         })
       }
 
-      // ✅ Générer un JWT pour la réinitialisation (valide 10 minutes)
+      // Générer un JWT pour la réinitialisation (valide 10 minutes)
       const resetToken = this.generateResetJWT(email)
 
       return response.status(200).json({
@@ -108,7 +108,7 @@ export default class OtpController {
     try {
       const { email, purpose = 'password_reset' } = request.qs()
 
-      if (!email) {
+      if (!email || typeof email !== 'string') {
         return response.status(400).json({
           success: false,
           message: 'Email requis'
@@ -146,7 +146,7 @@ export default class OtpController {
         })
       }
 
-      // ✅ Vérifier le JWT
+      // Vérifier le JWT
       const isValidToken = this.verifyResetJWT(email, resetToken)
       if (!isValidToken) {
         return response.status(400).json({
@@ -254,7 +254,7 @@ export default class OtpController {
 
   // ✅ Générer un JWT pour la réinitialisation (valide 10 minutes)
   private generateResetJWT(email: string): string {
-    const secret = env.get('APP_KEY')
+    const secret = env.get('APP_KEY') as string
     const payload = {
       email,
       purpose: 'password_reset',
@@ -267,10 +267,9 @@ export default class OtpController {
   // ✅ Vérifier le JWT de réinitialisation
   private verifyResetJWT(email: string, token: string): boolean {
     try {
-      const secret = env.get('APP_KEY')
+      const secret = env.get('APP_KEY') as string
       const decoded = jwt.verify(token, secret) as { email: string; purpose: string }
 
-      // Vérifier que l'email correspond
       return decoded.email === email && decoded.purpose === 'password_reset'
     } catch (error) {
       console.error('Erreur vérification JWT:', error)
