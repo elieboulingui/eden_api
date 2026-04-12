@@ -398,6 +398,37 @@ export class OrderSchema extends BaseModel {
   declare userId: string
 }
 
+export class OtpSchema extends BaseModel {
+  static $columns = ['attempts', 'blockReason', 'blockedAt', 'createdAt', 'email', 'expiresAt', 'id', 'isBlocked', 'isUsed', 'otp', 'purpose', 'updatedAt', 'userId'] as const
+  $columns = OtpSchema.$columns
+  @column()
+  declare attempts: number | null
+  @column()
+  declare blockReason: string | null
+  @column.dateTime()
+  declare blockedAt: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare email: string
+  @column.dateTime()
+  declare expiresAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isBlocked: boolean | null
+  @column()
+  declare isUsed: boolean | null
+  @column()
+  declare otp: string
+  @column()
+  declare purpose: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare userId: string | null
+}
+
 export class ProductSchema extends BaseModel {
   static $columns = ['category', 'categoryId', 'conservation', 'createdAt', 'description', 'id', 'imageUrl', 'imageUrl', 'isNew', 'isOnSale', 'isNew', 'isOnSale', 'name', 'origin', 'packaging', 'price', 'rating', 'stock', 'updatedAt', 'userId', 'weight'] as const
   $columns = ProductSchema.$columns
@@ -571,6 +602,29 @@ export class ReviewSchema extends BaseModel {
   declare updatedAt: DateTime | null
   @column()
   declare userId: string
+}
+
+export class SecurityLogSchema extends BaseModel {
+  static $columns = ['createdAt', 'duration', 'id', 'ip', 'method', 'referer', 'statusCode', 'url', 'userAgent'] as const
+  $columns = SecurityLogSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare duration: number | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare ip: string
+  @column()
+  declare method: string
+  @column()
+  declare referer: string | null
+  @column()
+  declare statusCode: number
+  @column()
+  declare url: string
+  @column()
+  declare userAgent: string | null
 }
 
 export class TestimonialSchema extends BaseModel {

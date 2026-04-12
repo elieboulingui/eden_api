@@ -28,7 +28,12 @@ server.use([
   () => import('@adonisjs/cors/cors_middleware'),
   () => import('@adonisjs/static/static_middleware'),
   () => import('#middleware/block_unauthorized_origin_middleware'),
-  () => import('#middleware/rate_limit_middleware')
+  () => import('#middleware/rate_limit_middleware'),
+  () => import('#middleware/brute_force_middleware'),
+  () => import('#middleware/secure_headers_middleware'),
+  () => import('#middleware/input_sanitizer_middleware'),
+  () => import('#middleware/bot_detector_middleware'),
+  () => import('#middleware/security_logger_middleware')
 ])
 
 /**
@@ -53,6 +58,8 @@ router.use([
  * the routes or the routes group.
  */
 export const middleware = router.named({
+  ipRateLimit: () => import('#middleware/ip_rate_limit_middleware'),
+  otpRateLimit: () => import('#middleware/otp_rate_limit_middleware'),
   guest: () => import('#middleware/guest_middleware'),
 
   auth: () => import('#middleware/auth_middleware'),
