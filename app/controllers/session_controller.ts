@@ -32,7 +32,10 @@ export default class SessionController {
           role: user.role,
           avatar: user.avatar,
           phone: user.phone,
-          address: user.address,
+          address: user.address, // ✅ Adresse déjà présente
+          country: user.country, // ✅ Ajout du pays
+          shop_name: user.shop_name, // ✅ Ajout boutique (si marchand)
+          shop_image: user.shop_image, // ✅ Ajout image boutique
           created_at: user.created_at,
           updated_at: user.updated_at,
         },
@@ -80,12 +83,25 @@ export default class SessionController {
 
     return response.ok({
       success: true,
-      user,
+      user: {
+        id: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        role: user.role,
+        avatar: user.avatar,
+        phone: user.phone,
+        address: user.address,
+        country: user.country, // ✅ Ajout du pays
+        shop_name: user.shop_name, // ✅ Ajout boutique
+        shop_image: user.shop_image, // ✅ Ajout image boutique
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+      },
     })
   }
 
   /**
-   * ✅ UPDATE PROFIL (FIX ERREUR TS)
+   * ✅ UPDATE PROFIL
    */
   async update({ request, response }: HttpContext) {
     try {
@@ -101,8 +117,9 @@ export default class SessionController {
       const data = request.only([
         'full_name',
         'phone',
-        'address',
+        'address', // ✅ Adresse déjà incluse
         'avatar',
+        'country', // ✅ Ajout du pays
       ])
 
       user.merge(data)
@@ -111,7 +128,20 @@ export default class SessionController {
       return response.ok({
         success: true,
         message: 'Profil mis à jour',
-        user,
+        user: {
+          id: user.id,
+          full_name: user.full_name,
+          email: user.email,
+          role: user.role,
+          avatar: user.avatar,
+          phone: user.phone,
+          address: user.address,
+          country: user.country,
+          shop_name: user.shop_name,
+          shop_image: user.shop_image,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
+        },
       })
 
     } catch (error: any) {
