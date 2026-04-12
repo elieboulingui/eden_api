@@ -17,16 +17,21 @@ export default class SecurityLoggerMiddleware {
 
     // Logger les erreurs 4xx et 5xx
     if (status >= 400) {
-      await db.table('security_logs').insert({
-        ip: request.ip(),
-        method: request.method(),
-        url: request.url(),
-        status_code: status,
-        user_agent: request.header('User-Agent'),
-        referer: request.header('Referer'),
-        duration,
-        created_at: new Date()
-      })
+      try {
+        await db.table('security_logs').insert({
+          id: crypto.randomUUID(),
+          ip: request.ip(),
+          method: request.method(),
+          url: request.url(),
+          status_code: status,
+          user_agent: request.header('User-Agent') || null,
+          referer: request.header('Referer') || null,
+          duration: duration,
+          created_at: new Date()
+        })
+      } catch (dbError) {
+        console.error('Erreur insertion security_logs:', dbError)
+      }
 
       // Alerte pour les erreurs 5xx
       if (status >= 500) {
@@ -35,14 +40,23 @@ export default class SecurityLoggerMiddleware {
 
       // Alerte pour les 403/429 répétés
       if (status === 403 || status === 429) {
-        const recentBlocks = await db.table('security_logs')
-          .where('ip', request.ip())
-          .where('status_code', status)
-          .where('created_at', '>', db.raw("NOW() - INTERVAL '10 minutes'"))
-          .count('* as total')
+        try {
+          const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000)
 
-        if (Number(recentBlocks[0].total) >= 5) {
-          logger.warn(`🚨 IP suspecte: ${request.ip()} - ${recentBlocks[0].total} blocages en 10 minutes`)
+          const recentBlocks = await db
+            .from('security_logs')
+            .where('ip', request.ip())
+            .where('status_code', status)
+            .where('created_at', '>', tenMinutesAgo)
+            .count('* as total')
+
+          const total = Number(recentBlocks[0]?.total || 0)
+
+          if (total >= 5) {
+            logger.warn(`🚨 IP suspecte: ${request.ip()} - ${total} blocages en 10 minutes`)
+          }
+        } catch (queryError) {
+          console.error('Erreur requête security_logs:', queryError)
         }
       }
     }
