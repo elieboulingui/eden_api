@@ -12,7 +12,7 @@ export default class BlockUnauthorizedOriginMiddleware {
       'http://localhost',
       'http://localhost:3000',
       'http://localhost:3333',
-      'https://paradis-alimentaires.vercel.app',
+      'https://eden-azure-one.vercel.app',
       'https://ecomerce-api-aotc.onrender.com'
     ]
 
