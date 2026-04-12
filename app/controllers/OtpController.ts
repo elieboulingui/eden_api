@@ -1,7 +1,7 @@
 // app/controllers/OtpController.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import OtpService from '#services/OtpService'
-import User from '#models/user'
+import User from '#models/User'
 import env from '#start/env'
 import jwt from 'jsonwebtoken'
 
@@ -254,21 +254,23 @@ export default class OtpController {
 
   // ✅ Générer un JWT pour la réinitialisation (valide 10 minutes)
   private generateResetJWT(email: string): string {
-    const secret = env.get('APP_KEY') as string
+    const secret = env.get('APP_KEY')
     const payload = {
       email,
       purpose: 'password_reset',
       iat: Math.floor(Date.now() / 1000),
     }
 
-    return jwt.sign(payload, secret, { expiresIn: '10m' })
+    // ✅ Utiliser Buffer.from() pour éviter l'erreur TypeScript
+    return jwt.sign(payload, Buffer.from(secret), { expiresIn: '10m' })
   }
 
   // ✅ Vérifier le JWT de réinitialisation
   private verifyResetJWT(email: string, token: string): boolean {
     try {
-      const secret = env.get('APP_KEY') as string
-      const decoded = jwt.verify(token, secret) as { email: string; purpose: string }
+      const secret = env.get('APP_KEY')
+      // ✅ Utiliser Buffer.from() pour éviter l'erreur TypeScript
+      const decoded = jwt.verify(token, Buffer.from(secret)) as { email: string; purpose: string }
 
       return decoded.email === email && decoded.purpose === 'password_reset'
     } catch (error) {
