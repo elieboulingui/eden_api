@@ -220,6 +220,39 @@ export default class CartController {
     }
   }
 
+
+  const handleIncrement = (id: string, productId: string, currentQuantity: number) => {
+  const maxStock = productsStock[productId] || 0
+  
+  // Vérification côté frontend
+  if (currentQuantity >= maxStock) {
+    toast({
+      title: "Stock insuffisant",
+      description: `Seulement ${maxStock} unité(s) disponible(s)`,
+      variant: "destructive",
+    })
+    return
+  }
+
+  setUpdatingId(id)
+  
+  // Mettre à jour localement seulement
+  updateQuantity(id, currentQuantity + 1)
+  
+  setTimeout(() => setUpdatingId(null), 300)
+}
+
+const handleDecrement = (id: string, productId: string, currentQuantity: number) => {
+  if (currentQuantity <= 1) return
+  
+  setUpdatingId(id)
+  
+  // Mettre à jour localement seulement
+  updateQuantity(id, currentQuantity - 1)
+  
+  setTimeout(() => setUpdatingId(null), 300)
+}
+
   // ================= ALIAS POUR ROUTES =================
 
   public async show(ctx: HttpContext) {
