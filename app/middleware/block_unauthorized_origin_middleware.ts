@@ -18,12 +18,12 @@ export default class BlockUnauthorizedOriginMiddleware {
 
     // Vérifier si l'origine est dans la liste des autorisées
     // On utilise some() pour supporter les différentes variations de localhost avec port
-    const isAllowed = allowedOrigins.some(allowed =>
-      origin?.startsWith(allowed) || origin === allowed
-    )
+    const isAllowed = origin ? allowedOrigins.some(allowed =>
+      origin.startsWith(allowed) || origin === allowed
+    ) : false
 
     // Bloquer les requêtes sans origine ou avec une origine non autorisée
-    if (!origin || !isAllowed) {
+    if (origin && !isAllowed) {
       return response.status(403).json({
         error: 'Forbidden',
         message: 'Access denied: Origin not allowed'
@@ -31,7 +31,9 @@ export default class BlockUnauthorizedOriginMiddleware {
     }
 
     // Ajouter l'en-tête CORS pour les origines autorisées
-    response.header('Access-Control-Allow-Origin', origin)
+    if (origin && isAllowed) {
+      response.header('Access-Control-Allow-Origin', origin)
+    }
     response.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
     response.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 
@@ -44,4 +46,3 @@ export default class BlockUnauthorizedOriginMiddleware {
     return output
   }
 }
-

@@ -3,6 +3,8 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+// Ajoutez cette ligne avec les autres imports
+const OtpController = () => import('#controllers/OtpController')
 const ContactsController = () => import('#controllers/contacts_controller')
 const MerchantsController = () => import('#controllers/merchants_controller')
 import PromotionsController from '#controllers/promotions_controller'
@@ -266,6 +268,17 @@ router.group(() => {
   router.patch('/reviews/:id/approve', [ReviewsController, 'approve'])
   router.patch('/reviews/:id/reject', [ReviewsController, 'reject'])
 
+
+
+  
+  // ----------------------------------------------------------
+  // OTP (One Time Password) - AJOUTEZ CE BLOC ICI
+  // ----------------------------------------------------------
+  router.post('/otp/send', [OtpController, 'send']).as('otp.send')
+  router.post('/otp/verify', [OtpController, 'verify']).as('otp.verify')
+  router.get('/otp/status', [OtpController, 'status']).as('otp.status')
+  router.post('/otp/resend', [OtpController, 'resend']).as('otp.resend')
+  router.post('/password/reset', [OtpController, 'resetPassword']).as('password.reset')
   // ----------------------------------------------------------
   // BLOG ADMIN
   // ----------------------------------------------------------
