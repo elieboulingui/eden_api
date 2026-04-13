@@ -23,7 +23,7 @@ export default class BlockUnauthorizedOriginMiddleware {
     )
 
     // Bloquer les requêtes sans origine ou avec une origine non autorisée
-    if (!origin || !isAllowed) {
+ if (origin && !isAllowed) {
       return response.status(403).json({
         error: 'Forbidden',
         message: 'Access denied: Origin not allowed'
