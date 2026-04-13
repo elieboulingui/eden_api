@@ -56,7 +56,11 @@ export default defineConfig({
     () => import('@adonisjs/lucid/database_provider'),
     () => import('@adonisjs/auth/auth_provider'),
     () => import('@adonisjs/mail/mail_provider'),
-    () => import('@adonisjs/redis/redis_provider')
+    () => import('@adonisjs/redis/redis_provider'),
+    () => import('@adonisjs/transmit/transmit_provider'),
+    () => import('@adonisjs/i18n/i18n_provider'),
+    () => import('@foadonis/openapi/openapi_provider'),
+    () => import('@adonisjs/lock/lock_provider')
   ],
 
   /*
@@ -121,6 +125,10 @@ export default defineConfig({
       pattern: 'public/**',
       reloadServer: true,
     },
+    {
+      pattern: 'resources/lang/**/*.{json,yaml,yml}',
+      reloadServer: false,
+    }
   ],
 
   /*
