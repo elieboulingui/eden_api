@@ -4,7 +4,7 @@ import { middleware } from '#start/kernel'
 
 // Controllers imports
 // Ajoutez cette ligne avec les autres imports
-const OtpController = () => import('#controllers/otp_controller')
+const OtpController = () => import('#controllers/OtpController')
 const ContactsController = () => import('#controllers/contacts_controller')
 const MerchantsController = () => import('#controllers/merchants_controller')
 import PromotionsController from '#controllers/promotions_controller'
