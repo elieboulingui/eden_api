@@ -2,11 +2,50 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import BlogPost from '#models/blog_post'
 import { DateTime } from 'luxon'
+import redis from '@adonisjs/redis/services/main'
 
 export default class BlogController {
 
+  // Durées de cache (en secondes)
+  private readonly CACHE_TTL = {
+    LIST: 600,        // 10 minutes
+    POST: 3600,       // 1 heure
+    CATEGORIES: 7200, // 2 heures
+    STATS: 300,       // 5 minutes
+    FEATURED: 1800    // 30 minutes
+  }
+
+  /**
+   * 🔧 Méthode utilitaire : Générer une clé de cache pour les listes
+   */
+  private getListCacheKey(page: number, limit: number, category?: string, search?: string, sort?: string): string {
+    return `blog:list:${page}:${limit}:${category || 'all'}:${search ? encodeURIComponent(search) : 'none'}:${sort || 'latest'}`
+  }
+
+  /**
+   * 🔧 Méthode utilitaire : Invalider tous les caches de liste
+   */
+  private async invalidateListCaches(): Promise<void> {
+    const keys = await redis.keys('blog:list:*')
+    if (keys.length > 0) {
+      await redis.del(...keys)
+    }
+  }
+
+  /**
+   * 🔧 Méthode utilitaire : Invalider le cache d'un article spécifique
+   */
+  private async invalidatePostCache(slug: string): Promise<void> {
+    await redis.del(`blog:post:${slug}`)
+    await redis.del('blog:featured')
+    await this.invalidateListCaches()
+  }
+
   // ============= ROUTES PUBLIQUES =============
 
+  /**
+   * 📋 Liste des articles publiés (avec cache)
+   */
   async index({ request, response }: HttpContext) {
     try {
       const page = request.input('page', 1)
@@ -15,6 +54,22 @@ export default class BlogController {
       const search = request.input('search')
       const sort = request.input('sort', 'latest')
 
+      // 🔑 Générer la clé de cache
+      const cacheKey = this.getListCacheKey(page, limit, category, search, sort)
+
+      // 🔍 Vérifier le cache
+      const cachedData = await redis.get(cacheKey)
+
+      if (cachedData) {
+        const data = JSON.parse(cachedData)
+        return response.ok({
+          success: true,
+          source: 'cache',
+          data: data
+        })
+      }
+
+      // Si pas en cache, construire la requête
       let query = BlogPost.query()
         .where('status', 'published')
         .whereNotNull('published_at')
@@ -43,22 +98,39 @@ export default class BlogController {
 
       const posts = await query.paginate(page, limit)
 
-      const categories = await BlogPost.query()
-        .where('status', 'published')
-        .distinct('category')
-        .select('category')
+      // 📋 Récupérer les catégories (avec cache séparé)
+      let categoriesCacheKey = 'blog:categories'
+      let categories = await redis.get(categoriesCacheKey)
+
+      if (categories) {
+        categories = JSON.parse(categories)
+      } else {
+        const cats = await BlogPost.query()
+          .where('status', 'published')
+          .distinct('category')
+          .select('category')
+
+        categories = cats.map(c => c.category)
+        await redis.set(categoriesCacheKey, JSON.stringify(categories), 'EX', this.CACHE_TTL.CATEGORIES)
+      }
+
+      const responseData = {
+        posts: posts.all(),
+        meta: posts.getMeta(),
+        categories: categories
+      }
+
+      // 💾 Mettre en cache
+      await redis.set(cacheKey, JSON.stringify(responseData), 'EX', this.CACHE_TTL.LIST)
 
       return response.ok({
         success: true,
-        data: {
-          posts: posts.all(),
-          meta: posts.getMeta(),
-          categories: categories.map(c => c.category)
-        }
+        source: 'database',
+        data: responseData
       })
 
     } catch (error: any) {
-      console.error('Erreur index blog:', error)
+      console.error('❌ Erreur index blog:', error)
       return response.internalServerError({
         success: false,
         message: error.message
@@ -66,45 +138,96 @@ export default class BlogController {
     }
   }
 
+  /**
+   * 📖 Afficher un article (avec cache et gestion des vues optimisée)
+   */
   async show({ params, response }: HttpContext) {
     try {
       const { slug } = params
+      const cacheKey = `blog:post:${slug}`
 
-      const post = await BlogPost.query()
-        .where('slug', slug)
-        .where('status', 'published')
-        .preload('author', (query) => {
-          query.select('id', 'full_name', 'email', 'avatar')
-        })
-        .first()
+      // 🔍 Vérifier le cache
+      const cachedPost = await redis.get(cacheKey)
 
-      if (!post) {
-        return response.notFound({
-          success: false,
-          message: 'Article non trouvé'
-        })
+      let post: BlogPost | null = null
+      let fromCache = false
+
+      if (cachedPost) {
+        post = JSON.parse(cachedPost)
+        fromCache = true
+      } else {
+        post = await BlogPost.query()
+          .where('slug', slug)
+          .where('status', 'published')
+          .preload('author', (query) => {
+            query.select('id', 'full_name', 'email', 'avatar')
+          })
+          .first()
+
+        if (!post) {
+          return response.notFound({
+            success: false,
+            message: 'Article non trouvé'
+          })
+        }
+
+        // 💾 Mettre en cache
+        await redis.set(cacheKey, JSON.stringify(post), 'EX', this.CACHE_TTL.POST)
       }
 
-      post.views += 1
-      await post.save()
+      // 📊 Gestion des vues avec Redis (plus efficace)
+      const viewsKey = `blog:views:${post.id}`
+      const today = DateTime.now().toFormat('yyyy-MM-dd')
+      const dailyViewsKey = `blog:daily_views:${post.id}:${today}`
 
-      const relatedPosts = await BlogPost.query()
-        .where('category', post.category)
-        .where('status', 'published')
-        .whereNot('id', post.id)
-        .orderBy('published_at', 'desc')
-        .limit(3)
+      // Incrémenter les vues dans Redis
+      const views = await redis.incr(viewsKey)
+      await redis.incr(dailyViewsKey)
+      await redis.expire(dailyViewsKey, 86400 * 7) // 7 jours
+
+      // Mettre à jour la base de données périodiquement (tous les 10 vues)
+      if (views % 10 === 0) {
+        const dbPost = await BlogPost.find(post.id)
+        if (dbPost) {
+          dbPost.views = views
+          await dbPost.save()
+        }
+      }
+
+      // Articles similaires (avec cache)
+      const relatedCacheKey = `blog:related:${post.category}:${post.id}`
+      let relatedPosts = await redis.get(relatedCacheKey)
+
+      if (relatedPosts) {
+        relatedPosts = JSON.parse(relatedPosts)
+      } else {
+        relatedPosts = await BlogPost.query()
+          .where('category', post.category)
+          .where('status', 'published')
+          .whereNot('id', post.id)
+          .orderBy('published_at', 'desc')
+          .limit(3)
+
+        await redis.set(relatedCacheKey, JSON.stringify(relatedPosts), 'EX', this.CACHE_TTL.POST)
+      }
+
+      // Ajouter le nombre de vues actuel
+      const postWithViews = {
+        ...post,
+        views: views
+      }
 
       return response.ok({
         success: true,
+        source: fromCache ? 'cache' : 'database',
         data: {
-          post: post,
+          post: postWithViews,
           related_posts: relatedPosts
         }
       })
 
     } catch (error: any) {
-      console.error('Erreur show blog:', error)
+      console.error('❌ Erreur show blog:', error)
       return response.internalServerError({
         success: false,
         message: error.message
@@ -112,8 +235,24 @@ export default class BlogController {
     }
   }
 
+  /**
+   * ⭐ Article vedette (avec cache)
+   */
   async featured({ response }: HttpContext) {
     try {
+      const cacheKey = 'blog:featured'
+
+      // 🔍 Vérifier le cache
+      const cachedFeatured = await redis.get(cacheKey)
+
+      if (cachedFeatured) {
+        return response.ok({
+          success: true,
+          source: 'cache',
+          data: JSON.parse(cachedFeatured)
+        })
+      }
+
       const featuredPost = await BlogPost.query()
         .where('status', 'published')
         .orderBy('views', 'desc')
@@ -123,13 +262,18 @@ export default class BlogController {
         })
         .first()
 
+      if (featuredPost) {
+        await redis.set(cacheKey, JSON.stringify(featuredPost), 'EX', this.CACHE_TTL.FEATURED)
+      }
+
       return response.ok({
         success: true,
+        source: 'database',
         data: featuredPost
       })
 
     } catch (error: any) {
-      console.error('Erreur featured blog:', error)
+      console.error('❌ Erreur featured blog:', error)
       return response.internalServerError({
         success: false,
         message: error.message
@@ -138,10 +282,29 @@ export default class BlogController {
   }
 
   /**
-   * Soumettre un article (PUBLIC - tout le monde peut poster)
+   * 📝 Soumettre un article (PUBLIC - avec rate limiting)
    */
   async publicStore({ request, response }: HttpContext) {
     try {
+      const clientIp = request.ip()
+
+      // 🔒 Rate limiting : Max 5 soumissions par IP en 24h
+      const rateLimitKey = `blog:submissions:${clientIp}`
+      const submissions = await redis.incr(rateLimitKey)
+
+      if (submissions === 1) {
+        await redis.expire(rateLimitKey, 86400) // 24 heures
+      }
+
+      if (submissions > 5) {
+        const ttl = await redis.ttl(rateLimitKey)
+        const hours = Math.ceil(ttl / 3600)
+        return response.status(429).json({
+          success: false,
+          message: `Limite de soumissions atteinte. Réessayez dans ${hours} heure${hours > 1 ? 's' : ''}.`
+        })
+      }
+
       const {
         title,
         excerpt,
@@ -192,6 +355,20 @@ export default class BlogController {
         published_at: undefined
       })
 
+      // 📊 Logger la soumission
+      const submissionsLogKey = 'blog:submissions_log'
+      await redis.lpush(
+        submissionsLogKey,
+        JSON.stringify({
+          id: post.id,
+          title: post.title,
+          author: author_name,
+          ip: clientIp,
+          timestamp: new Date().toISOString()
+        })
+      )
+      await redis.ltrim(submissionsLogKey, 0, 99) // Garder 100 dernières soumissions
+
       return response.created({
         success: true,
         data: post,
@@ -199,7 +376,7 @@ export default class BlogController {
       })
 
     } catch (error: any) {
-      console.error('Erreur publicStore blog:', error)
+      console.error('❌ Erreur publicStore blog:', error)
       return response.internalServerError({
         success: false,
         message: error.message
@@ -207,7 +384,7 @@ export default class BlogController {
     }
   }
 
-  // ============= ROUTES ADMIN (SANS AUTH) =============
+  // ============= ROUTES ADMIN =============
 
   async adminIndex({ request, response }: HttpContext) {
     try {
@@ -216,6 +393,7 @@ export default class BlogController {
       const status = request.input('status')
       const search = request.input('search')
 
+      // Pas de cache pour l'admin (données toujours fraîches)
       let query = BlogPost.query()
         .orderBy('created_at', 'desc')
 
@@ -242,7 +420,7 @@ export default class BlogController {
       })
 
     } catch (error: any) {
-      console.error('Erreur adminIndex blog:', error)
+      console.error('❌ Erreur adminIndex blog:', error)
       return response.internalServerError({
         success: false,
         message: error.message
@@ -251,7 +429,7 @@ export default class BlogController {
   }
 
   /**
-   * Créer un article (ADMIN - sans authentification)
+   * Créer un article (ADMIN - invalide le cache)
    */
   async store({ request, response }: HttpContext) {
     try {
@@ -304,6 +482,14 @@ export default class BlogController {
         published_at: status === 'published' ? DateTime.now() : undefined
       })
 
+      // 🗑️ Invalider les caches
+      await redis.del('blog:categories')
+      await this.invalidateListCaches()
+
+      if (status === 'published') {
+        await redis.del('blog:featured')
+      }
+
       return response.created({
         success: true,
         data: post,
@@ -311,7 +497,7 @@ export default class BlogController {
       })
 
     } catch (error: any) {
-      console.error('Erreur store blog:', error)
+      console.error('❌ Erreur store blog:', error)
       return response.internalServerError({
         success: false,
         message: error.message
@@ -338,7 +524,7 @@ export default class BlogController {
       })
 
     } catch (error: any) {
-      console.error('Erreur adminShow blog:', error)
+      console.error('❌ Erreur adminShow blog:', error)
       return response.internalServerError({
         success: false,
         message: error.message
@@ -346,6 +532,9 @@ export default class BlogController {
     }
   }
 
+  /**
+   * Mettre à jour un article (invalide le cache)
+   */
   async update({ params, request, response }: HttpContext) {
     try {
       const { id } = params
@@ -358,6 +547,9 @@ export default class BlogController {
           message: 'Article non trouvé'
         })
       }
+
+      const oldSlug = post.slug
+      const oldStatus = post.status
 
       const payload = request.only([
         'title',
@@ -382,14 +574,29 @@ export default class BlogController {
       if (payload.meta_description !== undefined) post.meta_description = payload.meta_description || undefined
       if (payload.tags) post.tags = payload.tags
 
+      let statusChanged = false
       if (payload.status && payload.status !== post.status) {
         post.status = payload.status
+        statusChanged = true
         if (payload.status === 'published' && !post.published_at) {
           post.published_at = DateTime.now()
         }
       }
 
       await post.save()
+
+      // 🗑️ Invalider les caches
+      await this.invalidatePostCache(oldSlug)
+      if (oldSlug !== post.slug) {
+        await this.invalidatePostCache(post.slug)
+      }
+
+      await redis.del('blog:categories')
+      await redis.del(`blog:related:${post.category}:*`)
+
+      if (statusChanged || oldStatus !== 'published' && post.status === 'published') {
+        await redis.del('blog:featured')
+      }
 
       return response.ok({
         success: true,
@@ -398,7 +605,7 @@ export default class BlogController {
       })
 
     } catch (error: any) {
-      console.error('Erreur update blog:', error)
+      console.error('❌ Erreur update blog:', error)
       return response.internalServerError({
         success: false,
         message: error.message
@@ -406,6 +613,9 @@ export default class BlogController {
     }
   }
 
+  /**
+   * Supprimer un article (invalide le cache)
+   */
   async destroy({ params, response }: HttpContext) {
     try {
       const { id } = params
@@ -419,7 +629,20 @@ export default class BlogController {
         })
       }
 
+      const slug = post.slug
+      const category = post.category
+
       await post.delete()
+
+      // 🗑️ Invalider tous les caches concernés
+      await this.invalidatePostCache(slug)
+      await redis.del('blog:categories')
+      await redis.del(`blog:related:${category}:*`)
+      await redis.del('blog:featured')
+
+      // Supprimer les vues de Redis
+      await redis.del(`blog:views:${id}`)
+      await redis.del(`blog:daily_views:${id}:*`)
 
       return response.ok({
         success: true,
@@ -427,7 +650,7 @@ export default class BlogController {
       })
 
     } catch (error: any) {
-      console.error('Erreur destroy blog:', error)
+      console.error('❌ Erreur destroy blog:', error)
       return response.internalServerError({
         success: false,
         message: error.message
@@ -435,16 +658,34 @@ export default class BlogController {
     }
   }
 
+  /**
+   * 📊 Statistiques du blog (avec cache)
+   */
   async stats({ response }: HttpContext) {
     try {
+      const cacheKey = 'blog:stats'
+
+      // 🔍 Vérifier le cache
+      const cachedStats = await redis.get(cacheKey)
+
+      if (cachedStats) {
+        return response.ok({
+          success: true,
+          source: 'cache',
+          data: JSON.parse(cachedStats)
+        })
+      }
+
       const totalPosts = await BlogPost.query().count('* as total')
       const publishedPosts = await BlogPost.query().where('status', 'published').count('* as total')
       const draftPosts = await BlogPost.query().where('status', 'draft').count('* as total')
       const totalViews = await BlogPost.query().sum('views as total')
+
       const popularPosts = await BlogPost.query()
         .where('status', 'published')
         .orderBy('views', 'desc')
         .limit(5)
+        .select('id', 'title', 'slug', 'views', 'category', 'published_at')
 
       const postsByCategory = await BlogPost.query()
         .where('status', 'published')
@@ -452,20 +693,108 @@ export default class BlogController {
         .count('* as total')
         .groupBy('category')
 
+      // Récupérer les soumissions en attente
+      const pendingSubmissionsKey = 'blog:submissions_log'
+      const pendingCount = await redis.llen(pendingSubmissionsKey)
+
+      const statsData = {
+        total_posts: parseInt(totalPosts[0].$extras.total) || 0,
+        published_posts: parseInt(publishedPosts[0].$extras.total) || 0,
+        draft_posts: parseInt(draftPosts[0].$extras.total) || 0,
+        total_views: parseInt(totalViews[0].$extras.total) || 0,
+        pending_submissions: pendingCount,
+        popular_posts: popularPosts,
+        posts_by_category: postsByCategory
+      }
+
+      // 💾 Mettre en cache
+      await redis.set(cacheKey, JSON.stringify(statsData), 'EX', this.CACHE_TTL.STATS)
+
       return response.ok({
         success: true,
-        data: {
-          total_posts: parseInt(totalPosts[0].$extras.total) || 0,
-          published_posts: parseInt(publishedPosts[0].$extras.total) || 0,
-          draft_posts: parseInt(draftPosts[0].$extras.total) || 0,
-          total_views: parseInt(totalViews[0].$extras.total) || 0,
-          popular_posts: popularPosts,
-          posts_by_category: postsByCategory
-        }
+        source: 'database',
+        data: statsData
       })
 
     } catch (error: any) {
-      console.error('Erreur stats blog:', error)
+      console.error('❌ Erreur stats blog:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
+    }
+  }
+
+  /**
+   * 🔧 Méthode utilitaire : Récupérer les soumissions en attente
+   */
+  async getPendingSubmissions({ response }: HttpContext) {
+    try {
+      const submissionsKey = 'blog:submissions_log'
+      const submissions = await redis.lrange(submissionsKey, 0, -1)
+
+      return response.ok({
+        success: true,
+        data: submissions.map(s => JSON.parse(s))
+      })
+    } catch (error: any) {
+      console.error('❌ Erreur pending submissions:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
+    }
+  }
+
+  /**
+   * 🔧 Méthode utilitaire : Vider tout le cache du blog
+   */
+  async clearCache({ response }: HttpContext) {
+    try {
+      const keys = await redis.keys('blog:*')
+
+      if (keys.length > 0) {
+        await redis.del(...keys)
+      }
+
+      return response.ok({
+        success: true,
+        message: `Cache vidé : ${keys.length} clés supprimées`
+      })
+    } catch (error: any) {
+      console.error('❌ Erreur clear cache:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
+    }
+  }
+
+  /**
+   * 📈 Récupérer les statistiques de vues quotidiennes d'un article
+   */
+  async getPostDailyViews({ params, response }: HttpContext) {
+    try {
+      const { id } = params
+      const days = 7
+
+      const dailyViews = []
+      for (let i = 0; i < days; i++) {
+        const date = DateTime.now().minus({ days: i }).toFormat('yyyy-MM-dd')
+        const key = `blog:daily_views:${id}:${date}`
+        const views = await redis.get(key) || '0'
+        dailyViews.push({
+          date,
+          views: parseInt(views)
+        })
+      }
+
+      return response.ok({
+        success: true,
+        data: dailyViews.reverse()
+      })
+    } catch (error: any) {
+      console.error('❌ Erreur daily views:', error)
       return response.internalServerError({
         success: false,
         message: error.message
