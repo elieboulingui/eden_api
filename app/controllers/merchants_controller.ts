@@ -15,8 +15,8 @@ export default class MerchantsController {
 
       let query = User.query()
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .where('is_verified', true) // ✅ Uniquement les marchands vérifiés
-        .where('verification_status', 'approved') // ✅ Statut approuvé
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
         .preload('wallet')
         .select([
           'id',
@@ -70,7 +70,6 @@ export default class MerchantsController {
         shop: {
           name: merchant.commercial_name || merchant.shop_name || merchant.full_name,
           image: merchant.logo_url || merchant.shop_image || merchant.avatar,
-          cover: merchant.cover_photo_url,
         },
         wallet: merchant.wallet ? {
           id: merchant.wallet.id,
@@ -109,8 +108,8 @@ export default class MerchantsController {
       const merchant = await User.query()
         .where('id', params.id)
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .where('is_verified', true) // ✅ Uniquement vérifié
-        .where('verification_status', 'approved') // ✅ Statut approuvé
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
         .preload('wallet')
         .first()
 
@@ -121,13 +120,48 @@ export default class MerchantsController {
         })
       }
 
-      // ✅ Récupérer TOUS les produits du marchand
       const products = await db
         .from('products')
         .where('user_id', merchant.id)
         .orderBy('created_at', 'desc')
 
       const stats = await this.getShopStats(merchant.id)
+
+      // Construction de l'objet shop avec les infos conditionnelles
+      const shopData: any = {
+        name: merchant.commercial_name || merchant.shop_name || merchant.full_name,
+        image: merchant.logo_url || merchant.shop_image || merchant.avatar,
+        cover: merchant.cover_photo_url,
+        stats: stats,
+      }
+
+      // Ajout des infos boutique physique
+      if (merchant.vendor_type === 'boutique_physique') {
+        shopData.address = merchant.shop_address
+        shopData.latitude = merchant.shop_latitude
+        shopData.longitude = merchant.shop_longitude
+        shopData.photos = {
+          facade1: merchant.facade_photo1_url,
+          facade2: merchant.facade_photo2_url,
+          interior1: merchant.interior_photo1_url,
+          interior2: merchant.interior_photo2_url,
+        }
+      }
+
+      // Ajout des infos vendeur en ligne
+      if (merchant.vendor_type === 'vendeur_ligne' || merchant.vendor_type === 'particulier') {
+        shopData.stock_address = merchant.stock_address
+        shopData.social_media = {
+          facebook: merchant.facebook_url,
+          instagram: merchant.instagram_url,
+          tiktok: merchant.tiktok_url,
+        }
+        shopData.stock_video = merchant.stock_video_url
+      }
+
+      // Ajout du contact WhatsApp
+      shopData.whatsapp = merchant.whatsapp_phone
+      shopData.is_whatsapp_verified = merchant.is_whatsapp_verified
 
       return response.status(200).json({
         success: true,
@@ -146,44 +180,8 @@ export default class MerchantsController {
           shop_description: merchant.shop_description,
           is_verified: merchant.is_verified,
           verification_status: merchant.verification_status,
-          
-          shop: {
-            name: merchant.commercial_name || merchant.shop_name || merchant.full_name,
-            image: merchant.logo_url || merchant.shop_image || merchant.avatar,
-            cover: merchant.cover_photo_url,
-            
-            // ✅ Infos boutique physique
-            ...(merchant.vendor_type === 'boutique_physique' && {
-              address: merchant.shop_address,
-              latitude: merchant.shop_latitude,
-              longitude: merchant.shop_longitude,
-              photos: {
-                facade1: merchant.facade_photo1_url,
-                facade2: merchant.facade_photo2_url,
-                interior1: merchant.interior_photo1_url,
-                interior2: merchant.interior_photo2_url,
-              }
-            }),
-            
-            // ✅ Infos vendeur en ligne
-            ...(merchant.vendor_type === 'vendeur_ligne' || merchant.vendor_type === 'particulier') && {
-              stock_address: merchant.stock_address,
-              social_media: {
-                facebook: merchant.facebook_url,
-                instagram: merchant.instagram_url,
-                tiktok: merchant.tiktok_url,
-              },
-              stock_video: merchant.stock_video_url,
-            }),
-            
-            // ✅ Contact
-            whatsapp: merchant.whatsapp_phone,
-            is_whatsapp_verified: merchant.is_whatsapp_verified,
-            
-            stats: stats,
-          },
-          
-          products: products.map(p => ({
+          shop: shopData,
+          products: products.map((p: any) => ({
             id: p.id,
             name: p.name,
             price: p.price,
@@ -196,14 +194,12 @@ export default class MerchantsController {
             category_id: p.category_id,
             created_at: p.created_at,
           })),
-          
           wallet: merchant.wallet ? {
             id: merchant.wallet.id,
             balance: merchant.wallet.balance,
             currency: merchant.wallet.currency,
             status: merchant.wallet.status,
           } : null,
-          
           created_at: merchant.created_at,
           updated_at: merchant.updated_at,
         },
@@ -225,8 +221,8 @@ export default class MerchantsController {
 
       const merchants = await User.query()
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .where('is_verified', true) // ✅ Vérifié
-        .where('verification_status', 'approved') // ✅ Approuvé
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
         .whereHas('wallet', (walletQuery) => {
           walletQuery.where('status', 'active')
         })
@@ -244,7 +240,6 @@ export default class MerchantsController {
           shop: {
             name: m.commercial_name || m.shop_name || m.full_name,
             image: m.logo_url || m.shop_image || m.avatar,
-            cover: m.cover_photo_url,
           },
           wallet: m.wallet ? { status: m.wallet.status } : null,
         })),
@@ -281,8 +276,8 @@ export default class MerchantsController {
 
       const merchants = await User.query()
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .where('is_verified', true) // ✅ Vérifié
-        .where('verification_status', 'approved') // ✅ Approuvé
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
         .where((builder) => {
           builder
             .where('full_name', 'LIKE', `%${searchTerm}%`)
@@ -306,7 +301,6 @@ export default class MerchantsController {
           shop: {
             name: m.commercial_name || m.shop_name || m.full_name,
             image: m.logo_url || m.shop_image || m.avatar,
-            cover: m.cover_photo_url,
           },
         })),
         meta: {
@@ -330,7 +324,6 @@ export default class MerchantsController {
     try {
       console.log('=== DÉBUT all merchants (vérifiés uniquement) ===')
 
-      // ✅ Récupérer tous les marchands VÉRIFIÉS
       const merchants = await db
         .from('users')
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
@@ -367,7 +360,6 @@ export default class MerchantsController {
         })
       }
 
-      // Pour chaque marchand, récupérer ses produits
       const formattedMerchants = []
 
       for (const merchant of merchants) {
@@ -392,7 +384,7 @@ export default class MerchantsController {
           whatsapp: merchant.whatsapp_phone,
           created_at: merchant.created_at,
           stats: stats,
-          products: products.map(p => ({
+          products: products.map((p: any) => ({
             id: p.id,
             name: p.name,
             price: p.price,
@@ -507,7 +499,7 @@ export default class MerchantsController {
         .where('user_id', merchantId)
         .count('* as total')
 
-      const formattedProducts = products.map(p => ({
+      const formattedProducts = products.map((p: any) => ({
         id: p.id,
         name: p.name,
         price: p.price,
