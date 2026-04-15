@@ -1,73 +1,29 @@
-import { DateTime } from 'luxon'
 import User from '#models/user'
 import type { HttpContext } from '@adonisjs/core/http'
+import jwt from 'jsonwebtoken'
 
-export default class NewAccountController {
+const JWT_SECRET = process.env.JWT_SECRET || 'linemarket'
 
-
-
+export default class SessionController {
   /**
-   * Récupérer la liste des comptes (admin seulement)
+   * Connexion utilisateur
    */
-  async index({ request, response }: HttpContext) {
+  async store({ request, response }: HttpContext) {
     try {
-      const page = request.input('page', 1)
-      const limit = request.input('limit', 10)
-      const role = request.input('role')
+      const { email, password } = request.only(['email', 'password'])
 
-      const query = User.query().orderBy('created_at', 'desc')
+      const user = await User.verifyCredentials(email, password)
 
-      if (role) {
-        query.where('role', role)
-      }
+      const token = jwt.sign(
+        { id: user.id, email: user.email, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      )
 
-      const users = await query.paginate(page, limit)
-
+      // Convert DateTime to ISO string for JSON response
       return response.ok({
         success: true,
-        users: users.all().map((user) => ({
-          id: user.id,
-          full_name: user.full_name,
-          email: user.email,
-          role: user.role,
-          phone: user.phone,
-          is_verified: user.is_verified,
-          verification_status: user.verification_status,
-          created_at: user.created_at?.toISO(),
-        })),
-        pagination: {
-          total: users.total,
-          page: users.currentPage,
-          limit: users.perPage,
-          lastPage: users.lastPage,
-        },
-      })
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
-      return response.internalServerError({
-        success: false,
-        message: 'Erreur lors de la récupération des comptes',
-        error: errorMessage,
-      })
-    }
-  }
-
-  /**
-   * Récupérer un compte spécifique (admin ou propriétaire)
-   */
-  async show({ params, response }: HttpContext) {
-    try {
-      const user = await User.find(params.id)
-
-      if (!user) {
-        return response.notFound({
-          success: false,
-          message: 'Utilisateur non trouvé',
-        })
-      }
-
-      return response.ok({
-        success: true,
+        message: 'Connexion réussie',
         user: {
           id: user.id,
           full_name: user.full_name,
@@ -75,62 +31,87 @@ export default class NewAccountController {
           role: user.role,
           phone: user.phone,
           address: user.address,
-          country: user.country,
-          neighborhood: user.neighborhood,
-          avatar: user.avatar,
-          birth_date: user.birth_date?.toISO(),
-          id_number: user.id_number,
-          vendor_type: user.vendor_type,
-          commercial_name: user.commercial_name,
-          shop_name: user.shop_name,
-          shop_description: user.shop_description,
-          is_verified: user.is_verified,
-          verification_status: user.verification_status,
           created_at: user.created_at?.toISO(),
           updated_at: user.updated_at?.toISO(),
         },
+        token,
       })
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
-      return response.internalServerError({
+      return response.status(401).json({
         success: false,
-        message: 'Erreur lors de la récupération du compte',
-        error: errorMessage,
+        message: 'Email ou mot de passe incorrect',
       })
     }
   }
 
   /**
-   * Mettre à jour un compte (admin ou propriétaire)
+   * 🔐 Récupérer user depuis JWT
    */
-  async update({ params, request, response }: HttpContext) {
+  private async getUserFromToken(request: HttpContext['request']) {
+    const authHeader = request.header('Authorization')
+
+    if (!authHeader) return null
+
+    const token = authHeader.replace('Bearer ', '')
+
     try {
-      const user = await User.find(params.id)
+      const payload: any = jwt.verify(token, JWT_SECRET)
+      return await User.find(payload.id)
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Profil utilisateur
+   */
+  async profile({ request, response }: HttpContext) {
+    const user = await this.getUserFromToken(request)
+
+    if (!user) {
+      return response.unauthorized({
+        success: false,
+        message: 'Non authentifié',
+      })
+    }
+
+    return response.ok({
+      success: true,
+      user: {
+        id: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        address: user.address,
+        created_at: user.created_at?.toISO(),
+        updated_at: user.updated_at?.toISO(),
+      },
+    })
+  }
+
+  /**
+   * ✅ UPDATE PROFIL (FIX ERREUR TS)
+   */
+  async update({ request, response }: HttpContext) {
+    try {
+      const user = await this.getUserFromToken(request)
 
       if (!user) {
-        return response.notFound({
+        return response.unauthorized({
           success: false,
-          message: 'Utilisateur non trouvé',
+          message: 'Non authentifié',
         })
       }
 
-      const payload = request.only([
-        'full_name',
-        'phone',
-        'address',
-        'country',
-        'neighborhood',
-        'shop_description',
-        'commercial_name',
-        'shop_name',
-      ])
+      const data = request.only(['full_name', 'phone', 'address'])
 
-      user.merge(payload)
+      user.merge(data)
       await user.save()
 
       return response.ok({
         success: true,
-        message: 'Compte mis à jour avec succès',
+        message: 'Profil mis à jour',
         user: {
           id: user.id,
           full_name: user.full_name,
@@ -138,127 +119,27 @@ export default class NewAccountController {
           role: user.role,
           phone: user.phone,
           address: user.address,
+          created_at: user.created_at?.toISO(),
           updated_at: user.updated_at?.toISO(),
         },
       })
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
-      return response.badRequest({
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue'
+      return response.internalServerError({
         success: false,
-        message: 'Erreur lors de la mise à jour du compte',
+        message: 'Erreur update profil',
         error: errorMessage,
       })
     }
   }
 
   /**
-   * Approuver un compte marchand (admin seulement)
+   * Déconnexion
    */
-  async approve({ params, request, response }: HttpContext) {
-    try {
-      const user = await User.find(params.id)
-
-      if (!user) {
-        return response.notFound({
-          success: false,
-          message: 'Utilisateur non trouvé',
-        })
-      }
-
-      const adminId = request.input('admin_id') || 'system'
-
-      await user.approve(adminId)
-
-      return response.ok({
-        success: true,
-        message: 'Compte marchand approuvé avec succès',
-        user: {
-          id: user.id,
-          full_name: user.full_name,
-          email: user.email,
-          is_verified: user.is_verified,
-          verification_status: user.verification_status,
-          verified_at: user.verified_at?.toISO(),
-        },
-      })
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
-      return response.badRequest({
-        success: false,
-        message: 'Erreur lors de l\'approbation du compte',
-        error: errorMessage,
-      })
-    }
-  }
-
-  /**
-   * Rejeter un compte marchand (admin seulement)
-   */
-  async reject({ params, request, response }: HttpContext) {
-    try {
-      const user = await User.find(params.id)
-
-      if (!user) {
-        return response.notFound({
-          success: false,
-          message: 'Utilisateur non trouvé',
-        })
-      }
-
-      const adminId = request.input('admin_id') || 'system'
-      const reason = request.input('reason') || 'Non spécifié'
-
-      await user.reject(adminId, reason)
-
-      return response.ok({
-        success: true,
-        message: 'Compte marchand rejeté',
-        user: {
-          id: user.id,
-          full_name: user.full_name,
-          email: user.email,
-          is_verified: user.is_verified,
-          verification_status: user.verification_status,
-          rejection_reason: user.rejection_reason,
-        },
-      })
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
-      return response.badRequest({
-        success: false,
-        message: 'Erreur lors du rejet du compte',
-        error: errorMessage,
-      })
-    }
-  }
-
-  /**
-   * Supprimer un compte (admin seulement)
-   */
-  async destroy({ params, response }: HttpContext) {
-    try {
-      const user = await User.find(params.id)
-
-      if (!user) {
-        return response.notFound({
-          success: false,
-          message: 'Utilisateur non trouvé',
-        })
-      }
-
-      await user.delete()
-
-      return response.ok({
-        success: true,
-        message: 'Compte supprimé avec succès',
-      })
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
-      return response.badRequest({
-        success: false,
-        message: 'Erreur lors de la suppression du compte',
-        error: errorMessage,
-      })
-    }
+  async destroy({ response }: HttpContext) {
+    return response.ok({
+      success: true,
+      message: 'Déconnexion réussie (supprimer le token côté client)',
+    })
   }
 }
