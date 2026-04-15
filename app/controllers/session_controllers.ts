@@ -4,41 +4,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 
 export default class NewAccountController {
 
-  async store({ request, response }: HttpContext) {
-    try {
-      const payload = request.all()
-      
-      // ✅ CORRECTION : Convertir birth_date en DateTime avant de passer à User.create()
-      const userData = {
-        ...payload,
-        birth_date: payload.birth_date ? DateTime.fromISO(payload.birth_date) : null,
-        // Autres conversions si nécessaire
-        shop_latitude: payload.shop_latitude ? Number(payload.shop_latitude) : null,
-        shop_longitude: payload.shop_longitude ? Number(payload.shop_longitude) : null,
-      }
 
-      const user = await User.create(userData)
-
-      return response.created({
-        success: true,
-        message: 'Compte créé avec succès',
-        user: {
-          id: user.id,
-          full_name: user.full_name,
-          email: user.email,
-          role: user.role,
-          created_at: user.created_at?.toISO(),
-        },
-      })
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
-      return response.badRequest({
-        success: false,
-        message: 'Erreur lors de la création du compte',
-        error: errorMessage,
-      })
-    }
-  }
 
   /**
    * Récupérer la liste des comptes (admin seulement)
