@@ -5,7 +5,6 @@ import jwt from 'jsonwebtoken'
 const JWT_SECRET = process.env.JWT_SECRET || 'linemarket'
 
 export default class SessionController {
-
   /**
    * Connexion utilisateur
    */
@@ -21,6 +20,7 @@ export default class SessionController {
         { expiresIn: '7d' }
       )
 
+      // Convert DateTime to ISO string for JSON response
       return response.ok({
         success: true,
         message: 'Connexion réussie',
@@ -31,12 +31,11 @@ export default class SessionController {
           role: user.role,
           phone: user.phone,
           address: user.address,
-          created_at: user.created_at,
-          updated_at: user.updated_at,
+          created_at: user.created_at?.toISO(),
+          updated_at: user.updated_at?.toISO(),
         },
         token,
       })
-
     } catch (error) {
       return response.status(401).json({
         success: false,
@@ -78,7 +77,16 @@ export default class SessionController {
 
     return response.ok({
       success: true,
-      user,
+      user: {
+        id: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        address: user.address,
+        created_at: user.created_at?.toISO(),
+        updated_at: user.updated_at?.toISO(),
+      },
     })
   }
 
@@ -96,11 +104,7 @@ export default class SessionController {
         })
       }
 
-      const data = request.only([
-        'full_name',
-        'phone',
-        'address',
-      ])
+      const data = request.only(['full_name', 'phone', 'address'])
 
       user.merge(data)
       await user.save()
@@ -108,14 +112,23 @@ export default class SessionController {
       return response.ok({
         success: true,
         message: 'Profil mis à jour',
-        user,
+        user: {
+          id: user.id,
+          full_name: user.full_name,
+          email: user.email,
+          role: user.role,
+          phone: user.phone,
+          address: user.address,
+          created_at: user.created_at?.toISO(),
+          updated_at: user.updated_at?.toISO(),
+        },
       })
-
-    } catch (error) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue'
       return response.internalServerError({
         success: false,
         message: 'Erreur update profil',
-        error: error.message,
+        error: errorMessage,
       })
     }
   }
