@@ -3,7 +3,6 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
-// Ajoutez cette ligne avec les autres imports
 const OtpController = () => import('#controllers/OtpController')
 const ContactsController = () => import('#controllers/contacts_controller')
 const MerchantsController = () => import('#controllers/merchants_controller')
@@ -42,11 +41,13 @@ router.get('/', async ({ view }) => {
 
 // Routes d'authentification web
 router.group(() => {
+  // ✅ CORRECTION : Les méthodes des contrôleurs View
+  // Si vous avez enlevé 'store', utilisez les méthodes existantes
   router.get('signup', [NewAccountViewController, 'create']).as('new_account.create')
-  router.post('signup', [NewAccountViewController, 'stores']).as('new_account.web.store')
+  router.post('signup', [NewAccountViewController, 'store']).as('new_account.web.store') // 'stores' → 'store'
 
   router.get('login', [SessionViewController, 'create']).as('session.create')
-  router.post('login', [SessionViewController, 'stores']).as('session.store')
+  router.post('login', [SessionViewController, 'store']).as('session.web.store') // 'stores' → 'store'
 }).use(middleware.guest())
 
 router.post('logout', [SessionViewController, 'destroy'])
@@ -251,34 +252,29 @@ router.group(() => {
   // ----------------------------------------------------------
   // AVIS (REVIEWS)
   // ----------------------------------------------------------
-  // Routes publiques (pas besoin d'auth)
   router.get('/reviews/product/:productId', [ReviewsController, 'getProductReviews'])
   router.get('/reviews/merchant/:merchantId', [ReviewsController, 'getMerchantReviews'])
   router.get('/reviews/user/:userId', [ReviewsController, 'myReviews'])
   router.post('/reviews/:id/helpful', [ReviewsController, 'markHelpful'])
 
-  // Routes avec actions (userId passé dans le body)
   router.post('/reviews', [ReviewsController, 'store'])
   router.put('/reviews/:id', [ReviewsController, 'update'])
   router.delete('/reviews/:id', [ReviewsController, 'destroy'])
 
-  // Routes admin
   router.get('/reviews', [ReviewsController, 'index'])
   router.get('/reviews/:id', [ReviewsController, 'show'])
   router.patch('/reviews/:id/approve', [ReviewsController, 'approve'])
   router.patch('/reviews/:id/reject', [ReviewsController, 'reject'])
 
-
-
-  
   // ----------------------------------------------------------
-  // OTP (One Time Password) - AJOUTEZ CE BLOC ICI
+  // OTP (One Time Password)
   // ----------------------------------------------------------
   router.post('/otp/send', [OtpController, 'send']).as('otp.send')
   router.post('/otp/verify', [OtpController, 'verify']).as('otp.verify')
   router.get('/otp/status', [OtpController, 'status']).as('otp.status')
   router.post('/otp/resend', [OtpController, 'resend']).as('otp.resend')
   router.post('/password/reset', [OtpController, 'resetPassword']).as('password.reset')
+
   // ----------------------------------------------------------
   // BLOG ADMIN
   // ----------------------------------------------------------
