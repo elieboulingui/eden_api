@@ -1,145 +1,157 @@
+import { DateTime } from 'luxon'
 import User from '#models/user'
 import type { HttpContext } from '@adonisjs/core/http'
-import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'linemarket'
-
-export default class SessionController {
+export default class NewAccountViewController {
   /**
-   * Connexion utilisateur
+   * Afficher le formulaire d'inscription (Web)
+   */
+  async create({ view }: HttpContext) {
+    return view.render('pages/auth/signup')
+  }
+
+  /**
+   * Création d'un nouveau compte (Web et API)
    */
   async store({ request, response }: HttpContext) {
     try {
-      const { email, password } = request.only(['email', 'password'])
+      const payload = request.all()
 
-      const user = await User.verifyCredentials(email, password)
+      // ✅ CORRECTION : Convertir les types avant de passer à User.create()
+      const userData = {
+        // Champs de base
+        full_name: payload.full_name,
+        email: payload.email,
+        password: payload.password,
+        role: payload.role || 'client',
+        phone: payload.phone || null,
+        address: payload.address || null,
+        country: payload.country || null,
+        neighborhood: payload.neighborhood || null,
+        avatar: payload.avatar || null,
 
-      const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      )
+        // ✅ Conversion DateTime
+        birth_date: payload.birth_date ? DateTime.fromISO(payload.birth_date) : null,
 
-      // Convert DateTime to ISO string for JSON response
-      return response.ok({
-        success: true,
-        message: 'Connexion réussie',
-        user: {
-          id: user.id,
-          full_name: user.full_name,
-          email: user.email,
-          role: user.role,
-          phone: user.phone,
-          address: user.address,
-          created_at: user.created_at?.toISO(),
-          updated_at: user.updated_at?.toISO(),
-        },
-        token,
-      })
-    } catch (error) {
-      return response.status(401).json({
-        success: false,
-        message: 'Email ou mot de passe incorrect',
-      })
-    }
-  }
+        // ÉTAPE 1
+        id_number: payload.id_number || null,
+        id_front_url: payload.id_front_url || null,
+        id_back_url: payload.id_back_url || null,
+        selfie_url: payload.selfie_url || null,
+        personal_phone: payload.personal_phone || null,
+        residence_address: payload.residence_address || null,
+        
+        // ✅ Conversion Boolean
+        is_phone_verified: this.parseBoolean(payload.is_phone_verified),
+        is_email_verified: this.parseBoolean(payload.is_email_verified),
 
-  /**
-   * 🔐 Récupérer user depuis JWT
-   */
-  private async getUserFromToken(request: HttpContext['request']) {
-    const authHeader = request.header('Authorization')
+        // ÉTAPE 2
+        vendor_type: payload.vendor_type || null,
+        nif_number: payload.nif_number || null,
+        rccm_number: payload.rccm_number || null,
+        rccm_document_url: payload.rccm_document_url || null,
+        commercial_name: payload.commercial_name || null,
+        shop_name: payload.shop_name || null,
+        whatsapp_phone: payload.whatsapp_phone || null,
+        is_whatsapp_verified: this.parseBoolean(payload.is_whatsapp_verified),
+        shop_description: payload.shop_description || null,
+        logo_url: payload.logo_url || null,
+        shop_image: payload.shop_image || null,
+        cover_photo_url: payload.cover_photo_url || null,
 
-    if (!authHeader) return null
+        // BLOC 4 : BOUTIQUE PHYSIQUE
+        shop_address: payload.shop_address || null,
+        // ✅ Conversion Number
+        shop_latitude: payload.shop_latitude ? Number.parseFloat(payload.shop_latitude) : null,
+        shop_longitude: payload.shop_longitude ? Number.parseFloat(payload.shop_longitude) : null,
+        facade_photo1_url: payload.facade_photo_1_url || payload.facade_photo1_url || null,
+        facade_photo2_url: payload.facade_photo_2_url || payload.facade_photo2_url || null,
+        interior_photo1_url: payload.interior_photo_1_url || payload.interior_photo1_url || null,
+        interior_photo2_url: payload.interior_photo_2_url || payload.interior_photo2_url || null,
+        seeg_or_lease_url: payload.seeg_or_lease_url || null,
 
-    const token = authHeader.replace('Bearer ', '')
+        // BLOC 5 : VENDEUR EN LIGNE / PARTICULIER
+        stock_address: payload.stock_address || null,
+        address_proof_url: payload.address_proof_url || null,
+        facebook_url: payload.facebook_url || null,
+        instagram_url: payload.instagram_url || null,
+        tiktok_url: payload.tiktok_url || null,
+        stock_video_url: payload.stock_video_url || null,
+        reference1_name: payload.reference_1_name || payload.reference1_name || null,
+        reference1_phone: payload.reference_1_phone || payload.reference1_phone || null,
+        reference2_name: payload.reference_2_name || payload.reference2_name || null,
+        reference2_phone: payload.reference_2_phone || payload.reference2_phone || null,
 
-    try {
-      const payload: any = jwt.verify(token, JWT_SECRET)
-      return await User.find(payload.id)
-    } catch {
-      return null
-    }
-  }
+        // ÉTAPE 3 : PAIEMENT
+        payment_method: payload.payment_method || null,
+        airtel_number: payload.airtel_number || null,
+        moov_number: payload.moov_number || null,
+        account_holder_name: payload.account_holder_name || null,
+        bank_name: payload.bank_name || null,
+        rib_document_url: payload.rib_document_url || null,
 
-  /**
-   * Profil utilisateur
-   */
-  async profile({ request, response }: HttpContext) {
-    const user = await this.getUserFromToken(request)
+        // VALIDATION
+        certify_truth: this.parseBoolean(payload.certify_truth),
+        accept_escrow: this.parseBoolean(payload.accept_escrow),
+        signature: payload.signature || null,
 
-    if (!user) {
-      return response.unauthorized({
-        success: false,
-        message: 'Non authentifié',
-      })
-    }
+        // STATUT
+        is_verified: this.parseBoolean(payload.is_verified),
+        verification_status: payload.verification_status || 'pending',
+        verified_at: payload.verified_at ? DateTime.fromISO(payload.verified_at) : null,
+        verified_by: payload.verified_by || null,
+        rejection_reason: payload.rejection_reason || null,
+      }
 
-    return response.ok({
-      success: true,
-      user: {
-        id: user.id,
-        full_name: user.full_name,
-        email: user.email,
-        role: user.role,
-        phone: user.phone,
-        address: user.address,
-        created_at: user.created_at?.toISO(),
-        updated_at: user.updated_at?.toISO(),
-      },
-    })
-  }
+      const user = await User.create(userData)
 
-  /**
-   * ✅ UPDATE PROFIL (FIX ERREUR TS)
-   */
-  async update({ request, response }: HttpContext) {
-    try {
-      const user = await this.getUserFromToken(request)
-
-      if (!user) {
-        return response.unauthorized({
-          success: false,
-          message: 'Non authentifié',
+      // Si c'est une requête API, retourner JSON
+      if (request.accepts(['json'])) {
+        return response.created({
+          success: true,
+          message: 'Compte créé avec succès',
+          user: {
+            id: user.id,
+            full_name: user.full_name,
+            email: user.email,
+            role: user.role,
+            created_at: user.created_at?.toISO(),
+          },
         })
       }
 
-      const data = request.only(['full_name', 'phone', 'address'])
+      // Sinon, rediriger vers la page de connexion (Web)
+      return response.redirect().toRoute('session.create')
 
-      user.merge(data)
-      await user.save()
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+      
+      // Si c'est une requête API, retourner JSON
+      if (request.accepts(['json'])) {
+        return response.badRequest({
+          success: false,
+          message: 'Erreur lors de la création du compte',
+          error: errorMessage,
+        })
+      }
 
-      return response.ok({
-        success: true,
-        message: 'Profil mis à jour',
-        user: {
-          id: user.id,
-          full_name: user.full_name,
-          email: user.email,
-          role: user.role,
-          phone: user.phone,
-          address: user.address,
-          created_at: user.created_at?.toISO(),
-          updated_at: user.updated_at?.toISO(),
-        },
-      })
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue'
-      return response.internalServerError({
-        success: false,
-        message: 'Erreur update profil',
-        error: errorMessage,
+      // Sinon, retourner à la page d'inscription avec erreur (Web)
+      return response.redirect().back().withErrors({
+        signup: errorMessage,
       })
     }
   }
 
   /**
-   * Déconnexion
+   * Utilitaire pour parser les booléens
    */
-  async destroy({ response }: HttpContext) {
-    return response.ok({
-      success: true,
-      message: 'Déconnexion réussie (supprimer le token côté client)',
-    })
+  private parseBoolean(value: any): boolean {
+    if (value === 'true' || value === true || value === 1 || value === '1') {
+      return true
+    }
+    if (value === 'false' || value === false || value === 0 || value === '0') {
+      return false
+    }
+    return false
   }
 }
