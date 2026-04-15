@@ -11,8 +11,6 @@ import PubsController from '#controllers/pubs_controller'
 import TestimonialsController from '#controllers/testimonials_controller'
 import NewAccountController from '#controllers/new_account_controller'
 import SessionController from '#controllers/session_controller'
-import NewAccountViewController from '#controllers/new_account_controllers'
-import SessionViewController from '#controllers/session_controllers'
 import UsersController from '#controllers/users_controller'
 import ProductsController from '#controllers/products_controller'
 import CategoriesController from '#controllers/categories_controller'
@@ -41,16 +39,20 @@ router.get('/', async ({ view }) => {
 
 // Routes d'authentification web
 router.group(() => {
-  // ✅ CORRECTION : Les méthodes des contrôleurs View
-  // Si vous avez enlevé 'store', utilisez les méthodes existantes
-  router.get('signup', [NewAccountViewController, 'create']).as('new_account.create')
-  router.post('signup', [NewAccountViewController, 'store']).as('new_account.web.store') // 'stores' → 'store'
+  router.get('signup', async ({ view }) => {
+    return view.render('pages/auth/signup')
+  }).as('new_account.create')
+  
+  router.post('signup', [NewAccountController, 'store']).as('new_account.web.store')
 
-  router.get('login', [SessionViewController, 'create']).as('session.create')
-  router.post('login', [SessionViewController, 'store']).as('session.web.store') // 'stores' → 'store'
+  router.get('login', async ({ view }) => {
+    return view.render('pages/auth/login')
+  }).as('session.create')
+  
+  router.post('login', [SessionController, 'store']).as('session.web.store')
 }).use(middleware.guest())
 
-router.post('logout', [SessionViewController, 'destroy'])
+router.post('logout', [SessionController, 'destroy'])
   .as('session.web.destroy')
   .middleware([middleware.auth()])
 
@@ -71,15 +73,22 @@ router.group(() => {
   // ----------------------------------------------------------
   // AUTHENTIFICATION
   // ----------------------------------------------------------
-  router.post('/client/register', [NewAccountController, 'store']).as('new_account.store')
-  router.post('/client/login', [SessionController, 'store']).as('session.client.store')
-  router.post('/login', [SessionController, 'store']).as('session.login')
-  router.post('/api/login', [SessionController, 'store']).as('session.api.login')
-  router.post('/client/logout', [SessionController, 'destroy'])
+  router.post('/client/register', [NewAccountController, 'store']).as('api.register')
+  router.post('/client/login', [SessionController, 'store']).as('api.login')
+  router.post('/login', [SessionController, 'store'])
+  router.post('/client/logout', [SessionController, 'destroy']).as('api.logout')
+  router.put('/profile/update', [SessionController, 'update']).as('api.profile.update')
+  router.put('/profile/password', [SessionController, 'changePassword']).as('api.profile.password')
+  router.get('/profile', [SessionController, 'profile']).as('api.profile')
 
-  // ROUTES PROFIL
-  router.put('/profile/update', [SessionController, 'update']).as('profile.update')
-  router.put('/profile/password', [SessionController, 'changePassword']).as('profile.password')
+  // ----------------------------------------------------------
+  // OTP (One Time Password)
+  // ----------------------------------------------------------
+  router.post('/otp/send', [OtpController, 'send']).as('otp.send')
+  router.post('/otp/verify', [OtpController, 'verify']).as('otp.verify')
+  router.get('/otp/status', [OtpController, 'status']).as('otp.status')
+  router.post('/otp/resend', [OtpController, 'resend']).as('otp.resend')
+  router.post('/password/reset', [OtpController, 'resetPassword']).as('password.reset')
 
   // ----------------------------------------------------------
   // BLOG (PUBLIC)
@@ -88,6 +97,18 @@ router.group(() => {
   router.get('/blog/posts/featured', [BlogController, 'featured']).as('blog.featured')
   router.get('/blog/posts/:slug', [BlogController, 'show']).as('blog.show')
   router.post('/blog/posts/submit', [BlogController, 'publicStore']).as('blog.submit')
+
+  // ----------------------------------------------------------
+  // BLOG ADMIN
+  // ----------------------------------------------------------
+  router.group(() => {
+    router.get('/posts', [BlogController, 'adminIndex']).as('admin.posts.index')
+    router.get('/posts/stats', [BlogController, 'stats']).as('admin.posts.stats')
+    router.get('/posts/:id', [BlogController, 'adminShow']).as('admin.posts.show')
+    router.post('/posts', [BlogController, 'store']).as('admin.posts.store')
+    router.put('/posts/:id', [BlogController, 'update']).as('admin.posts.update')
+    router.delete('/posts/:id', [BlogController, 'destroy']).as('admin.posts.destroy')
+  }).prefix('/blog/admin')
 
   // ----------------------------------------------------------
   // TESTIMONIALS (TÉMOIGNAGES)
@@ -265,26 +286,5 @@ router.group(() => {
   router.get('/reviews/:id', [ReviewsController, 'show'])
   router.patch('/reviews/:id/approve', [ReviewsController, 'approve'])
   router.patch('/reviews/:id/reject', [ReviewsController, 'reject'])
-
-  // ----------------------------------------------------------
-  // OTP (One Time Password)
-  // ----------------------------------------------------------
-  router.post('/otp/send', [OtpController, 'send']).as('otp.send')
-  router.post('/otp/verify', [OtpController, 'verify']).as('otp.verify')
-  router.get('/otp/status', [OtpController, 'status']).as('otp.status')
-  router.post('/otp/resend', [OtpController, 'resend']).as('otp.resend')
-  router.post('/password/reset', [OtpController, 'resetPassword']).as('password.reset')
-
-  // ----------------------------------------------------------
-  // BLOG ADMIN
-  // ----------------------------------------------------------
-  router.group(() => {
-    router.get('/posts', [BlogController, 'adminIndex']).as('admin.posts.index')
-    router.get('/posts/stats', [BlogController, 'stats']).as('admin.posts.stats')
-    router.get('/posts/:id', [BlogController, 'adminShow']).as('admin.posts.show')
-    router.post('/posts', [BlogController, 'store']).as('admin.posts.store')
-    router.put('/posts/:id', [BlogController, 'update']).as('admin.posts.update')
-    router.delete('/posts/:id', [BlogController, 'destroy']).as('admin.posts.destroy')
-  }).prefix('/blog/admin')
 
 }).prefix('/api')
