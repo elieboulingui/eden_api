@@ -684,7 +684,7 @@ export class TransactionSchema extends BaseModel {
 }
 
 export class UserSchema extends BaseModel {
-  static $columns = ['acceptEscrow', 'accountHolderName', 'address', 'addressProofUrl', 'airtelNumber', 'avatar', 'bankName', 'birthDate', 'certifyTruth', 'commercialName', 'country', 'coverPhotoUrl', 'createdAt', 'email', 'facadePhoto1Url', 'facadePhoto2Url', 'facebookUrl', 'fullName', 'id', 'idBackUrl', 'idFrontUrl', 'idNumber', 'instagramUrl', 'interiorPhoto1Url', 'interiorPhoto2Url', 'isEmailVerified', 'isPhoneVerified', 'isVerified', 'isWhatsappVerified', 'logoUrl', 'moovNumber', 'neighborhood', 'nifNumber', 'password', 'paymentMethod', 'personalPhone', 'phone', 'rccmDocumentUrl', 'rccmNumber', 'reference1Name', 'reference1Phone', 'reference2Name', 'reference2Phone', 'rejectionReason', 'residenceAddress', 'ribDocumentUrl', 'role', 'seegOrLeaseUrl', 'selfieUrl', 'shopAddress', 'shopDescription', 'shopImage', 'shopLatitude', 'shopLongitude', 'shopName', 'signature', 'stockAddress', 'stockVideoUrl', 'tiktokUrl', 'updatedAt', 'vendorType', 'verificationStatus', 'verifiedAt', 'verifiedBy', 'whatsappPhone'] as const
+  static $columns = ['acceptEscrow', 'accountHolderName', 'address', 'addressProofUrl', 'airtelNumber', 'avatar', 'bankName', 'birthDate', 'certifyTruth', 'commercialName', 'country', 'coverPhotoUrl', 'createdAt', 'email', 'facadePhoto1Url', 'facadePhoto2Url', 'facadePhoto1Url', 'facadePhoto2Url', 'facebookUrl', 'fullName', 'id', 'idBackUrl', 'idFrontUrl', 'idNumber', 'instagramUrl', 'interiorPhoto1Url', 'interiorPhoto2Url', 'interiorPhoto1Url', 'interiorPhoto2Url', 'isEmailVerified', 'isPhoneVerified', 'isVerified', 'isWhatsappVerified', 'logoUrl', 'moovNumber', 'neighborhood', 'nifNumber', 'password', 'paymentMethod', 'personalPhone', 'phone', 'rccmDocumentUrl', 'rccmNumber', 'reference1Name', 'reference1Phone', 'reference2Name', 'reference2Phone', 'reference1Name', 'reference1Phone', 'reference2Name', 'reference2Phone', 'rejectionReason', 'residenceAddress', 'ribDocumentUrl', 'role', 'seegOrLeaseUrl', 'selfieUrl', 'shopAddress', 'shopDescription', 'shopImage', 'shopLatitude', 'shopLongitude', 'shopName', 'signature', 'stockAddress', 'stockVideoUrl', 'tiktokUrl', 'updatedAt', 'vendorType', 'verificationStatus', 'verifiedAt', 'verifiedBy', 'whatsappPhone'] as const
   $columns = UserSchema.$columns
   @column()
   declare acceptEscrow: boolean | null
@@ -764,6 +764,14 @@ export class UserSchema extends BaseModel {
   declare rccmDocumentUrl: string | null
   @column()
   declare rccmNumber: string | null
+  @column()
+  declare reference1Name: string | null
+  @column()
+  declare reference1Phone: string | null
+  @column()
+  declare reference2Name: string | null
+  @column()
+  declare reference2Phone: string | null
   @column()
   declare reference1Name: string | null
   @column()

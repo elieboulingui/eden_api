@@ -47,203 +47,205 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare country: string | null
 
   @column()
-  declare neighborhood: string | null // ✅ Quartier / Ville
+  declare neighborhood: string | null
 
   // ============================================================
   // ÉTAPE 1 : INFORMATIONS DU RESPONSABLE (MARCHAND)
   // ============================================================
-  
-  @column.date()
+
+  @column.date({ columnName: 'birth_date' })
   declare birth_date: DateTime | null
 
-  @column()
-  declare id_number: string | null // Numéro CNI ou Passeport
+  @column({ columnName: 'id_number' })
+  declare id_number: string | null
 
-  @column()
-  declare id_front_url: string | null // Photo recto CNI/Passeport
+  @column({ columnName: 'id_front_url' })
+  declare id_front_url: string | null
 
-  @column()
-  declare id_back_url: string | null // Photo verso CNI/Passeport
+  @column({ columnName: 'id_back_url' })
+  declare id_back_url: string | null
 
-  @column()
-  declare selfie_url: string | null // Selfie avec CNI
+  @column({ columnName: 'selfie_url' })
+  declare selfie_url: string | null
 
-  @column()
-  declare personal_phone: string | null // Numéro de téléphone personnel
+  @column({ columnName: 'personal_phone' })
+  declare personal_phone: string | null
 
-  @column()
-  declare is_phone_verified: boolean // Vérification OTP téléphone
+  @column({ columnName: 'is_phone_verified' })
+  declare is_phone_verified: boolean
 
-  @column()
-  declare is_email_verified: boolean // Vérification OTP email
+  @column({ columnName: 'is_email_verified' })
+  declare is_email_verified: boolean
 
-  @column()
-  declare residence_address: string | null // Adresse de résidence actuelle
+  @column({ columnName: 'residence_address' })
+  declare residence_address: string | null
 
   // ============================================================
   // ÉTAPE 2 : TYPE D'ACTIVITÉ
   // ============================================================
 
-  @column()
+  @column({ columnName: 'vendor_type' })
   declare vendor_type: 'boutique_physique' | 'vendeur_ligne' | 'particulier' | null
 
-  @column()
+  @column({ columnName: 'nif_number' })
   declare nif_number: string | null
 
-  @column()
+  @column({ columnName: 'rccm_number' })
   declare rccm_number: string | null
 
-  @column()
+  @column({ columnName: 'rccm_document_url' })
   declare rccm_document_url: string | null
 
-  @column()
-  declare commercial_name: string | null // Nom commercial
+  @column({ columnName: 'commercial_name' })
+  declare commercial_name: string | null
 
-  @column()
-  declare shop_name: string | null // Alias pour commercial_name (compatibilité)
+  @column({ columnName: 'shop_name' })
+  declare shop_name: string | null
 
-  @column()
-  declare whatsapp_phone: string | null // WhatsApp Business
+  @column({ columnName: 'whatsapp_phone' })
+  declare whatsapp_phone: string | null
 
-  @column()
-  declare is_whatsapp_verified: boolean // Vérification OTP WhatsApp
+  @column({ columnName: 'is_whatsapp_verified' })
+  declare is_whatsapp_verified: boolean
 
-  @column()
-  declare shop_description: string | null // Description courte
+  @column({ columnName: 'shop_description' })
+  declare shop_description: string | null
 
-  @column()
+  @column({ columnName: 'logo_url' })
   declare logo_url: string | null
 
-  @column()
-  declare shop_image: string | null // Alias pour logo_url (compatibilité)
+  @column({ columnName: 'shop_image' })
+  declare shop_image: string | null
 
-  @column()
-  declare cover_photo_url: string | null // Photo de couverture
+  @column({ columnName: 'cover_photo_url' })
+  declare cover_photo_url: string | null
 
   // ============================================================
-  // BLOC 4 : BOUTIQUE PHYSIQUE
+  // BLOC 4 : BOUTIQUE PHYSIQUE (AVEC UNDERSCORES)
   // ============================================================
 
-  @column()
-  declare shop_address: string | null // Adresse exacte
+  @column({ columnName: 'shop_address' })
+  declare shop_address: string | null
 
-  @column()
-  declare shop_latitude: number | null // Latitude GPS
+  @column({ columnName: 'shop_latitude' })
+  declare shop_latitude: number | null
 
-  @column()
-  declare shop_longitude: number | null // Longitude GPS
+  @column({ columnName: 'shop_longitude' })
+  declare shop_longitude: number | null
 
-  @column()
-  declare facade_photo1_url: string | null // Photo façade 1 avec enseigne
+  // ✅ Correction : avec underscore entre photo et 1
+  @column({ columnName: 'facade_photo_1_url' })
+  declare facade_photo1_url: string | null
 
-  @column()
-  declare facade_photo2_url: string | null // Photo façade 2 autre angle
+  @column({ columnName: 'facade_photo_2_url' })
+  declare facade_photo2_url: string | null
 
-  @column()
-  declare interior_photo1_url: string | null // Photo intérieur 1 (stock)
+  @column({ columnName: 'interior_photo_1_url' })
+  declare interior_photo1_url: string | null
 
-  @column()
-  declare interior_photo2_url: string | null // Photo intérieur 2
+  @column({ columnName: 'interior_photo_2_url' })
+  declare interior_photo2_url: string | null
 
-  @column()
-  declare seeg_or_lease_url: string | null // Quittance SEEG ou contrat de bail
+  @column({ columnName: 'seeg_or_lease_url' })
+  declare seeg_or_lease_url: string | null
 
   // ============================================================
   // BLOC 5 : VENDEUR EN LIGNE / PARTICULIER
   // ============================================================
 
-  @column()
-  declare stock_address: string | null // Adresse de stockage
+  @column({ columnName: 'stock_address' })
+  declare stock_address: string | null
 
-  @column()
-  declare address_proof_url: string | null // Preuve d'adresse (SEEG/Facture)
+  @column({ columnName: 'address_proof_url' })
+  declare address_proof_url: string | null
 
-  @column()
+  @column({ columnName: 'facebook_url' })
   declare facebook_url: string | null
 
-  @column()
+  @column({ columnName: 'instagram_url' })
   declare instagram_url: string | null
 
-  @column()
+  @column({ columnName: 'tiktok_url' })
   declare tiktok_url: string | null
 
-  @column()
-  declare stock_video_url: string | null // Vidéo de 20 secondes du stock
+  @column({ columnName: 'stock_video_url' })
+  declare stock_video_url: string | null
 
-  @column()
-  declare reference1_name: string | null // Contact référence 1 - Nom
+  // ✅ Correction : avec underscore entre reference et 1
+  @column({ columnName: 'reference_1_name' })
+  declare reference1_name: string | null
 
-  @column()
-  declare reference1_phone: string | null // Contact référence 1 - Téléphone
+  @column({ columnName: 'reference_1_phone' })
+  declare reference1_phone: string | null
 
-  @column()
-  declare reference2_name: string | null // Contact référence 2 - Nom
+  @column({ columnName: 'reference_2_name' })
+  declare reference2_name: string | null
 
-  @column()
-  declare reference2_phone: string | null // Contact référence 2 - Téléphone
+  @column({ columnName: 'reference_2_phone' })
+  declare reference2_phone: string | null
 
   // ============================================================
   // ÉTAPE 3 : PAIEMENT ET VALIDATION
   // ============================================================
 
-  @column()
+  @column({ columnName: 'payment_method' })
   declare payment_method: 'airtel_money' | 'moov_money' | 'virement_bancaire' | null
 
-  @column()
+  @column({ columnName: 'airtel_number' })
   declare airtel_number: string | null
 
-  @column()
+  @column({ columnName: 'moov_number' })
   declare moov_number: string | null
 
-  @column()
-  declare account_holder_name: string | null // Nom du titulaire Mobile Money
+  @column({ columnName: 'account_holder_name' })
+  declare account_holder_name: string | null
 
-  @column()
+  @column({ columnName: 'bank_name' })
   declare bank_name: string | null
 
-  @column()
-  declare rib_document_url: string | null // RIB pour virement bancaire
+  @column({ columnName: 'rib_document_url' })
+  declare rib_document_url: string | null
 
   // ============================================================
   // VALIDATION ET ENGAGEMENT
   // ============================================================
 
-  @column()
-  declare certify_truth: boolean // Certification sur l'honneur
+  @column({ columnName: 'certify_truth' })
+  declare certify_truth: boolean
 
-  @column()
-  declare accept_escrow: boolean // Acceptation du séquestre
+  @column({ columnName: 'accept_escrow' })
+  declare accept_escrow: boolean
 
-  @column()
-  declare signature: string | null // Signature électronique
+  @column({ columnName: 'signature' })
+  declare signature: string | null
 
   // ============================================================
   // STATUT DE VÉRIFICATION
   // ============================================================
 
-  @column()
-  declare is_verified: boolean // Compte vérifié complètement
+  @column({ columnName: 'is_verified' })
+  declare is_verified: boolean
 
-  @column()
-  declare verification_status: 'pending' | 'approved' | 'rejected' | null // Statut de vérification
+  @column({ columnName: 'verification_status' })
+  declare verification_status: 'pending' | 'approved' | 'rejected' | null
 
-  @column()
-  declare verified_at: DateTime | null // Date de vérification
+  @column.date({ columnName: 'verified_at' })
+  declare verified_at: DateTime | null
 
-  @column()
-  declare verified_by: string | null // ID de l'admin qui a vérifié
+  @column({ columnName: 'verified_by' })
+  declare verified_by: string | null
 
-  @column()
-  declare rejection_reason: string | null // Raison du rejet
+  @column({ columnName: 'rejection_reason' })
+  declare rejection_reason: string | null
 
   // ============================================================
   // TIMESTAMPS
   // ============================================================
 
-  @column.dateTime({ autoCreate: true })
+  @column.dateTime({ autoCreate: true, columnName: 'created_at' })
   declare created_at: DateTime
 
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  @column.dateTime({ autoCreate: true, autoUpdate: true, columnName: 'updated_at' })
   declare updated_at: DateTime
 
   // ============================================================
@@ -290,7 +292,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
 
   @beforeCreate()
   static setDefaults(user: User) {
-    // Valeurs par défaut pour les booléens
     user.is_phone_verified = user.is_phone_verified ?? false
     user.is_email_verified = user.is_email_verified ?? false
     user.is_whatsapp_verified = user.is_whatsapp_verified ?? false
@@ -329,11 +330,9 @@ export default class User extends compose(BaseModel, AuthFinder) {
     return `${first.slice(0, 2)}`.toUpperCase()
   }
 
-  // ✅ Vérifie si le marchand a complété toutes les étapes
   get hasCompletedRegistration(): boolean {
     if (!this.isMerchant) return true
-    
-    // Vérification des champs obligatoires de l'étape 1
+
     const step1Complete = !!(
       this.birth_date &&
       this.id_number &&
@@ -344,16 +343,14 @@ export default class User extends compose(BaseModel, AuthFinder) {
       this.is_email_verified &&
       this.residence_address
     )
-    
-    // Vérification des champs obligatoires de l'étape 2
+
     const step2Complete = !!(
       this.vendor_type &&
       this.commercial_name &&
       this.is_whatsapp_verified &&
       this.shop_description
     )
-    
-    // Vérification spécifique selon le type de vendeur
+
     let specificComplete = false
     if (this.vendor_type === 'boutique_physique') {
       specificComplete = !!(
@@ -377,16 +374,14 @@ export default class User extends compose(BaseModel, AuthFinder) {
         this.reference2_phone
       )
     }
-    
-    // Vérification des champs obligatoires de l'étape 3
+
     const step3Complete = !!(
       this.payment_method &&
       this.certify_truth &&
       this.accept_escrow &&
       this.signature
     )
-    
-    // Vérification spécifique du moyen de paiement
+
     let paymentComplete = false
     if (this.payment_method === 'airtel_money') {
       paymentComplete = !!(this.airtel_number && this.account_holder_name)
@@ -395,11 +390,10 @@ export default class User extends compose(BaseModel, AuthFinder) {
     } else if (this.payment_method === 'virement_bancaire') {
       paymentComplete = !!(this.bank_name && this.rib_document_url)
     }
-    
+
     return step1Complete && step2Complete && specificComplete && step3Complete && paymentComplete
   }
 
-  // ✅ Type de boutique affiché en français
   get vendorTypeLabel(): string | null {
     const labels = {
       'boutique_physique': 'Boutique physique',
@@ -409,7 +403,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
     return this.vendor_type ? labels[this.vendor_type] : null
   }
 
-  // ✅ Statut de vérification affiché en français
   get verificationStatusLabel(): string {
     const labels = {
       'pending': 'En attente',
@@ -463,9 +456,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
     return Number.parseInt(result[0].$extras.total) || 0
   }
 
-  /**
-   * Marquer le compte comme vérifié
-   */
   async approve(adminId: string): Promise<void> {
     this.is_verified = true
     this.verification_status = 'approved'
@@ -475,9 +465,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
     await this.save()
   }
 
-  /**
-   * Rejeter la vérification du compte
-   */
   async reject(adminId: string, reason: string): Promise<void> {
     this.is_verified = false
     this.verification_status = 'rejected'
@@ -487,9 +474,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
     await this.save()
   }
 
-  /**
-   * Mettre en attente de vérification
-   */
   async pending(): Promise<void> {
     this.is_verified = false
     this.verification_status = 'pending'

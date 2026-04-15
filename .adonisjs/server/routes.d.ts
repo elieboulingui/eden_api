@@ -48,6 +48,7 @@ export type ScannedRoutes = {
     'cart.get': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'cart.show': { paramsTuple?: []; params?: {} }
     'cart.add': { paramsTuple?: []; params?: {} }
+    'cart.updateItem': { paramsTuple?: []; params?: {} }
     'cart.update': { paramsTuple?: []; params?: {} }
     'cart.item.delete': { paramsTuple: [ParamValue]; params: {'itemId': ParamValue} }
     'cart.clear': { paramsTuple?: []; params?: {} }
@@ -127,6 +128,11 @@ export type ScannedRoutes = {
     'reviews.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'reviews.approve': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'reviews.reject': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'otp.send': { paramsTuple?: []; params?: {} }
+    'otp.verify': { paramsTuple?: []; params?: {} }
+    'otp.status': { paramsTuple?: []; params?: {} }
+    'otp.resend': { paramsTuple?: []; params?: {} }
+    'password.reset': { paramsTuple?: []; params?: {} }
     'admin.posts.index': { paramsTuple?: []; params?: {} }
     'admin.posts.stats': { paramsTuple?: []; params?: {} }
     'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -195,6 +201,7 @@ export type ScannedRoutes = {
     'reviews.my_reviews': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'reviews.index': { paramsTuple?: []; params?: {} }
     'reviews.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'otp.status': { paramsTuple?: []; params?: {} }
     'admin.posts.index': { paramsTuple?: []; params?: {} }
     'admin.posts.stats': { paramsTuple?: []; params?: {} }
     'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -260,6 +267,7 @@ export type ScannedRoutes = {
     'reviews.my_reviews': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'reviews.index': { paramsTuple?: []; params?: {} }
     'reviews.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'otp.status': { paramsTuple?: []; params?: {} }
     'admin.posts.index': { paramsTuple?: []; params?: {} }
     'admin.posts.stats': { paramsTuple?: []; params?: {} }
     'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -299,6 +307,10 @@ export type ScannedRoutes = {
     'merchant.coupons.store': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'reviews.mark_helpful': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'reviews.store': { paramsTuple?: []; params?: {} }
+    'otp.send': { paramsTuple?: []; params?: {} }
+    'otp.verify': { paramsTuple?: []; params?: {} }
+    'otp.resend': { paramsTuple?: []; params?: {} }
+    'password.reset': { paramsTuple?: []; params?: {} }
     'admin.posts.store': { paramsTuple?: []; params?: {} }
   }
   PUT: {
@@ -307,6 +319,7 @@ export type ScannedRoutes = {
     'testimonials.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'products.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'categories.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'cart.updateItem': { paramsTuple?: []; params?: {} }
     'cart.update': { paramsTuple?: []; params?: {} }
     'orders.status.update': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'tracking.status.update': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
