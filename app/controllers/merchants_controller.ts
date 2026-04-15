@@ -5,7 +5,7 @@ import db from '@adonisjs/lucid/services/db'
 
 export default class MerchantsController {
 
-  // ✅ GET /api/merchants - Liste paginée des marchands
+  // ✅ GET /api/merchants - Liste paginée des marchands VÉRIFIÉS
   async index({ request, response }: HttpContext) {
     try {
       const page = request.input('page', 1)
@@ -15,6 +15,8 @@ export default class MerchantsController {
 
       let query = User.query()
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
         .preload('wallet')
         .select([
           'id',
@@ -24,7 +26,14 @@ export default class MerchantsController {
           'avatar',
           'shop_name',
           'shop_image',
-          'country', // ✅ Ajout du pays
+          'commercial_name',
+          'logo_url',
+          'vendor_type',
+          'shop_description',
+          'country',
+          'neighborhood',
+          'is_verified',
+          'verification_status',
           'created_at',
           'updated_at'
         ])
@@ -40,6 +49,7 @@ export default class MerchantsController {
           builder
             .where('full_name', 'LIKE', `%${search}%`)
             .orWhere('shop_name', 'LIKE', `%${search}%`)
+            .orWhere('commercial_name', 'LIKE', `%${search}%`)
             .orWhere('email', 'LIKE', `%${search}%`)
         })
       }
@@ -52,10 +62,14 @@ export default class MerchantsController {
         email: merchant.email,
         avatar: merchant.avatar,
         role: merchant.role,
-        country: merchant.country, // ✅ Ajout du pays
+        country: merchant.country,
+        neighborhood: merchant.neighborhood,
+        vendor_type: merchant.vendor_type,
+        shop_description: merchant.shop_description,
+        is_verified: merchant.is_verified,
         shop: {
-          name: merchant.shop_name || merchant.full_name,
-          image: merchant.shop_image || merchant.avatar,
+          name: merchant.commercial_name || merchant.shop_name || merchant.full_name,
+          image: merchant.logo_url || merchant.shop_image || merchant.avatar,
         },
         wallet: merchant.wallet ? {
           id: merchant.wallet.id,
@@ -88,29 +102,66 @@ export default class MerchantsController {
     }
   }
 
-  // ✅ GET /api/merchants/:id - Détail d'un marchand avec ses produits
+  // ✅ GET /api/merchants/:id - Détail d'un marchand VÉRIFIÉ avec ses produits
   async show({ params, response }: HttpContext) {
     try {
       const merchant = await User.query()
         .where('id', params.id)
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
         .preload('wallet')
         .first()
 
       if (!merchant) {
         return response.status(404).json({
           success: false,
-          message: 'Marchand non trouvé',
+          message: 'Marchand non trouvé ou non vérifié',
         })
       }
 
-      // ✅ Récupérer TOUS les produits du marchand (sans filtre status)
       const products = await db
         .from('products')
         .where('user_id', merchant.id)
         .orderBy('created_at', 'desc')
 
       const stats = await this.getShopStats(merchant.id)
+
+      // Construction de l'objet shop avec les infos conditionnelles
+      const shopData: any = {
+        name: merchant.commercial_name || merchant.shop_name || merchant.full_name,
+        image: merchant.logo_url || merchant.shop_image || merchant.avatar,
+        cover: merchant.cover_photo_url,
+        stats: stats,
+      }
+
+      // Ajout des infos boutique physique
+      if (merchant.vendor_type === 'boutique_physique') {
+        shopData.address = merchant.shop_address
+        shopData.latitude = merchant.shop_latitude
+        shopData.longitude = merchant.shop_longitude
+        shopData.photos = {
+          facade1: merchant.facade_photo1_url,
+          facade2: merchant.facade_photo2_url,
+          interior1: merchant.interior_photo1_url,
+          interior2: merchant.interior_photo2_url,
+        }
+      }
+
+      // Ajout des infos vendeur en ligne
+      if (merchant.vendor_type === 'vendeur_ligne' || merchant.vendor_type === 'particulier') {
+        shopData.stock_address = merchant.stock_address
+        shopData.social_media = {
+          facebook: merchant.facebook_url,
+          instagram: merchant.instagram_url,
+          tiktok: merchant.tiktok_url,
+        }
+        shopData.stock_video = merchant.stock_video_url
+      }
+
+      // Ajout du contact WhatsApp
+      shopData.whatsapp = merchant.whatsapp_phone
+      shopData.is_whatsapp_verified = merchant.is_whatsapp_verified
 
       return response.status(200).json({
         success: true,
@@ -119,14 +170,18 @@ export default class MerchantsController {
           full_name: merchant.full_name,
           email: merchant.email,
           avatar: merchant.avatar,
+          phone: merchant.phone,
           role: merchant.role,
-          country: merchant.country, // ✅ Ajout du pays
-          shop: {
-            name: merchant.shop_name || merchant.full_name,
-            image: merchant.shop_image || merchant.avatar,
-            stats: stats,
-          },
-          products: products.map(p => ({
+          country: merchant.country,
+          neighborhood: merchant.neighborhood,
+          residence_address: merchant.residence_address,
+          vendor_type: merchant.vendor_type,
+          vendor_type_label: merchant.vendorTypeLabel,
+          shop_description: merchant.shop_description,
+          is_verified: merchant.is_verified,
+          verification_status: merchant.verification_status,
+          shop: shopData,
+          products: products.map((p: any) => ({
             id: p.id,
             name: p.name,
             price: p.price,
@@ -158,7 +213,7 @@ export default class MerchantsController {
     }
   }
 
-  // ✅ GET /api/merchants/active - Liste des marchands actifs
+  // ✅ GET /api/merchants/active - Liste des marchands actifs ET VÉRIFIÉS
   async active({ request, response }: HttpContext) {
     try {
       const page = request.input('page', 1)
@@ -166,6 +221,8 @@ export default class MerchantsController {
 
       const merchants = await User.query()
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
         .whereHas('wallet', (walletQuery) => {
           walletQuery.where('status', 'active')
         })
@@ -177,10 +234,12 @@ export default class MerchantsController {
         data: merchants.map(m => ({
           id: m.id,
           full_name: m.full_name,
-          country: m.country, // ✅ Ajout du pays
+          country: m.country,
+          neighborhood: m.neighborhood,
+          vendor_type: m.vendor_type,
           shop: {
-            name: m.shop_name || m.full_name,
-            image: m.shop_image || m.avatar
+            name: m.commercial_name || m.shop_name || m.full_name,
+            image: m.logo_url || m.shop_image || m.avatar,
           },
           wallet: m.wallet ? { status: m.wallet.status } : null,
         })),
@@ -200,7 +259,7 @@ export default class MerchantsController {
     }
   }
 
-  // ✅ GET /api/merchants/search?q=xxx - Recherche de marchands
+  // ✅ GET /api/merchants/search?q=xxx - Recherche de marchands VÉRIFIÉS
   async search({ request, response }: HttpContext) {
     try {
       const searchTerm = request.input('q', '')
@@ -217,11 +276,15 @@ export default class MerchantsController {
 
       const merchants = await User.query()
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
         .where((builder) => {
           builder
             .where('full_name', 'LIKE', `%${searchTerm}%`)
             .orWhere('shop_name', 'LIKE', `%${searchTerm}%`)
+            .orWhere('commercial_name', 'LIKE', `%${searchTerm}%`)
             .orWhere('email', 'LIKE', `%${searchTerm}%`)
+            .orWhere('shop_description', 'LIKE', `%${searchTerm}%`)
         })
         .preload('wallet')
         .paginate(page, limit)
@@ -231,10 +294,13 @@ export default class MerchantsController {
         data: merchants.map(m => ({
           id: m.id,
           full_name: m.full_name,
-          country: m.country, // ✅ Ajout du pays
+          country: m.country,
+          neighborhood: m.neighborhood,
+          vendor_type: m.vendor_type,
+          shop_description: m.shop_description,
           shop: {
-            name: m.shop_name || m.full_name,
-            image: m.shop_image || m.avatar
+            name: m.commercial_name || m.shop_name || m.full_name,
+            image: m.logo_url || m.shop_image || m.avatar,
           },
         })),
         meta: {
@@ -253,20 +319,38 @@ export default class MerchantsController {
     }
   }
 
-  // ✅ GET /api/merchants/all - TOUS les marchands avec leurs produits
+  // ✅ GET /api/merchants/all - TOUS les marchands VÉRIFIÉS avec leurs produits
   async all({ response }: HttpContext) {
     try {
-      console.log('=== DÉBUT all merchants ===')
+      console.log('=== DÉBUT all merchants (vérifiés uniquement) ===')
 
-      // Étape 1 : Récupérer tous les utilisateurs avec le rôle marchand
       const merchants = await db
         .from('users')
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .select(['id', 'full_name', 'shop_name', 'shop_image', 'avatar', 'email', 'country', 'created_at']) // ✅ Ajout de country
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
+        .select([
+          'id', 
+          'full_name', 
+          'shop_name', 
+          'commercial_name',
+          'shop_image', 
+          'logo_url',
+          'cover_photo_url',
+          'avatar', 
+          'email', 
+          'country',
+          'neighborhood',
+          'vendor_type',
+          'shop_description',
+          'whatsapp_phone',
+          'created_at'
+        ])
+        .orderBy('commercial_name', 'asc')
         .orderBy('shop_name', 'asc')
         .orderBy('full_name', 'asc')
 
-      console.log(`✓ ${merchants.length} marchands trouvés`)
+      console.log(`✓ ${merchants.length} marchands vérifiés trouvés`)
 
       if (merchants.length === 0) {
         return response.status(200).json({
@@ -276,25 +360,31 @@ export default class MerchantsController {
         })
       }
 
-      // Étape 2 : Pour chaque marchand, récupérer ses produits
       const formattedMerchants = []
 
       for (const merchant of merchants) {
-        // ✅ Récupérer TOUS les produits de ce marchand (sans filtre status)
         const products = await db
           .from('products')
           .where('user_id', merchant.id)
           .select('*')
           .orderBy('created_at', 'desc')
 
+        const stats = await this.getShopStats(merchant.id)
+
         formattedMerchants.push({
           id: merchant.id,
-          name: merchant.shop_name || merchant.full_name || 'Marchand',
-          image: merchant.shop_image || merchant.avatar || null,
+          name: merchant.commercial_name || merchant.shop_name || merchant.full_name || 'Marchand',
+          image: merchant.logo_url || merchant.shop_image || merchant.avatar || null,
+          cover: merchant.cover_photo_url || null,
           email: merchant.email,
-          country: merchant.country, // ✅ Ajout du pays
+          country: merchant.country,
+          neighborhood: merchant.neighborhood,
+          vendor_type: merchant.vendor_type,
+          shop_description: merchant.shop_description,
+          whatsapp: merchant.whatsapp_phone,
           created_at: merchant.created_at,
-          products: products.map(p => ({
+          stats: stats,
+          products: products.map((p: any) => ({
             id: p.id,
             name: p.name,
             price: p.price,
@@ -332,19 +422,21 @@ export default class MerchantsController {
     }
   }
 
-  // ✅ GET /api/merchants/:id/stats - Statistiques d'un marchand
+  // ✅ GET /api/merchants/:id/stats - Statistiques d'un marchand VÉRIFIÉ
   async stats({ params, response }: HttpContext) {
     try {
       const merchant = await db
         .from('users')
         .where('id', params.id)
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
         .first()
 
       if (!merchant) {
         return response.status(404).json({
           success: false,
-          message: 'Marchand non trouvé',
+          message: 'Marchand non trouvé ou non vérifié',
         })
       }
 
@@ -354,8 +446,10 @@ export default class MerchantsController {
         success: true,
         data: {
           merchant_id: merchant.id,
-          merchant_name: merchant.shop_name || merchant.full_name,
-          country: merchant.country, // ✅ Ajout du pays
+          merchant_name: merchant.commercial_name || merchant.shop_name || merchant.full_name,
+          country: merchant.country,
+          neighborhood: merchant.neighborhood,
+          vendor_type: merchant.vendor_type,
           ...stats
         },
       })
@@ -369,7 +463,7 @@ export default class MerchantsController {
     }
   }
 
-  // ✅ GET /api/merchants/:id/products - Produits paginés d'un marchand
+  // ✅ GET /api/merchants/:id/products - Produits paginés d'un marchand VÉRIFIÉ
   async merchantProducts({ params, request, response }: HttpContext) {
     try {
       const merchantId = params.id
@@ -380,16 +474,17 @@ export default class MerchantsController {
         .from('users')
         .where('id', merchantId)
         .whereIn('role', ['merchant', 'marchant', 'marchand'])
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
         .first()
 
       if (!merchant) {
         return response.status(404).json({
           success: false,
-          message: 'Marchand non trouvé',
+          message: 'Marchand non trouvé ou non vérifié',
         })
       }
 
-      // Pagination manuelle
       const offset = (page - 1) * limit
 
       const products = await db
@@ -404,7 +499,7 @@ export default class MerchantsController {
         .where('user_id', merchantId)
         .count('* as total')
 
-      const formattedProducts = products.map(p => ({
+      const formattedProducts = products.map((p: any) => ({
         id: p.id,
         name: p.name,
         price: p.price,
@@ -429,10 +524,12 @@ export default class MerchantsController {
         data: {
           merchant: {
             id: merchant.id,
-            name: merchant.shop_name || merchant.full_name,
-            image: merchant.shop_image || merchant.avatar,
+            name: merchant.commercial_name || merchant.shop_name || merchant.full_name,
+            image: merchant.logo_url || merchant.shop_image || merchant.avatar,
             email: merchant.email,
-            country: merchant.country, // ✅ Ajout du pays
+            country: merchant.country,
+            neighborhood: merchant.neighborhood,
+            vendor_type: merchant.vendor_type,
           },
           products: formattedProducts,
         },
@@ -455,7 +552,6 @@ export default class MerchantsController {
   // ✅ Méthode privée pour calculer les statistiques d'une boutique
   private async getShopStats(merchantId: string) {
     try {
-      // ✅ Pas de filtre status pour les produits
       const productsCount = await db
         .from('products')
         .where('user_id', merchantId)
