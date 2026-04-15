@@ -773,14 +773,6 @@ export class UserSchema extends BaseModel {
   @column()
   declare reference2Phone: string | null
   @column()
-  declare reference1Name: string | null
-  @column()
-  declare reference1Phone: string | null
-  @column()
-  declare reference2Name: string | null
-  @column()
-  declare reference2Phone: string | null
-  @column()
   declare rejectionReason: string | null
   @column()
   declare residenceAddress: string | null
