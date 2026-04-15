@@ -447,6 +447,12 @@ export class ProductSchema extends BaseModel {
   @column()
   declare imageUrl: string | null
   @column()
+  declare imageUrl: string | null
+  @column()
+  declare isNew: boolean | null
+  @column()
+  declare isOnSale: boolean | null
+  @column()
   declare isNew: boolean | null
   @column()
   declare isOnSale: boolean | null
@@ -678,34 +684,138 @@ export class TransactionSchema extends BaseModel {
 }
 
 export class UserSchema extends BaseModel {
-  static $columns = ['address', 'avatar', 'country', 'createdAt', 'email', 'fullName', 'id', 'password', 'phone', 'role', 'shopImage', 'shopName', 'updatedAt'] as const
+  static $columns = ['acceptEscrow', 'accountHolderName', 'address', 'addressProofUrl', 'airtelNumber', 'avatar', 'bankName', 'birthDate', 'certifyTruth', 'commercialName', 'country', 'coverPhotoUrl', 'createdAt', 'email', 'facadePhoto1Url', 'facadePhoto2Url', 'facebookUrl', 'fullName', 'id', 'idBackUrl', 'idFrontUrl', 'idNumber', 'instagramUrl', 'interiorPhoto1Url', 'interiorPhoto2Url', 'isEmailVerified', 'isPhoneVerified', 'isVerified', 'isWhatsappVerified', 'logoUrl', 'moovNumber', 'neighborhood', 'nifNumber', 'password', 'paymentMethod', 'personalPhone', 'phone', 'rccmDocumentUrl', 'rccmNumber', 'reference1Name', 'reference1Phone', 'reference2Name', 'reference2Phone', 'rejectionReason', 'residenceAddress', 'ribDocumentUrl', 'role', 'seegOrLeaseUrl', 'selfieUrl', 'shopAddress', 'shopDescription', 'shopImage', 'shopLatitude', 'shopLongitude', 'shopName', 'signature', 'stockAddress', 'stockVideoUrl', 'tiktokUrl', 'updatedAt', 'vendorType', 'verificationStatus', 'verifiedAt', 'verifiedBy', 'whatsappPhone'] as const
   $columns = UserSchema.$columns
+  @column()
+  declare acceptEscrow: boolean | null
+  @column()
+  declare accountHolderName: string | null
   @column()
   declare address: string | null
   @column()
+  declare addressProofUrl: string | null
+  @column()
+  declare airtelNumber: string | null
+  @column()
   declare avatar: string | null
   @column()
+  declare bankName: string | null
+  @column.date()
+  declare birthDate: DateTime | null
+  @column()
+  declare certifyTruth: boolean | null
+  @column()
+  declare commercialName: string | null
+  @column()
   declare country: string | null
+  @column()
+  declare coverPhotoUrl: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime | null
   @column()
   declare email: string
   @column()
+  declare facadePhoto1Url: string | null
+  @column()
+  declare facadePhoto2Url: string | null
+  @column()
+  declare facebookUrl: string | null
+  @column()
   declare fullName: string | null
   @column({ isPrimary: true })
   declare id: string
+  @column()
+  declare idBackUrl: string | null
+  @column()
+  declare idFrontUrl: string | null
+  @column()
+  declare idNumber: string | null
+  @column()
+  declare instagramUrl: string | null
+  @column()
+  declare interiorPhoto1Url: string | null
+  @column()
+  declare interiorPhoto2Url: string | null
+  @column()
+  declare isEmailVerified: boolean | null
+  @column()
+  declare isPhoneVerified: boolean | null
+  @column()
+  declare isVerified: boolean | null
+  @column()
+  declare isWhatsappVerified: boolean | null
+  @column()
+  declare logoUrl: string | null
+  @column()
+  declare moovNumber: string | null
+  @column()
+  declare neighborhood: string | null
+  @column()
+  declare nifNumber: string | null
   @column({ serializeAs: null })
   declare password: string
   @column()
+  declare paymentMethod: string | null
+  @column()
+  declare personalPhone: string | null
+  @column()
   declare phone: string | null
+  @column()
+  declare rccmDocumentUrl: string | null
+  @column()
+  declare rccmNumber: string | null
+  @column()
+  declare reference1Name: string | null
+  @column()
+  declare reference1Phone: string | null
+  @column()
+  declare reference2Name: string | null
+  @column()
+  declare reference2Phone: string | null
+  @column()
+  declare rejectionReason: string | null
+  @column()
+  declare residenceAddress: string | null
+  @column()
+  declare ribDocumentUrl: string | null
   @column()
   declare role: string | null
   @column()
+  declare seegOrLeaseUrl: string | null
+  @column()
+  declare selfieUrl: string | null
+  @column()
+  declare shopAddress: string | null
+  @column()
+  declare shopDescription: string | null
+  @column()
   declare shopImage: string | null
   @column()
+  declare shopLatitude: string | null
+  @column()
+  declare shopLongitude: string | null
+  @column()
   declare shopName: string | null
+  @column()
+  declare signature: string | null
+  @column()
+  declare stockAddress: string | null
+  @column()
+  declare stockVideoUrl: string | null
+  @column()
+  declare tiktokUrl: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+  @column()
+  declare vendorType: string | null
+  @column()
+  declare verificationStatus: string | null
+  @column.dateTime()
+  declare verifiedAt: DateTime | null
+  @column()
+  declare verifiedBy: string | null
+  @column()
+  declare whatsappPhone: string | null
 }
 
 export class WalletSchema extends BaseModel {
