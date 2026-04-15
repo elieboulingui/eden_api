@@ -1,6 +1,8 @@
+// app/controllers/session_controller.ts
 import User from '#models/user'
 import type { HttpContext } from '@adonisjs/core/http'
 import jwt from 'jsonwebtoken'
+import hash from '@adonisjs/core/services/hash'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'linemarket'
 
@@ -11,7 +13,6 @@ export default class SessionController {
   async store({ request, response }: HttpContext) {
     try {
       const { email, password } = request.only(['email', 'password'])
-
       const user = await User.verifyCredentials(email, password)
 
       const token = jwt.sign(
@@ -20,7 +21,6 @@ export default class SessionController {
         { expiresIn: '7d' }
       )
 
-      // Convert DateTime to ISO string for JSON response
       return response.ok({
         success: true,
         message: 'Connexion réussie',
@@ -45,15 +45,13 @@ export default class SessionController {
   }
 
   /**
-   * 🔐 Récupérer user depuis JWT
+   * Récupérer user depuis JWT
    */
   private async getUserFromToken(request: HttpContext['request']) {
     const authHeader = request.header('Authorization')
-
     if (!authHeader) return null
 
     const token = authHeader.replace('Bearer ', '')
-
     try {
       const payload: any = jwt.verify(token, JWT_SECRET)
       return await User.find(payload.id)
@@ -67,7 +65,6 @@ export default class SessionController {
    */
   async profile({ request, response }: HttpContext) {
     const user = await this.getUserFromToken(request)
-
     if (!user) {
       return response.unauthorized({
         success: false,
@@ -91,12 +88,11 @@ export default class SessionController {
   }
 
   /**
-   * ✅ UPDATE PROFIL (FIX ERREUR TS)
+   * Mise à jour profil
    */
   async update({ request, response }: HttpContext) {
     try {
       const user = await this.getUserFromToken(request)
-
       if (!user) {
         return response.unauthorized({
           success: false,
@@ -105,7 +101,6 @@ export default class SessionController {
       }
 
       const data = request.only(['full_name', 'phone', 'address'])
-
       user.merge(data)
       await user.save()
 
@@ -134,12 +129,57 @@ export default class SessionController {
   }
 
   /**
-   * Déconnexion
+   * ✅ Changement de mot de passe (MÉTHODE MANQUANTE)
+   */
+  async changePassword({ request, response }: HttpContext) {
+    try {
+      const user = await this.getUserFromToken(request)
+      if (!user) {
+        return response.unauthorized({
+          success: false,
+          message: 'Non authentifié',
+        })
+      }
+
+      const { current_password, new_password } = request.only([
+        'current_password',
+        'new_password',
+      ])
+
+      // Vérifier le mot de passe actuel
+      const isValid = await hash.verify(user.password, current_password)
+      if (!isValid) {
+        return response.badRequest({
+          success: false,
+          message: 'Mot de passe actuel incorrect',
+        })
+      }
+
+      // Mettre à jour le mot de passe
+      user.password = await hash.make(new_password)
+      await user.save()
+
+      return response.ok({
+        success: true,
+        message: 'Mot de passe modifié avec succès',
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue'
+      return response.badRequest({
+        success: false,
+        message: 'Erreur lors du changement de mot de passe',
+        error: errorMessage,
+      })
+    }
+  }
+
+  /**
+   * Déconnexion utilisateur
    */
   async destroy({ response }: HttpContext) {
     return response.ok({
       success: true,
-      message: 'Déconnexion réussie (supprimer le token côté client)',
+      message: 'Déconnexion réussie (supprimez le token côté client)',
     })
   }
 }
