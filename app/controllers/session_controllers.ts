@@ -1,122 +1,41 @@
+import { DateTime } from 'luxon'
 import User from '#models/user'
 import type { HttpContext } from '@adonisjs/core/http'
-import jwt from 'jsonwebtoken'
-import env from '#start/env'
 
-export default class SessionController {
-  /**
-   * Authenticate user credentials and return a JWT token
-   */
+export default class NewAccountController {
   async store({ request, response }: HttpContext) {
-    const { email, password } = request.all()
-
     try {
-      const user = await User.verifyCredentials(email, password)
+      const data = request.only([
+        'role',
+        'country',
+        'neighborhood',
+        'birth_date',
+        'id_number',
+        'id_front_url',
+        // ... autres champs
+        'password',
+      ])
 
-      // Création du payload JWT
-      const payload = {
-        userId: user.id,
-        email: user.email,
-        full_name: user.full_name,
+      // ✅ CORRECTION : Convertir birth_date en DateTime
+      const userData = {
+        ...data,
+        birth_date: data.birth_date ? DateTime.fromISO(data.birth_date) : null,
       }
 
-      // Génération du token JWT
-      const token = jwt.sign(payload, 'APP_KEY', {
-        expiresIn: '7d', // Token valide 7 jours
-      })
+      const user = await User.create(userData)
 
-      return response.status(200).json({
+      return response.created({
         success: true,
-        message: 'Connexion réussie',
-        user: {
-          id: user.id,
-          full_name: user.full_name,
-          email: user.email,
-        },
-        token: {
-          type: 'Bearer',
-          value: token,
-        },
+        message: 'Compte créé avec succès',
+        user,
       })
     } catch (error) {
-      return response.status(401).json({
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+      return response.badRequest({
         success: false,
-        message: 'Identifiants invalides',
+        message: 'Erreur création compte',
+        error: errorMessage,
       })
     }
-  }
-
-  /**
-   * Get current authenticated user (via JWT)
-   */
-  async me({ request, response }: HttpContext) {
-    try {
-      // Récupération du token depuis le header Authorization
-      const authHeader = request.header('Authorization')
-
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return response.status(401).json({
-          success: false,
-          message: 'Token manquant ou invalide',
-        })
-      }
-
-      const token = authHeader.split(' ')[1]
-
-      // Vérification et décodage du token
-      const decoded = jwt.verify(token, 'APP_KEY') as any
-
-      // Récupération de l'utilisateur
-      const user = await User.find(decoded.userId)
-
-      if (!user) {
-        return response.status(404).json({
-          success: false,
-          message: 'Utilisateur non trouvé',
-        })
-      }
-
-      return response.status(200).json({
-        success: true,
-        user: {
-          id: user.id,
-          full_name: user.full_name,
-          email: user.email,
-        },
-      })
-    } catch (error) {
-      if (error instanceof jwt.JsonWebTokenError) {
-        return response.status(401).json({
-          success: false,
-          message: 'Token invalide',
-        })
-      }
-
-      if (error instanceof jwt.TokenExpiredError) {
-        return response.status(401).json({
-          success: false,
-          message: 'Token expiré',
-        })
-      }
-
-      return response.status(401).json({
-        success: false,
-        message: 'Non authentifié',
-      })
-    }
-  }
-
-  /**
-   * Log out - côté client uniquement (supprimer le token)
-   */
-  async destroy({ response }: HttpContext) {
-    // Avec JWT, la déconnexion se fait côté client en supprimant le token
-    // On peut ajouter une blacklist si nécessaire, mais pour une API simple,
-    // il suffit que le client supprime le token de son stockage
-
-    return response.status(200).json({
-      success: true,
-      message: 'Déconnexion réussie (supprimez le token côté client)',
-    })
   }
 }
