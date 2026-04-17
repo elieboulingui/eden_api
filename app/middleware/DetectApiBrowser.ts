@@ -1,21 +1,28 @@
 import { HttpContext } from '@adonisjs/core/http'
 
 export default class DetectApiBrowserMiddleware {
-  async handle(ctx: HttpContext, next: () => Promise<void>) {
+  async handle({ request, response }: HttpContext, next: () => Promise<void>) {
+    // Exécute d'abord la route normalement
     await next()
-
-    // Après l'exécution de la route, on regarde si :
-    // 1. L'URL commence par /api
-    // 2. La requête a été faite par un navigateur (Accept: text/html)
-    // 3. La réponse n'est pas déjà une erreur ou une redirection
-    if (
-      ctx.request.url().startsWith('/api') &&
-      ctx.request.accepts(['html', 'json']) === 'html' &&
-      ctx.response.getStatus() === 200
-    ) {
-      return ctx.response.notFound({
-        error: 'Resource not found'
-      })
+    
+    // Vérifie si l'URL commence par /api
+    const isApiRoute = request.url().startsWith('/api')
+    
+    if (isApiRoute) {
+      // Récupère l'en-tête Accept du navigateur
+      const acceptHeader = request.header('accept') || ''
+      
+      // Vérifie si c'est un navigateur qui demande du HTML
+      const isBrowserRequest = acceptHeader.includes('text/html') && !acceptHeader.includes('application/json')
+      
+      // Si c'est un navigateur qui essaie d'accéder à l'API
+      if (isBrowserRequest) {
+        // Retourne une erreur 404
+        return response.status(404).send({
+          error: 'Page non trouvée',
+          message: 'Cette ressource n\'est pas accessible directement depuis le navigateur'
+        })
+      }
     }
   }
 }
