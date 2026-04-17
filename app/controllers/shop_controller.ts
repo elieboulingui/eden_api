@@ -1,8 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Product from '#models/Product'
-import Coupon from '#models/coupon'
-import Promotion from '#models/promotion'
-import Category from '#models/categories'
 import { DateTime } from 'luxon'
 
 export default class ShopController {
@@ -19,7 +16,7 @@ export default class ShopController {
 
       console.log('Params:', { page, category, search, sort, limit })
 
-      // Requête de base pour les produits - SANS status
+      // Requête de base pour les produits
       let productsQuery = Product.query()
         .preload('user', (query) => query.select('id', 'full_name', 'country'))
 
@@ -45,9 +42,6 @@ export default class ShopController {
         case 'price_desc':
           productsQuery = productsQuery.orderBy('price', 'desc')
           break
-        case 'popular':
-          productsQuery = productsQuery.orderBy('sales', 'desc')
-          break
         default:
           productsQuery = productsQuery.orderBy('created_at', 'desc')
           break
@@ -56,133 +50,60 @@ export default class ShopController {
       const products = await productsQuery.paginate(page, limit)
       console.log(`✅ ${products.length} produits trouvés`)
 
-      // Récupérer les produits en promotion (avec old_price)
-      const productsOnSale = await Product.query()
-        .preload('user', (query) => query.select('id', 'full_name', 'country'))
-        .whereNotNull('old_price')
-        .where('old_price', '>', 0)
-        .orderBy('created_at', 'desc')
-        .limit(8)
-      console.log(`✅ ${productsOnSale.length} produits en promo trouvés`)
-
-      // Récupérer les nouveaux produits
-      const newProducts = await Product.query()
-        .preload('user', (query) => query.select('id', 'full_name', 'country'))
-        .where('is_new', true)
-        .orderBy('created_at', 'desc')
-        .limit(8)
-      console.log(`✅ ${newProducts.length} nouveaux produits trouvés`)
-
-      // Récupérer les meilleures ventes
-      const bestSellers = await Product.query()
-        .preload('user', (query) => query.select('id', 'full_name', 'country'))
-        .orderBy('sales', 'desc')
-        .limit(8)
-      console.log(`✅ ${bestSellers.length} meilleures ventes trouvées`)
-
-      // Récupérer les coupons actifs
-      const now = DateTime.now()
-      const nowSQL = now.toSQL()
-      
-      let activeCoupons: any[] = []
+      // Récupérer les nouveaux produits (sans old_price)
+      let newProducts: any[] = []
       try {
-        activeCoupons = await Coupon.query()
-          .where('status', 'active')
-          .where((builder) => {
-            builder.whereNull('valid_until').orWhere('valid_until', '>', nowSQL)
-          })
+        newProducts = await Product.query()
+          .preload('user', (query) => query.select('id', 'full_name', 'country'))
+          .where('is_new', true)
           .orderBy('created_at', 'desc')
-          .limit(6)
-        console.log(`✅ ${activeCoupons.length} coupons trouvés`)
+          .limit(8)
+        console.log(`✅ ${newProducts.length} nouveaux produits trouvés`)
       } catch (err) {
-        console.log('⚠️ Pas de coupons ou table inexistante')
+        console.log('⚠️ Colonne is_new inexistante, on prend les plus récents')
+        newProducts = await Product.query()
+          .preload('user', (query) => query.select('id', 'full_name', 'country'))
+          .orderBy('created_at', 'desc')
+          .limit(8)
       }
 
-      // Récupérer les bannières
-      let banners: any[] = []
+      // Récupérer les produits en promotion - avec gestion d'erreur
+      let productsOnSale: any[] = []
       try {
-        banners = await Promotion.query()
-          .where('type', 'banner')
-          .where('status', 'active')
-          .where((builder) => {
-            builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
-          })
-          .where((builder) => {
-            builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
-          })
-          .orderBy('priority', 'asc')
-          .limit(5)
-        console.log(`✅ ${banners.length} bannières trouvées`)
+        productsOnSale = await Product.query()
+          .preload('user', (query) => query.select('id', 'full_name', 'country'))
+          .whereNotNull('old_price')
+          .where('old_price', '>', 0)
+          .orderBy('created_at', 'desc')
+          .limit(8)
       } catch (err) {
-        console.log('⚠️ Pas de promotions ou table inexistante')
+        console.log('⚠️ Colonne old_price inexistante, pas de produits en promo')
+        productsOnSale = []
       }
 
-      // Récupérer les flash sales
-      let flashSales: any[] = []
+      // Meilleures ventes (on prend les plus récents si pas de colonne sales)
+      let bestSellers: any[] = []
       try {
-        flashSales = await Promotion.query()
-          .where('type', 'flash_sale')
-          .where('status', 'active')
-          .where((builder) => {
-            builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
-          })
-          .where((builder) => {
-            builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
-          })
-          .orderBy('priority', 'asc')
-          .limit(4)
+        bestSellers = await Product.query()
+          .preload('user', (query) => query.select('id', 'full_name', 'country'))
+          .orderBy('created_at', 'desc')
+          .limit(8)
       } catch (err) {
-        console.log('⚠️ Pas de flash sales')
+        console.log('⚠️ Erreur bestSellers')
+        bestSellers = []
       }
 
-      // Récupérer les offres par catégorie
-      let categoryOffers: any[] = []
-      try {
-        categoryOffers = await Promotion.query()
-          .where('type', 'category_offer')
-          .where('status', 'active')
-          .where((builder) => {
-            builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
-          })
-          .where((builder) => {
-            builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
-          })
-          .orderBy('priority', 'asc')
-          .limit(6)
-      } catch (err) {
-        console.log('⚠️ Pas d\'offres catégorie')
-      }
-
-      // Récupérer les catégories
-      let categories: any[] = []
-      try {
-        categories = await Category.query()
-          .where('is_active', true)
-          .orderBy('name', 'asc')
-        console.log(`✅ ${categories.length} catégories trouvées`)
-      } catch (err) {
-        console.log('⚠️ Pas de catégories ou table inexistante')
-      }
-
-      // Statistiques - SANS status
+      // Statistiques
       const totalProductsResult = await Product.query().count('* as total')
-      const totalMerchantsResult = await Product.query()
-        .distinct('user_id')
-        .count('* as total')
       
-      let totalCoupons = 0
-      let totalPromotions = 0
+      let totalMerchants = 0
       try {
-        const totalCouponsResult = await Coupon.query().where('status', 'active').count('* as total')
-        totalCoupons = Number(totalCouponsResult[0].$extras.total)
+        const totalMerchantsResult = await Product.query()
+          .distinct('user_id')
+          .count('* as total')
+        totalMerchants = Number(totalMerchantsResult[0].$extras.total)
       } catch (err) {
-        // Ignorer
-      }
-      try {
-        const totalPromotionsResult = await Promotion.query().where('status', 'active').count('* as total')
-        totalPromotions = Number(totalPromotionsResult[0].$extras.total)
-      } catch (err) {
-        // Ignorer
+        console.log('⚠️ Erreur comptage marchands')
       }
 
       // Fonction de formatage des produits
@@ -192,35 +113,40 @@ export default class ShopController {
           userData = {
             id: String(p.user.id),
             name: p.user.full_name || p.user.name || '',
-            shopName: p.user.shop_name || null,
+            shopName: p.user.shop_name || p.user.full_name || null,
           }
         }
 
+        // Gérer le prix avec old_price si disponible
+        const oldPrice = p.old_price || null
+        const isOnSale = oldPrice ? oldPrice > p.price : false
+        const discountPercentage = oldPrice && isOnSale
+          ? Math.round(((oldPrice - p.price) / oldPrice) * 100)
+          : null
+
         return {
           id: String(p.id),
-          name: p.name,
-          description: p.description,
-          price: p.price,
+          name: p.name || '',
+          description: p.description || '',
+          price: p.price || 0,
           formattedPrice: new Intl.NumberFormat('fr-FR', {
             style: 'currency',
             currency: 'XOF',
-          }).format(p.price),
-          oldPrice: p.old_price,
-          formattedOldPrice: p.old_price
+          }).format(p.price || 0),
+          oldPrice: oldPrice,
+          formattedOldPrice: oldPrice
             ? new Intl.NumberFormat('fr-FR', {
                 style: 'currency',
                 currency: 'XOF',
-              }).format(p.old_price)
+              }).format(oldPrice)
             : null,
-          discountPercentage: p.old_price
-            ? Math.round(((p.old_price - p.price) / p.old_price) * 100)
-            : null,
+          discountPercentage: discountPercentage,
           image: p.image_url ?? null,
           stock: p.stock || 0,
           isInStock: (p.stock || 0) > 0,
           isLowStock: (p.stock || 0) > 0 && (p.stock || 0) <= 5,
           isNew: p.is_new || false,
-          isOnSale: p.old_price ? p.old_price > p.price : false,
+          isOnSale: isOnSale,
           rating: p.rating || 0,
           reviewsCount: p.reviews_count || 0,
           sales: p.sales || 0,
@@ -230,40 +156,13 @@ export default class ShopController {
         }
       }
 
-      // Formater les coupons
-      const formatCoupon = (c: any) => ({
-        id: String(c.id),
-        code: c.code,
-        discount: c.discount,
-        type: c.type,
-        description: c.description,
-        validUntil: c.valid_until,
-        isValid: true,
-        product: null,
-      })
-
-      // Formater les promotions
-      const formatPromotion = (p: any) => ({
-        id: String(p.id),
-        title: p.title,
-        description: p.description,
-        image: p.image_url ?? p.banner_image ?? null,
-        type: p.type,
-        discountPercentage: p.discount_percentage,
-        discountAmount: p.discount_amount,
-        link: p.link,
-        buttonText: p.button_text || 'Voir plus',
-        startDate: p.start_date,
-        endDate: p.end_date,
-        priority: p.priority,
-      })
-
-      // Formater les catégories
-      const formatCategory = (c: any) => ({
-        id: String(c.id),
-        name: c.name,
-        slug: c.slug,
-      })
+      // Récupérer les catégories uniques des produits
+      const categoriesList = [...new Set(products.map(p => p.category).filter(Boolean))]
+      const formattedCategories = categoriesList.map((cat, index) => ({
+        id: String(index + 1),
+        name: cat,
+        slug: cat.toLowerCase().replace(/\s+/g, '-'),
+      }))
 
       return response.json({
         success: true,
@@ -271,16 +170,16 @@ export default class ShopController {
         productsOnSale: productsOnSale.map(formatProduct),
         newProducts: newProducts.map(formatProduct),
         bestSellers: bestSellers.map(formatProduct),
-        activeCoupons: activeCoupons.map(formatCoupon),
-        banners: banners.map(formatPromotion),
-        flashSales: flashSales.map(formatPromotion),
-        categoryOffers: categoryOffers.map(formatPromotion),
-        categories: categories.map(formatCategory),
+        activeCoupons: [],
+        banners: [],
+        flashSales: [],
+        categoryOffers: [],
+        categories: formattedCategories,
         stats: {
           totalProducts: Number(totalProductsResult[0].$extras.total),
-          totalMerchants: Number(totalMerchantsResult[0].$extras.total),
-          totalCoupons: totalCoupons,
-          totalPromotions: totalPromotions,
+          totalMerchants: totalMerchants,
+          totalCoupons: 0,
+          totalPromotions: 0,
         },
         pagination: {
           currentPage: products.currentPage,
@@ -310,76 +209,16 @@ export default class ShopController {
   }
 
   async apiCoupons({ response }: HttpContext) {
-    try {
-      const now = DateTime.now()
-      const coupons = await Coupon.query()
-        .where('status', 'active')
-        .where((builder) => {
-          builder.whereNull('valid_until').orWhere('valid_until', '>', now.toSQL())
-        })
-        .orderBy('created_at', 'desc')
-        .limit(20)
-
-      return response.json({
-        success: true,
-        coupons: coupons.map((c: any) => ({
-          id: String(c.id),
-          code: c.code,
-          discount: c.discount,
-          type: c.type,
-          description: c.description,
-          validUntil: c.valid_until,
-          isValid: true,
-        })),
-      })
-    } catch (error: unknown) {
-      console.error('apiCoupons error:', error)
-      return response.json({
-        success: true,
-        coupons: [],
-      })
-    }
+    return response.json({
+      success: true,
+      coupons: [],
+    })
   }
 
   async apiPromotions({ response }: HttpContext) {
-    try {
-      const now = DateTime.now()
-      const nowSQL = now.toSQL()
-
-      const promotions = await Promotion.query()
-        .where('status', 'active')
-        .where((builder) => {
-          builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
-        })
-        .where((builder) => {
-          builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
-        })
-        .orderBy('priority', 'asc')
-        .limit(20)
-
-      return response.json({
-        success: true,
-        promotions: promotions.map((p: any) => ({
-          id: String(p.id),
-          title: p.title,
-          description: p.description,
-          image: p.image_url ?? p.banner_image ?? null,
-          type: p.type,
-          discountPercentage: p.discount_percentage,
-          discountAmount: p.discount_amount,
-          link: p.link,
-          buttonText: p.button_text,
-          startDate: p.start_date,
-          endDate: p.end_date,
-          priority: p.priority,
-        })),
-      })
-    } catch (error: unknown) {
-      console.error('apiPromotions error:', error)
-      return response.json({
-        success: true,
-        promotions: [],
-      })
-    }
+    return response.json({
+      success: true,
+      promotions: [],
+    })
   }
 }
