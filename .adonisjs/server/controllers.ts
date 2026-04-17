@@ -17,7 +17,6 @@ export const controllers = {
   MerchantDashboard: () => import('#controllers/merchant_dashboard_controller'),
   Merchants: () => import('#controllers/merchants_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
-  NewAccountControllers: () => import('#controllers/new_account_controllers'),
   Newsletter: () => import('#controllers/newsletter_controller'),
   OrderTrackings: () => import('#controllers/order_trackings_controller'),
   Orders: () => import('#controllers/OrdersController'),
@@ -29,7 +28,7 @@ export const controllers = {
   PushSubscriptions: () => import('#controllers/push_subscriptions_controller'),
   Reviews: () => import('#controllers/reviews_controller'),
   Session: () => import('#controllers/session_controller'),
-  SessionControllers: () => import('#controllers/session_controllers'),
+  Shop: () => import('#controllers/shop_controller'),
   Testimonials: () => import('#controllers/testimonials_controller'),
   Users: () => import('#controllers/users_controller'),
 }

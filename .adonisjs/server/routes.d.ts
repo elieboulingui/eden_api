@@ -8,23 +8,34 @@ export type ScannedRoutes = {
     'new_account.create': { paramsTuple?: []; params?: {} }
     'new_account.web.store': { paramsTuple?: []; params?: {} }
     'session.create': { paramsTuple?: []; params?: {} }
-    'session.store': { paramsTuple?: []; params?: {} }
+    'session.web.store': { paramsTuple?: []; params?: {} }
     'session.web.destroy': { paramsTuple?: []; params?: {} }
     'dashboard.admin': { paramsTuple?: []; params?: {} }
     'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'dashboard.manager': { paramsTuple?: []; params?: {} }
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
-    'new_account.store': { paramsTuple?: []; params?: {} }
-    'session.client.store': { paramsTuple?: []; params?: {} }
-    'session.login': { paramsTuple?: []; params?: {} }
-    'session.api.login': { paramsTuple?: []; params?: {} }
-    'session.destroy': { paramsTuple?: []; params?: {} }
-    'profile.update': { paramsTuple?: []; params?: {} }
-    'profile.password': { paramsTuple?: []; params?: {} }
+    'api.register': { paramsTuple?: []; params?: {} }
+    'api.login': { paramsTuple?: []; params?: {} }
+    'session.store': { paramsTuple?: []; params?: {} }
+    'api.logout': { paramsTuple?: []; params?: {} }
+    'api.profile.update': { paramsTuple?: []; params?: {} }
+    'api.profile.password': { paramsTuple?: []; params?: {} }
+    'api.profile': { paramsTuple?: []; params?: {} }
+    'otp.send': { paramsTuple?: []; params?: {} }
+    'otp.verify': { paramsTuple?: []; params?: {} }
+    'otp.status': { paramsTuple?: []; params?: {} }
+    'otp.resend': { paramsTuple?: []; params?: {} }
+    'password.reset': { paramsTuple?: []; params?: {} }
     'blog.index': { paramsTuple?: []; params?: {} }
     'blog.featured': { paramsTuple?: []; params?: {} }
     'blog.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
     'blog.submit': { paramsTuple?: []; params?: {} }
+    'admin.posts.index': { paramsTuple?: []; params?: {} }
+    'admin.posts.stats': { paramsTuple?: []; params?: {} }
+    'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'admin.posts.store': { paramsTuple?: []; params?: {} }
+    'admin.posts.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'admin.posts.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'testimonials.index': { paramsTuple?: []; params?: {} }
     'testimonials.store': { paramsTuple?: []; params?: {} }
     'testimonials.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -128,17 +139,9 @@ export type ScannedRoutes = {
     'reviews.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'reviews.approve': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'reviews.reject': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'otp.send': { paramsTuple?: []; params?: {} }
-    'otp.verify': { paramsTuple?: []; params?: {} }
-    'otp.status': { paramsTuple?: []; params?: {} }
-    'otp.resend': { paramsTuple?: []; params?: {} }
-    'password.reset': { paramsTuple?: []; params?: {} }
-    'admin.posts.index': { paramsTuple?: []; params?: {} }
-    'admin.posts.stats': { paramsTuple?: []; params?: {} }
-    'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'admin.posts.store': { paramsTuple?: []; params?: {} }
-    'admin.posts.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'admin.posts.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'api.shop.index': { paramsTuple?: []; params?: {} }
+    'api.shop.coupons': { paramsTuple?: []; params?: {} }
+    'api.shop.promotions': { paramsTuple?: []; params?: {} }
   }
   GET: {
     'home': { paramsTuple?: []; params?: {} }
@@ -148,9 +151,14 @@ export type ScannedRoutes = {
     'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'dashboard.manager': { paramsTuple?: []; params?: {} }
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
+    'api.profile': { paramsTuple?: []; params?: {} }
+    'otp.status': { paramsTuple?: []; params?: {} }
     'blog.index': { paramsTuple?: []; params?: {} }
     'blog.featured': { paramsTuple?: []; params?: {} }
     'blog.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
+    'admin.posts.index': { paramsTuple?: []; params?: {} }
+    'admin.posts.stats': { paramsTuple?: []; params?: {} }
+    'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'testimonials.index': { paramsTuple?: []; params?: {} }
     'testimonials.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'products.index': { paramsTuple?: []; params?: {} }
@@ -201,10 +209,9 @@ export type ScannedRoutes = {
     'reviews.my_reviews': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'reviews.index': { paramsTuple?: []; params?: {} }
     'reviews.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'otp.status': { paramsTuple?: []; params?: {} }
-    'admin.posts.index': { paramsTuple?: []; params?: {} }
-    'admin.posts.stats': { paramsTuple?: []; params?: {} }
-    'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'api.shop.index': { paramsTuple?: []; params?: {} }
+    'api.shop.coupons': { paramsTuple?: []; params?: {} }
+    'api.shop.promotions': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
     'home': { paramsTuple?: []; params?: {} }
@@ -214,9 +221,14 @@ export type ScannedRoutes = {
     'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'dashboard.manager': { paramsTuple?: []; params?: {} }
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
+    'api.profile': { paramsTuple?: []; params?: {} }
+    'otp.status': { paramsTuple?: []; params?: {} }
     'blog.index': { paramsTuple?: []; params?: {} }
     'blog.featured': { paramsTuple?: []; params?: {} }
     'blog.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
+    'admin.posts.index': { paramsTuple?: []; params?: {} }
+    'admin.posts.stats': { paramsTuple?: []; params?: {} }
+    'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'testimonials.index': { paramsTuple?: []; params?: {} }
     'testimonials.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'products.index': { paramsTuple?: []; params?: {} }
@@ -267,21 +279,24 @@ export type ScannedRoutes = {
     'reviews.my_reviews': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'reviews.index': { paramsTuple?: []; params?: {} }
     'reviews.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'otp.status': { paramsTuple?: []; params?: {} }
-    'admin.posts.index': { paramsTuple?: []; params?: {} }
-    'admin.posts.stats': { paramsTuple?: []; params?: {} }
-    'admin.posts.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'api.shop.index': { paramsTuple?: []; params?: {} }
+    'api.shop.coupons': { paramsTuple?: []; params?: {} }
+    'api.shop.promotions': { paramsTuple?: []; params?: {} }
   }
   POST: {
     'new_account.web.store': { paramsTuple?: []; params?: {} }
-    'session.store': { paramsTuple?: []; params?: {} }
+    'session.web.store': { paramsTuple?: []; params?: {} }
     'session.web.destroy': { paramsTuple?: []; params?: {} }
-    'new_account.store': { paramsTuple?: []; params?: {} }
-    'session.client.store': { paramsTuple?: []; params?: {} }
-    'session.login': { paramsTuple?: []; params?: {} }
-    'session.api.login': { paramsTuple?: []; params?: {} }
-    'session.destroy': { paramsTuple?: []; params?: {} }
+    'api.register': { paramsTuple?: []; params?: {} }
+    'api.login': { paramsTuple?: []; params?: {} }
+    'session.store': { paramsTuple?: []; params?: {} }
+    'api.logout': { paramsTuple?: []; params?: {} }
+    'otp.send': { paramsTuple?: []; params?: {} }
+    'otp.verify': { paramsTuple?: []; params?: {} }
+    'otp.resend': { paramsTuple?: []; params?: {} }
+    'password.reset': { paramsTuple?: []; params?: {} }
     'blog.submit': { paramsTuple?: []; params?: {} }
+    'admin.posts.store': { paramsTuple?: []; params?: {} }
     'testimonials.store': { paramsTuple?: []; params?: {} }
     'products.store': { paramsTuple?: []; params?: {} }
     'contacts.store': { paramsTuple?: []; params?: {} }
@@ -307,15 +322,11 @@ export type ScannedRoutes = {
     'merchant.coupons.store': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'reviews.mark_helpful': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'reviews.store': { paramsTuple?: []; params?: {} }
-    'otp.send': { paramsTuple?: []; params?: {} }
-    'otp.verify': { paramsTuple?: []; params?: {} }
-    'otp.resend': { paramsTuple?: []; params?: {} }
-    'password.reset': { paramsTuple?: []; params?: {} }
-    'admin.posts.store': { paramsTuple?: []; params?: {} }
   }
   PUT: {
-    'profile.update': { paramsTuple?: []; params?: {} }
-    'profile.password': { paramsTuple?: []; params?: {} }
+    'api.profile.update': { paramsTuple?: []; params?: {} }
+    'api.profile.password': { paramsTuple?: []; params?: {} }
+    'admin.posts.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'testimonials.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'products.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'categories.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -329,9 +340,9 @@ export type ScannedRoutes = {
     'merchant.categories.update': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
     'merchant.coupons.update': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'reviews.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'admin.posts.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   DELETE: {
+    'admin.posts.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'testimonials.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'products.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'categories.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -344,7 +355,6 @@ export type ScannedRoutes = {
     'merchant.categories.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
     'merchant.coupons.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'reviews.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'admin.posts.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   PATCH: {
     'pubs.toggle': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }

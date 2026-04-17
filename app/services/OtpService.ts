@@ -3,6 +3,7 @@ import { DateTime } from 'luxon'
 import Otp from '#models/Otp'
 import User from '#models/user'
 import mail from '@adonisjs/mail/services/main'
+import env from '#start/env'
 
 export default class OtpService {
 
@@ -63,7 +64,7 @@ export default class OtpService {
           .from('noreply@eden-marketplace.com')
           .to(email)
           .subject(this.getEmailSubject(purpose))
-          .html(this.getEmailTemplate(otp.otp, purpose))
+          .html(this.getEmailTemplate(otp.otp, purpose, email))
       })
 
       return {
@@ -179,13 +180,17 @@ export default class OtpService {
   }
 
   // ✅ Template HTML pour l'email
-  private static getEmailTemplate(otp: string, purpose: string): string {
+  private static getEmailTemplate(otp: string, purpose: string, email: string): string {
     const purposeText: Record<string, string> = {
       password_reset: 'réinitialiser votre mot de passe',
       email_verification: 'vérifier votre adresse email',
       login: 'vous connecter à votre compte',
       transaction: 'valider votre transaction'
     }
+
+    // Générer l'URL avec le code OTP en paramètre
+    const frontendUrl = env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')
+    const verificationUrl = `${frontendUrl}/verify-otp?code=${otp}&email=${encodeURIComponent(email)}&purpose=${purpose}`
 
     return `
       <!DOCTYPE html>
@@ -252,6 +257,36 @@ export default class OtpService {
           .warning li {
             margin-bottom: 5px;
           }
+          .verify-button {
+            text-align: center;
+            margin: 30px 0;
+          }
+          .verify-button a {
+            display: inline-block;
+            background: linear-gradient(135deg, #0b6f5b 0%, #0d9488 100%);
+            color: white;
+            text-decoration: none;
+            padding: 14px 35px;
+            border-radius: 50px;
+            font-weight: bold;
+            font-size: 16px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 10px rgba(11, 111, 91, 0.3);
+          }
+          .verify-button a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(11, 111, 91, 0.4);
+          }
+          .alternative-link {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 14px;
+          }
+          .alternative-link a {
+            color: #0b6f5b;
+            text-decoration: none;
+            border-bottom: 1px dashed #0b6f5b;
+          }
           .footer {
             margin-top: 30px;
             padding-top: 20px;
@@ -282,6 +317,18 @@ export default class OtpService {
 
             <div class="otp-code">
               ${otp}
+            </div>
+
+            <!-- ✅ NOUVEAU : Lien cliquable avec le code OTP en paramètre -->
+            <div class="verify-button">
+              <a href="${verificationUrl}">
+                🔐 Vérifier mon compte
+              </a>
+            </div>
+
+            <div class="alternative-link">
+              <p>Ou copiez ce lien dans votre navigateur :</p>
+              <a href="${verificationUrl}">${verificationUrl}</a>
             </div>
 
             <div class="warning">

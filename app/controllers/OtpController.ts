@@ -9,10 +9,15 @@ export default class OtpController {
 
   // ✅ Envoyer un OTP
   public async send({ request, response }: HttpContext) {
+    console.log("➡️ [SEND OTP] Requête reçue")
+
     try {
       const { email, purpose = 'password_reset' } = request.body()
+      console.log("📩 Email:", email)
+      console.log("🎯 Purpose:", purpose)
 
       if (!email) {
+        console.log("❌ Email manquant")
         return response.status(400).json({
           success: false,
           message: 'Email requis'
@@ -21,19 +26,24 @@ export default class OtpController {
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(email)) {
+        console.log("❌ Email invalide")
         return response.status(400).json({
           success: false,
           message: 'Format d\'email invalide'
         })
       }
 
+      console.log("📨 Envoi OTP en cours...")
       const result = await OtpService.sendOtpEmail(email, purpose)
+      console.log("📬 Résultat OTP:", result)
 
       if (!result.success) {
+        console.log("❌ Échec envoi OTP")
         return response.status(400).json(result)
       }
 
       const remainingTime = await OtpService.getRemainingTime(email, purpose)
+      console.log("⏳ Temps restant:", remainingTime)
 
       return response.status(200).json({
         success: true,
@@ -45,7 +55,7 @@ export default class OtpController {
         }
       })
     } catch (error) {
-      console.error('Erreur send OTP:', error)
+      console.error("🔥 ERREUR SEND OTP:", error)
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur'
@@ -55,10 +65,15 @@ export default class OtpController {
 
   // ✅ Vérifier un OTP
   public async verify({ request, response }: HttpContext) {
+    console.log("➡️ [VERIFY OTP] Requête reçue")
+
     try {
       const { email, otp, purpose = 'password_reset' } = request.body()
+      console.log("📩 Email:", email)
+      console.log("🔢 OTP:", otp)
 
       if (!email || !otp) {
+        console.log("❌ Données manquantes")
         return response.status(400).json({
           success: false,
           message: 'Email et OTP requis'
@@ -66,23 +81,27 @@ export default class OtpController {
       }
 
       if (otp.length !== 6 || !/^\d+$/.test(otp)) {
+        console.log("❌ OTP invalide format")
         return response.status(400).json({
           success: false,
           message: 'L\'OTP doit contenir 6 chiffres'
         })
       }
 
+      console.log("🔍 Vérification OTP...")
       const result = await OtpService.verifyOtp(email, otp, purpose)
+      console.log("📊 Résultat vérification:", result)
 
       if (!result.valid) {
+        console.log("❌ OTP incorrect")
         return response.status(400).json({
           success: false,
           message: result.message
         })
       }
 
-      // Générer un JWT pour la réinitialisation (valide 10 minutes)
       const resetToken = this.generateResetJWT(email)
+      console.log("🔑 Token généré:", resetToken)
 
       return response.status(200).json({
         success: true,
@@ -91,11 +110,11 @@ export default class OtpController {
           verified: true,
           email,
           resetToken,
-          expiresIn: 600 // 10 minutes
+          expiresIn: 600
         }
       })
     } catch (error) {
-      console.error('Erreur verify OTP:', error)
+      console.error("🔥 ERREUR VERIFY OTP:", error)
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur'
@@ -103,12 +122,16 @@ export default class OtpController {
     }
   }
 
-  // ✅ Vérifier le statut d'un OTP
+  // ✅ Status OTP
   public async status({ request, response }: HttpContext) {
+    console.log("➡️ [STATUS OTP] Requête reçue")
+
     try {
       const { email, purpose = 'password_reset' } = request.qs()
+      console.log("📩 Email:", email)
 
       if (!email || typeof email !== 'string') {
+        console.log("❌ Email manquant")
         return response.status(400).json({
           success: false,
           message: 'Email requis'
@@ -116,6 +139,7 @@ export default class OtpController {
       }
 
       const remainingTime = await OtpService.getRemainingTime(email, purpose)
+      console.log("⏳ Temps restant:", remainingTime)
 
       return response.status(200).json({
         success: true,
@@ -126,7 +150,7 @@ export default class OtpController {
         }
       })
     } catch (error) {
-      console.error('Erreur status OTP:', error)
+      console.error("🔥 ERREUR STATUS OTP:", error)
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur'
@@ -134,21 +158,27 @@ export default class OtpController {
     }
   }
 
-  // ✅ Réinitialiser le mot de passe avec vérification JWT
+  // ✅ Reset password
   public async resetPassword({ request, response }: HttpContext) {
+    console.log("➡️ [RESET PASSWORD] Requête reçue")
+
     try {
       const { email, resetToken, newPassword, confirmPassword } = request.body()
+      console.log("📩 Email:", email)
 
       if (!email || !resetToken || !newPassword || !confirmPassword) {
+        console.log("❌ Champs manquants")
         return response.status(400).json({
           success: false,
           message: 'Tous les champs sont requis'
         })
       }
 
-      // Vérifier le JWT
       const isValidToken = this.verifyResetJWT(email, resetToken)
+      console.log("🔐 Token valide ?", isValidToken)
+
       if (!isValidToken) {
+        console.log("❌ Token invalide")
         return response.status(400).json({
           success: false,
           message: 'Token invalide ou expiré'
@@ -156,57 +186,36 @@ export default class OtpController {
       }
 
       if (newPassword !== confirmPassword) {
+        console.log("❌ Mots de passe différents")
         return response.status(400).json({
           success: false,
           message: 'Les mots de passe ne correspondent pas'
         })
       }
 
-      if (newPassword.length < 8) {
-        return response.status(400).json({
-          success: false,
-          message: 'Le mot de passe doit contenir au moins 8 caractères'
-        })
-      }
-
-      if (!/[A-Z]/.test(newPassword)) {
-        return response.status(400).json({
-          success: false,
-          message: 'Le mot de passe doit contenir au moins une majuscule'
-        })
-      }
-
-      if (!/[a-z]/.test(newPassword)) {
-        return response.status(400).json({
-          success: false,
-          message: 'Le mot de passe doit contenir au moins une minuscule'
-        })
-      }
-
-      if (!/[0-9]/.test(newPassword)) {
-        return response.status(400).json({
-          success: false,
-          message: 'Le mot de passe doit contenir au moins un chiffre'
-        })
-      }
-
+      console.log("🔎 Recherche utilisateur...")
       const user = await User.findBy('email', email)
+
       if (!user) {
+        console.log("❌ Utilisateur non trouvé")
         return response.status(404).json({
           success: false,
           message: 'Utilisateur non trouvé'
         })
       }
 
+      console.log("🔄 Mise à jour du mot de passe...")
       user.password = newPassword
       await user.save()
+
+      console.log("✅ Mot de passe modifié")
 
       return response.status(200).json({
         success: true,
         message: 'Mot de passe modifié avec succès'
       })
     } catch (error) {
-      console.error('Erreur resetPassword:', error)
+      console.error("🔥 ERREUR RESET PASSWORD:", error)
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur'
@@ -214,25 +223,33 @@ export default class OtpController {
     }
   }
 
-  // ✅ Renvoyer un OTP
+  // ✅ Resend OTP
   public async resend({ request, response }: HttpContext) {
+    console.log("➡️ [RESEND OTP] Requête reçue")
+
     try {
       const { email, purpose = 'password_reset' } = request.body()
+      console.log("📩 Email:", email)
 
       if (!email) {
+        console.log("❌ Email manquant")
         return response.status(400).json({
           success: false,
           message: 'Email requis'
         })
       }
 
+      console.log("📨 Renvoi OTP...")
       const result = await OtpService.sendOtpEmail(email, purpose)
+      console.log("📬 Résultat:", result)
 
       if (!result.success) {
+        console.log("❌ Échec renvoi OTP")
         return response.status(400).json(result)
       }
 
       const remainingTime = await OtpService.getRemainingTime(email, purpose)
+      console.log("⏳ Temps restant:", remainingTime)
 
       return response.status(200).json({
         success: true,
@@ -244,7 +261,7 @@ export default class OtpController {
         }
       })
     } catch (error) {
-      console.error('Erreur resend OTP:', error)
+      console.error("🔥 ERREUR RESEND OTP:", error)
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur'
@@ -252,29 +269,36 @@ export default class OtpController {
     }
   }
 
-  // ✅ Générer un JWT pour la réinitialisation (valide 10 minutes)
   private generateResetJWT(email: string): string {
+    console.log("🔐 Génération JWT pour:", email)
+
     const secret = env.get('APP_KEY')
+
     const payload = {
       email,
       purpose: 'password_reset',
       iat: Math.floor(Date.now() / 1000),
     }
 
-    // ✅ Utiliser Buffer.from() pour éviter l'erreur TypeScript
-    return jwt.sign(payload, Buffer.from(secret), { expiresIn: '10m' })
+    const token = jwt.sign(payload, Buffer.from(secret), { expiresIn: '10m' })
+
+    console.log("🔑 JWT généré:", token)
+
+    return token
   }
 
-  // ✅ Vérifier le JWT de réinitialisation
   private verifyResetJWT(email: string, token: string): boolean {
+    console.log("🔍 Vérification JWT pour:", email)
+
     try {
       const secret = env.get('APP_KEY')
-      // ✅ Utiliser Buffer.from() pour éviter l'erreur TypeScript
       const decoded = jwt.verify(token, Buffer.from(secret)) as { email: string; purpose: string }
+
+      console.log("📦 Décodé:", decoded)
 
       return decoded.email === email && decoded.purpose === 'password_reset'
     } catch (error) {
-      console.error('Erreur vérification JWT:', error)
+      console.error("❌ JWT invalide:", error)
       return false
     }
   }
