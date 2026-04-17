@@ -35,7 +35,6 @@ const CouponsController = () => import('#controllers/coupons_controller')
 
 // Page d'accueil
 
-router.get('/boutique', [ShopController, 'index']).as('boutique.index')
 
 router.get('/', async ({ view }) => {
   return view.render('pages/home')
