@@ -19,11 +19,11 @@ export default class ShopController {
 
     // Base query for products
     let productsQuery = Product.query()
-      .preload('user', (query) => {
-        query.select('id', 'name', 'shopName')
+      .preload('user', (query: any) => {
+        query.select('id', 'name', 'shop_name')
       })
       .preload('category')
-      .where('isActive', true)
+      .where('is_active', true)
 
     // Apply category filter
     if (category) {
@@ -54,7 +54,7 @@ export default class ShopController {
         break
       case 'newest':
       default:
-        productsQuery = productsQuery.orderBy('createdAt', 'desc')
+        productsQuery = productsQuery.orderBy('created_at', 'desc')
         break
     }
 
@@ -63,30 +63,30 @@ export default class ShopController {
     // Get products on sale
     const productsOnSale = await Product.query()
       .preload('user', (query: any) => {
-        query.select('id', 'name', 'shopName')
+        query.select('id', 'name', 'shop_name')
       })
-      .where('isActive', true)
-      .whereNotNull('oldPrice')
-      .where('oldPrice', '>', 0)
-      .orderBy('createdAt', 'desc')
+      .where('is_active', true)
+      .whereNotNull('old_price')
+      .where('old_price', '>', 0)
+      .orderBy('created_at', 'desc')
       .limit(8)
 
     // Get new products
     const newProducts = await Product.query()
       .preload('user', (query: any) => {
-        query.select('id', 'name', 'shopName')
+        query.select('id', 'name', 'shop_name')
       })
-      .where('isActive', true)
-      .where('isNew', true)
-      .orderBy('createdAt', 'desc')
+      .where('is_active', true)
+      .where('is_new', true)
+      .orderBy('created_at', 'desc')
       .limit(8)
 
     // Get best sellers
     const bestSellers = await Product.query()
       .preload('user', (query: any) => {
-        query.select('id', 'name', 'shopName')
+        query.select('id', 'name', 'shop_name')
       })
-      .where('isActive', true)
+      .where('is_active', true)
       .orderBy('sales', 'desc')
       .limit(8)
 
@@ -94,46 +94,46 @@ export default class ShopController {
     const now = DateTime.now()
     const activeCoupons = await Coupon.query()
       .preload('product')
-      .where('isActive', true)
+      .where('is_active', true)
       .where((builder: any) => {
         builder
-          .whereNull('validUntil')
-          .orWhere('validUntil', '>', now.toSQL())
+          .whereNull('valid_until')
+          .orWhere('valid_until', '>', now.toSQL())
       })
-      .orderBy('createdAt', 'desc')
+      .orderBy('created_at', 'desc')
       .limit(6)
 
     // Get banners
     const banners = await Promotion.query()
       .where('type', 'banner')
-      .where('isActive', true)
+      .where('is_active', true)
       .where((builder: any) => {
         builder
-          .whereNull('startDate')
-          .orWhere('startDate', '<=', now.toSQL())
+          .whereNull('start_date')
+          .orWhere('start_date', '<=', now.toSQL())
       })
       .where((builder: any) => {
         builder
-          .whereNull('endDate')
-          .orWhere('endDate', '>=', now.toSQL())
+          .whereNull('end_date')
+          .orWhere('end_date', '>=', now.toSQL())
       })
       .orderBy('priority', 'asc')
-      .orderBy('createdAt', 'desc')
+      .orderBy('created_at', 'desc')
       .limit(5)
 
     // Get flash sales
     const flashSales = await Promotion.query()
       .where('type', 'flash_sale')
-      .where('isActive', true)
+      .where('is_active', true)
       .where((builder: any) => {
         builder
-          .whereNull('startDate')
-          .orWhere('startDate', '<=', now.toSQL())
+          .whereNull('start_date')
+          .orWhere('start_date', '<=', now.toSQL())
       })
       .where((builder: any) => {
         builder
-          .whereNull('endDate')
-          .orWhere('endDate', '>=', now.toSQL())
+          .whereNull('end_date')
+          .orWhere('end_date', '>=', now.toSQL())
       })
       .orderBy('priority', 'asc')
       .limit(4)
@@ -141,23 +141,23 @@ export default class ShopController {
     // Get category offers
     const categoryOffers = await Promotion.query()
       .where('type', 'category_offer')
-      .where('isActive', true)
+      .where('is_active', true)
       .where((builder: any) => {
         builder
-          .whereNull('startDate')
-          .orWhere('startDate', '<=', now.toSQL())
+          .whereNull('start_date')
+          .orWhere('start_date', '<=', now.toSQL())
       })
       .where((builder: any) => {
         builder
-          .whereNull('endDate')
-          .orWhere('endDate', '>=', now.toSQL())
+          .whereNull('end_date')
+          .orWhere('end_date', '>=', now.toSQL())
       })
       .orderBy('priority', 'asc')
       .limit(6)
 
     // Get all categories
     const categories = await Category.query()
-      .where('isActive', true)
+      .where('is_active', true)
       .orderBy('name', 'asc')
 
     // Format products for response
@@ -238,13 +238,13 @@ export default class ShopController {
 
     // Get stats
     const stats = {
-      totalProducts: await Product.query().where('isActive', true).count('* as total'),
+      totalProducts: await Product.query().where('is_active', true).count('* as total'),
       totalMerchants: await Product.query()
-        .where('isActive', true)
+        .where('is_active', true)
         .distinct('user_id')
         .count('* as total'),
-      totalCoupons: await Coupon.query().where('isActive', true).count('* as total'),
-      totalPromotions: await Promotion.query().where('isActive', true).count('* as total'),
+      totalCoupons: await Coupon.query().where('is_active', true).count('* as total'),
+      totalPromotions: await Promotion.query().where('is_active', true).count('* as total'),
     }
 
     return view.render('shop/index', {
@@ -297,10 +297,10 @@ export default class ShopController {
 
       let productsQuery = Product.query()
         .preload('user', (query: any) => {
-          query.select('id', 'name', 'shopName')
+          query.select('id', 'name', 'shop_name')
         })
         .preload('category')
-        .where('isActive', true)
+        .where('is_active', true)
 
       if (category) {
         productsQuery = productsQuery.whereHas('category', (builder: any) => {
@@ -328,23 +328,22 @@ export default class ShopController {
           break
         case 'newest':
         default:
-          productsQuery = productsQuery.orderBy('createdAt', 'desc')
+          productsQuery = productsQuery.orderBy('created_at', 'desc')
           break
       }
 
       const products = await productsQuery.paginate(page, limit)
 
-      // Rest of the code similar to index but returning JSON
       const now = DateTime.now()
       const activeCoupons = await Coupon.query()
         .preload('product')
-        .where('isActive', true)
+        .where('is_active', true)
         .where((builder: any) => {
           builder
-            .whereNull('validUntil')
-            .orWhere('validUntil', '>', now.toSQL())
+            .whereNull('valid_until')
+            .orWhere('valid_until', '>', now.toSQL())
         })
-        .orderBy('createdAt', 'desc')
+        .orderBy('created_at', 'desc')
         .limit(6)
 
       const formatProduct = (p: Product) => ({
