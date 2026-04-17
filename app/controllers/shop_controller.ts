@@ -49,32 +49,38 @@ export default class ShopController {
       const products = await productsQuery.paginate(page, limit)
       console.log(`✅ ${products.length} produits trouvés`)
 
+      // Si aucun produit trouvé, renvoyer un tableau vide mais avec success: true
+      const allProducts = products.all()
+
       // Récupérer les nouveaux produits
       let newProducts: any[] = []
       try {
-        newProducts = await Product.query()
+        const newProductsQuery = await Product.query()
           .preload('user', (query) => query.select('id', 'full_name', 'country'))
           .where('is_new', true)
           .orderBy('created_at', 'desc')
           .limit(8)
+        newProducts = newProductsQuery
         console.log(`✅ ${newProducts.length} nouveaux produits trouvés`)
       } catch (err) {
         console.log('⚠️ Colonne is_new inexistante, on prend les plus récents')
-        newProducts = await Product.query()
+        const recentProducts = await Product.query()
           .preload('user', (query) => query.select('id', 'full_name', 'country'))
           .orderBy('created_at', 'desc')
           .limit(8)
+        newProducts = recentProducts
       }
 
       // Récupérer les produits en promotion
       let productsOnSale: any[] = []
       try {
-        productsOnSale = await Product.query()
+        const onSaleQuery = await Product.query()
           .preload('user', (query) => query.select('id', 'full_name', 'country'))
           .whereNotNull('old_price')
           .where('old_price', '>', 0)
           .orderBy('created_at', 'desc')
           .limit(8)
+        productsOnSale = onSaleQuery
       } catch (err) {
         console.log('⚠️ Colonne old_price inexistante, pas de produits en promo')
         productsOnSale = []
@@ -83,13 +89,24 @@ export default class ShopController {
       // Meilleures ventes
       let bestSellers: any[] = []
       try {
-        bestSellers = await Product.query()
+        const bestQuery = await Product.query()
           .preload('user', (query) => query.select('id', 'full_name', 'country'))
           .orderBy('created_at', 'desc')
           .limit(8)
+        bestSellers = bestQuery
       } catch (err) {
         console.log('⚠️ Erreur bestSellers')
         bestSellers = []
+      }
+
+      // Si newProducts est vide, utiliser allProducts
+      if (newProducts.length === 0) {
+        newProducts = allProducts.slice(0, 8)
+      }
+      
+      // Si bestSellers est vide, utiliser allProducts
+      if (bestSellers.length === 0) {
+        bestSellers = allProducts.slice(0, 8)
       }
 
       // Statistiques
@@ -124,7 +141,7 @@ export default class ShopController {
 
         return {
           id: String(p.id),
-          name: p.name || '',
+          name: p.name || 'Sans nom',
           description: p.description || '',
           price: p.price || 0,
           formattedPrice: new Intl.NumberFormat('fr-FR', {
@@ -154,20 +171,36 @@ export default class ShopController {
         }
       }
 
+      // Formater tous les produits
+      const formattedProducts = allProducts.map(formatProduct)
+      const formattedNewProducts = newProducts.map(formatProduct)
+      const formattedOnSale = productsOnSale.map(formatProduct)
+      const formattedBestSellers = bestSellers.map(formatProduct)
+
       // Récupérer les catégories uniques des produits
-      const categoriesList = [...new Set(products.map(p => p.category).filter((cat): cat is string => cat !== null))]
-      const formattedCategories = categoriesList.map((cat, index) => ({
-        id: String(index + 1),
-        name: cat,
-        slug: cat.toLowerCase().replace(/\s+/g, '-'),
-      }))
+      const categoriesList = [...new Set(allProducts.map(p => p.category).filter((cat): cat is string => cat !== null && cat !== ''))]
+      const formattedCategories = categoriesList.length > 0 
+        ? categoriesList.map((cat, index) => ({
+            id: String(index + 1),
+            name: cat,
+            slug: cat.toLowerCase().replace(/\s+/g, '-'),
+          }))
+        : [
+            { id: '1', name: 'Tous les produits', slug: 'all' }
+          ]
+
+      console.log('📊 Stats:', {
+        totalProducts: Number(totalProductsResult[0].$extras.total),
+        formattedProductsCount: formattedProducts.length,
+        categoriesCount: formattedCategories.length,
+      })
 
       return response.json({
         success: true,
-        products: products.map(formatProduct),
-        productsOnSale: productsOnSale.map(formatProduct),
-        newProducts: newProducts.map(formatProduct),
-        bestSellers: bestSellers.map(formatProduct),
+        products: formattedProducts,
+        productsOnSale: formattedOnSale.length > 0 ? formattedOnSale : formattedProducts.filter(p => p.isOnSale).slice(0, 8),
+        newProducts: formattedNewProducts.length > 0 ? formattedNewProducts : formattedProducts.slice(0, 8),
+        bestSellers: formattedBestSellers.length > 0 ? formattedBestSellers : formattedProducts.slice(0, 8),
         activeCoupons: [],
         banners: [],
         flashSales: [],
