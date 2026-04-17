@@ -1,6 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Product from '#models/Product'
-import { DateTime } from 'luxon'
 
 export default class ShopController {
   
@@ -50,7 +49,7 @@ export default class ShopController {
       const products = await productsQuery.paginate(page, limit)
       console.log(`✅ ${products.length} produits trouvés`)
 
-      // Récupérer les nouveaux produits (sans old_price)
+      // Récupérer les nouveaux produits
       let newProducts: any[] = []
       try {
         newProducts = await Product.query()
@@ -67,7 +66,7 @@ export default class ShopController {
           .limit(8)
       }
 
-      // Récupérer les produits en promotion - avec gestion d'erreur
+      // Récupérer les produits en promotion
       let productsOnSale: any[] = []
       try {
         productsOnSale = await Product.query()
@@ -81,7 +80,7 @@ export default class ShopController {
         productsOnSale = []
       }
 
-      // Meilleures ventes (on prend les plus récents si pas de colonne sales)
+      // Meilleures ventes
       let bestSellers: any[] = []
       try {
         bestSellers = await Product.query()
@@ -117,7 +116,6 @@ export default class ShopController {
           }
         }
 
-        // Gérer le prix avec old_price si disponible
         const oldPrice = p.old_price || null
         const isOnSale = oldPrice ? oldPrice > p.price : false
         const discountPercentage = oldPrice && isOnSale
@@ -157,7 +155,7 @@ export default class ShopController {
       }
 
       // Récupérer les catégories uniques des produits
-      const categoriesList = [...new Set(products.map(p => p.category).filter(Boolean))]
+      const categoriesList = [...new Set(products.map(p => p.category).filter((cat): cat is string => cat !== null))]
       const formattedCategories = categoriesList.map((cat, index) => ({
         id: String(index + 1),
         name: cat,
