@@ -25,6 +25,38 @@ export default class ShopController {
         .where('status', 'active')
         .orderBy('created_at', 'desc')
 
+      // Filtre par catégorie
+      if (category && category !== 'all') {
+        productsQuery = productsQuery.whereHas('categoryRelation', (builder) => {
+          builder.where('slug', category)
+        })
+      }
+
+      // Recherche
+      if (search) {
+        const searchTerm = `%${search}%`
+        productsQuery = productsQuery.where((builder) => {
+          builder.where('name', 'LIKE', searchTerm)
+            .orWhere('description', 'LIKE', searchTerm)
+        })
+      }
+
+      // Tri
+      switch (sort) {
+        case 'price_asc':
+          productsQuery = productsQuery.orderBy('price', 'asc')
+          break
+        case 'price_desc':
+          productsQuery = productsQuery.orderBy('price', 'desc')
+          break
+        case 'popular':
+          productsQuery = productsQuery.orderBy('sales', 'desc')
+          break
+        default:
+          productsQuery = productsQuery.orderBy('created_at', 'desc')
+          break
+      }
+
       const products = await productsQuery.paginate(page, limit)
       console.log(`✅ ${products.length} produits trouvés`)
 
@@ -54,7 +86,7 @@ export default class ShopController {
       console.log(`✅ ${categories.length} catégories trouvées`)
 
       // Formatage simple
-      const formatProduct = (p: any) => ({
+      const formatProduct = (p: Product) => ({
         id: p.id,
         name: p.name,
         description: p.description,
@@ -77,7 +109,7 @@ export default class ShopController {
         stock: p.stock || 0,
         isInStock: (p.stock || 0) > 0,
         isLowStock: (p.stock || 0) > 0 && (p.stock || 0) <= 5,
-        isNew: p.is_new || false,
+        isNew: p.isNew || false, // ✅ Correction: utiliser isNew au lieu de is_new
         isOnSale: p.old_price ? p.old_price > p.price : false,
         rating: p.rating || 0,
         reviewsCount: p.reviews_count || 0,
@@ -93,13 +125,15 @@ export default class ShopController {
           : null,
       })
 
+      const allProducts = products.map(formatProduct)
+
       return response.json({
         success: true,
-        products: products.map(formatProduct),
-        productsOnSale: products.filter(p => p.old_price && p.old_price > p.price).map(formatProduct).slice(0, 8),
-        newProducts: products.filter(p => p.is_new).map(formatProduct).slice(0, 8),
-        bestSellers: [...products].sort((a, b) => (b.sales || 0) - (a.sales || 0)).map(formatProduct).slice(0, 8),
-        activeCoupons: activeCoupons.map((c: any) => ({
+        products: allProducts,
+        productsOnSale: allProducts.filter(p => p.oldPrice && p.oldPrice > p.price).slice(0, 8),
+        newProducts: allProducts.filter(p => p.isNew).slice(0, 8),
+        bestSellers: [...allProducts].sort((a, b) => (b.sales || 0) - (a.sales || 0)).slice(0, 8),
+        activeCoupons: activeCoupons.map((c: Coupon) => ({
           id: c.id,
           code: c.code,
           discount: c.discount,
@@ -109,7 +143,7 @@ export default class ShopController {
           isValid: true,
           product: null,
         })),
-        banners: banners.map((p: any) => ({
+        banners: banners.map((p: Promotion) => ({
           id: p.id,
           title: p.title,
           description: p.description,
@@ -124,7 +158,7 @@ export default class ShopController {
         })),
         flashSales: [],
         categoryOffers: [],
-        categories: categories.map((c: any) => ({
+        categories: categories.map((c: Category) => ({
           id: c.id,
           name: c.name,
           slug: c.slug,
@@ -150,19 +184,21 @@ export default class ShopController {
         },
       })
       
-    } catch (error) {
-      console.error('❌ Shop API error:', error)
+    } catch (error: unknown) {
+      // ✅ Correction: typer error comme unknown
+      const err = error as Error
+      console.error('❌ Shop API error:', err)
       console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
+        message: err.message,
+        stack: err.stack,
+        name: err.name,
       })
       
       return response.status(500).json({
         success: false,
         message: 'Erreur lors du chargement de la boutique',
-        error: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+        error: err.message,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
       })
     }
   }
@@ -180,7 +216,7 @@ export default class ShopController {
 
       return response.json({
         success: true,
-        coupons: coupons.map((c: any) => ({
+        coupons: coupons.map((c: Coupon) => ({
           id: c.id,
           code: c.code,
           discount: c.discount,
@@ -190,12 +226,13 @@ export default class ShopController {
           isValid: true,
         })),
       })
-    } catch (error) {
-      console.error('apiCoupons error:', error)
+    } catch (error: unknown) {
+      const err = error as Error
+      console.error('apiCoupons error:', err)
       return response.status(500).json({ 
         success: false, 
         message: 'Erreur coupons',
-        error: error.message,
+        error: err.message,
       })
     }
   }
@@ -218,7 +255,7 @@ export default class ShopController {
 
       return response.json({
         success: true,
-        promotions: promotions.map((p: any) => ({
+        promotions: promotions.map((p: Promotion) => ({
           id: p.id,
           title: p.title,
           description: p.description,
@@ -233,12 +270,13 @@ export default class ShopController {
           priority: p.priority,
         })),
       })
-    } catch (error) {
-      console.error('apiPromotions error:', error)
+    } catch (error: unknown) {
+      const err = error as Error
+      console.error('apiPromotions error:', err)
       return response.status(500).json({ 
         success: false, 
         message: 'Erreur promotions',
-        error: error.message,
+        error: err.message,
       })
     }
   }
