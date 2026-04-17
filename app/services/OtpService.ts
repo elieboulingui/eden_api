@@ -61,7 +61,7 @@ export default class OtpService {
       // Envoyer l'email
       await mail.send((message) => {
         message
-          .from('noreply@eden-marketplace.com')
+          .from('eden.com')
           .to(email)
           .subject(this.getEmailSubject(purpose))
           .html(this.getEmailTemplate(otp.otp, purpose, email))
@@ -305,7 +305,7 @@ export default class OtpService {
         <div class="container">
           <div class="card">
             <div class="logo">
-              <h1>🌿 Eden Marketplace</h1>
+              <h1>🌿 Eden </h1>
             </div>
 
             <p style="font-size: 16px;">Bonjour,</p>
