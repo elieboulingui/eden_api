@@ -290,7 +290,6 @@ router.group(() => {
 
 
   
-router.get('/shop', [ShopController, 'index']).as('shop.index')
 router.get('/boutique', [ShopController, 'index']).as('boutique.index')
 
 // Routes API
