@@ -7,9 +7,7 @@ import Category from '#models/categories'
 import { DateTime } from 'luxon'
 
 export default class ShopController {
-  /**
-   * Page principale de la boutique
-   */
+
   async index({ request, view }: HttpContext) {
     const page = request.input('page', 1)
     const category = request.input('category')
@@ -21,11 +19,12 @@ export default class ShopController {
       .preload('user', (query: any) => {
         query.select('id', 'name', 'shop_name')
       })
-      .preload('category' as any)
-      .where('is_active', true)
+      // ✅ Le nom correct est 'categoryRelation' (défini dans le modèle)
+      .preload('categoryRelation' as any)
+      .where('status', 'active')  // ✅ Product utilise 'status' pas 'is_active'
 
     if (category) {
-      productsQuery = productsQuery.whereHas('category' as any, (builder: any) => {
+      productsQuery = productsQuery.whereHas('categoryRelation' as any, (builder: any) => {
         builder.where('slug', category)
       })
     }
@@ -57,45 +56,43 @@ export default class ShopController {
     const products = await productsQuery.paginate(page, limit)
 
     const productsOnSale = await Product.query()
-      .preload('user', (query: any) => {
-        query.select('id', 'name', 'shop_name')
-      })
-      .where('is_active', true)
+      .preload('user', (query: any) => query.select('id', 'name', 'shop_name'))
+      .where('status', 'active')
       .whereNotNull('old_price')
       .where('old_price', '>', 0)
       .orderBy('created_at', 'desc')
       .limit(8)
 
     const newProducts = await Product.query()
-      .preload('user', (query: any) => {
-        query.select('id', 'name', 'shop_name')
-      })
-      .where('is_active', true)
+      .preload('user', (query: any) => query.select('id', 'name', 'shop_name'))
+      .where('status', 'active')
+      // ✅ isNew est en camelCase dans le modèle mais stocké en snake_case en BDD
       .where('is_new', true)
       .orderBy('created_at', 'desc')
       .limit(8)
 
     const bestSellers = await Product.query()
-      .preload('user', (query: any) => {
-        query.select('id', 'name', 'shop_name')
-      })
-      .where('is_active', true)
+      .preload('user', (query: any) => query.select('id', 'name', 'shop_name'))
+      .where('status', 'active')
       .orderBy('sales', 'desc')
       .limit(8)
 
     const now = DateTime.now()
+
+    // ✅ Coupon utilise 'status' pas 'is_active'
     const activeCoupons = await Coupon.query()
       .preload('product')
-      .where('is_active', true)
+      .where('status', 'active')
       .where((builder: any) => {
         builder.whereNull('valid_until').orWhere('valid_until', '>', now.toSQL())
       })
       .orderBy('created_at', 'desc')
       .limit(6)
 
+    // ✅ Promotion utilise 'status' pas 'is_active'
     const banners = await Promotion.query()
       .where('type', 'banner')
-      .where('is_active', true)
+      .where('status', 'active')
       .where((builder: any) => {
         builder.whereNull('start_date').orWhere('start_date', '<=', now.toSQL())
       })
@@ -103,12 +100,11 @@ export default class ShopController {
         builder.whereNull('end_date').orWhere('end_date', '>=', now.toSQL())
       })
       .orderBy('priority', 'asc')
-      .orderBy('created_at', 'desc')
       .limit(5)
 
     const flashSales = await Promotion.query()
       .where('type', 'flash_sale')
-      .where('is_active', true)
+      .where('status', 'active')
       .where((builder: any) => {
         builder.whereNull('start_date').orWhere('start_date', '<=', now.toSQL())
       })
@@ -120,7 +116,7 @@ export default class ShopController {
 
     const categoryOffers = await Promotion.query()
       .where('type', 'category_offer')
-      .where('is_active', true)
+      .where('status', 'active')
       .where((builder: any) => {
         builder.whereNull('start_date').orWhere('start_date', '<=', now.toSQL())
       })
@@ -134,7 +130,6 @@ export default class ShopController {
       .where('is_active', true)
       .orderBy('name', 'asc')
 
-    // Use `any` to avoid snake_case vs camelCase TS conflicts on model instances
     const formatProduct = (p: any) => ({
       id: p.id,
       name: p.name,
@@ -146,25 +141,25 @@ export default class ShopController {
       }).format(p.price),
       oldPrice: p.old_price,
       formattedOldPrice: p.old_price
-        ? new Intl.NumberFormat('fr-FR', {
-            style: 'currency',
-            currency: 'XOF',
-          }).format(p.old_price)
+        ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF' }).format(p.old_price)
         : null,
       discountPercentage: p.old_price
         ? Math.round(((p.old_price - p.price) / p.old_price) * 100)
         : null,
-      image: p.image ?? null,
+      // ✅ image_url est le bon nom de colonne dans Product
+      image: p.image_url ?? null,
       stock: p.stock,
       isInStock: p.stock > 0,
       isLowStock: p.stock > 0 && p.stock <= 5,
-      isNew: p.is_new || false,
+      // ✅ isNew est stocké en BDD comme 'is_new'
+      isNew: p.isNew ?? p.is_new ?? false,
       isOnSale: p.old_price ? p.old_price > p.price : false,
       rating: p.rating || 0,
       reviewsCount: p.reviews_count || 0,
       sales: p.sales || 0,
       likes: p.likes || 0,
-      category: p.category?.name || null,
+      // ✅ La relation est 'categoryRelation'
+      category: p.categoryRelation?.name ?? p.category ?? null,
       user: p.user
         ? {
             id: p.user.id,
@@ -181,15 +176,11 @@ export default class ShopController {
       type: c.type,
       description: c.description,
       validUntil: c.valid_until,
-      isValid: c.valid_until
+      isValid: c.isValid?.() ?? (c.valid_until
         ? DateTime.fromJSDate(c.valid_until).toMillis() > DateTime.now().toMillis()
-        : true,
+        : true),
       product: c.product
-        ? {
-            id: c.product.id,
-            name: c.product.name,
-            price: c.product.price,
-          }
+        ? { id: c.product.id, name: c.product.name, price: c.product.price }
         : null,
     })
 
@@ -197,7 +188,8 @@ export default class ShopController {
       id: p.id,
       title: p.title,
       description: p.description,
-      image: p.image ?? null,
+      // ✅ Promotion a image_url ET banner_image — on prend le premier disponible
+      image: p.image_url ?? p.banner_image ?? null,
       type: p.type,
       discountPercentage: p.discount_percentage,
       discountAmount: p.discount_amount,
@@ -209,13 +201,13 @@ export default class ShopController {
     })
 
     const stats = {
-      totalProducts: await Product.query().where('is_active', true).count('* as total'),
+      totalProducts: await Product.query().where('status', 'active').count('* as total'),
       totalMerchants: await Product.query()
-        .where('is_active', true)
+        .where('status', 'active')
         .distinct('user_id')
         .count('* as total'),
-      totalCoupons: await Coupon.query().where('is_active', true).count('* as total'),
-      totalPromotions: await Promotion.query().where('is_active', true).count('* as total'),
+      totalCoupons: await Coupon.query().where('status', 'active').count('* as total'),
+      totalPromotions: await Promotion.query().where('status', 'active').count('* as total'),
     }
 
     return view.render('shop/index', {
@@ -250,14 +242,11 @@ export default class ShopController {
       filters: {
         category: category || null,
         search: search || null,
-        sort: sort,
+        sort,
       },
     })
   }
 
-  /**
-   * API endpoint for shop data (JSON response)
-   */
   async apiIndex({ request, response }: HttpContext) {
     try {
       const page = request.input('page', 1)
@@ -267,14 +256,12 @@ export default class ShopController {
       const limit = 12
 
       let productsQuery = Product.query()
-        .preload('user', (query: any) => {
-          query.select('id', 'name', 'shop_name')
-        })
-        .preload('category' as any)
-        .where('is_active', true)
+        .preload('user', (query: any) => query.select('id', 'name', 'shop_name'))
+        .preload('categoryRelation' as any)
+        .where('status', 'active')
 
       if (category) {
-        productsQuery = productsQuery.whereHas('category' as any, (builder: any) => {
+        productsQuery = productsQuery.whereHas('categoryRelation' as any, (builder: any) => {
           builder.where('slug', category)
         })
       }
@@ -288,27 +275,18 @@ export default class ShopController {
       }
 
       switch (sort) {
-        case 'price_asc':
-          productsQuery = productsQuery.orderBy('price', 'asc')
-          break
-        case 'price_desc':
-          productsQuery = productsQuery.orderBy('price', 'desc')
-          break
-        case 'popular':
-          productsQuery = productsQuery.orderBy('sales', 'desc')
-          break
-        case 'newest':
-        default:
-          productsQuery = productsQuery.orderBy('created_at', 'desc')
-          break
+        case 'price_asc': productsQuery = productsQuery.orderBy('price', 'asc'); break
+        case 'price_desc': productsQuery = productsQuery.orderBy('price', 'desc'); break
+        case 'popular': productsQuery = productsQuery.orderBy('sales', 'desc'); break
+        default: productsQuery = productsQuery.orderBy('created_at', 'desc'); break
       }
 
       const products = await productsQuery.paginate(page, limit)
-
       const now = DateTime.now()
+
       const activeCoupons = await Coupon.query()
         .preload('product')
-        .where('is_active', true)
+        .where('status', 'active')
         .where((builder: any) => {
           builder.whereNull('valid_until').orWhere('valid_until', '>', now.toSQL())
         })
@@ -320,37 +298,27 @@ export default class ShopController {
         name: p.name,
         description: p.description,
         price: p.price,
-        formattedPrice: new Intl.NumberFormat('fr-FR', {
-          style: 'currency',
-          currency: 'XOF',
-        }).format(p.price),
+        formattedPrice: new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF' }).format(p.price),
         oldPrice: p.old_price,
         formattedOldPrice: p.old_price
-          ? new Intl.NumberFormat('fr-FR', {
-              style: 'currency',
-              currency: 'XOF',
-            }).format(p.old_price)
+          ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF' }).format(p.old_price)
           : null,
         discountPercentage: p.old_price
           ? Math.round(((p.old_price - p.price) / p.old_price) * 100)
           : null,
-        image: p.image ?? null,
+        image: p.image_url ?? null,
         stock: p.stock,
         isInStock: p.stock > 0,
         isLowStock: p.stock > 0 && p.stock <= 5,
-        isNew: p.is_new || false,
+        isNew: p.isNew ?? p.is_new ?? false,
         isOnSale: p.old_price ? p.old_price > p.price : false,
         rating: p.rating || 0,
         reviewsCount: p.reviews_count || 0,
         sales: p.sales || 0,
         likes: p.likes || 0,
-        category: p.category?.name || null,
+        category: p.categoryRelation?.name ?? p.category ?? null,
         user: p.user
-          ? {
-              id: p.user.id,
-              name: p.user.name,
-              shopName: p.user.shop_name,
-            }
+          ? { id: p.user.id, name: p.user.name, shopName: p.user.shop_name }
           : null,
       })
 
@@ -364,15 +332,11 @@ export default class ShopController {
           type: c.type,
           description: c.description,
           validUntil: c.valid_until,
-          isValid: c.valid_until
-            ? DateTime.fromJSDate(c.valid_until).toMillis() > DateTime.now().toMillis()
-            : true,
+          isValid: c.isValid?.() ?? (c.valid_until
+            ? DateTime.fromJSDate(c.valid_until).toMillis() > Date.now()
+            : true),
           product: c.product
-            ? {
-                id: c.product.id,
-                name: c.product.name,
-                price: c.product.price,
-              }
+            ? { id: c.product.id, name: c.product.name, price: c.product.price }
             : null,
         })),
         pagination: {
@@ -383,11 +347,7 @@ export default class ShopController {
           hasPrevious: products.currentPage > 1,
           hasNext: products.currentPage < products.lastPage,
         },
-        filters: {
-          category: category || null,
-          search: search || null,
-          sort: sort,
-        },
+        filters: { category: category || null, search: search || null, sort },
       })
     } catch (error) {
       console.error('Shop API error:', error)
@@ -398,15 +358,12 @@ export default class ShopController {
     }
   }
 
-  /**
-   * API endpoint — active coupons only
-   */
   async apiCoupons({ response }: HttpContext) {
     try {
       const now = DateTime.now()
       const coupons = await Coupon.query()
         .preload('product')
-        .where('is_active', true)
+        .where('status', 'active')
         .where((builder: any) => {
           builder.whereNull('valid_until').orWhere('valid_until', '>', now.toSQL())
         })
@@ -422,9 +379,7 @@ export default class ShopController {
           type: c.type,
           description: c.description,
           validUntil: c.valid_until,
-          isValid: c.valid_until
-            ? DateTime.fromJSDate(c.valid_until).toMillis() > DateTime.now().toMillis()
-            : true,
+          isValid: c.isValid?.() ?? true,
           product: c.product
             ? { id: c.product.id, name: c.product.name, price: c.product.price }
             : null,
@@ -436,14 +391,11 @@ export default class ShopController {
     }
   }
 
-  /**
-   * API endpoint — active promotions only
-   */
   async apiPromotions({ response }: HttpContext) {
     try {
       const now = DateTime.now()
       const promotions = await Promotion.query()
-        .where('is_active', true)
+        .where('status', 'active')
         .where((builder: any) => {
           builder.whereNull('start_date').orWhere('start_date', '<=', now.toSQL())
         })
@@ -459,7 +411,7 @@ export default class ShopController {
           id: p.id,
           title: p.title,
           description: p.description,
-          image: p.image ?? null,
+          image: p.image_url ?? p.banner_image ?? null,
           type: p.type,
           discountPercentage: p.discount_percentage,
           discountAmount: p.discount_amount,
