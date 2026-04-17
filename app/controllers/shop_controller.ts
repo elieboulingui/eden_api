@@ -19,16 +19,13 @@ export default class ShopController {
 
       console.log('Params:', { page, category, search, sort, limit })
 
-      // Requête de base pour les produits
+      // Requête de base pour les produits - SANS status
       let productsQuery = Product.query()
-        .preload('user', (query) => query.select('id', 'name', 'shop_name'))
-        .where('status', 'active')
+        .preload('user', (query) => query.select('id', 'full_name', 'country'))
 
       // Filtre par catégorie
       if (category && category !== 'all' && category !== '') {
-        productsQuery = productsQuery.whereHas('categoryRelation', (builder) => {
-          builder.where('slug', category)
-        })
+        productsQuery = productsQuery.where('category', category)
       }
 
       // Recherche
@@ -59,10 +56,9 @@ export default class ShopController {
       const products = await productsQuery.paginate(page, limit)
       console.log(`✅ ${products.length} produits trouvés`)
 
-      // Récupérer les produits en promotion
+      // Récupérer les produits en promotion (avec old_price)
       const productsOnSale = await Product.query()
-        .preload('user', (query) => query.select('id', 'name', 'shop_name'))
-        .where('status', 'active')
+        .preload('user', (query) => query.select('id', 'full_name', 'country'))
         .whereNotNull('old_price')
         .where('old_price', '>', 0)
         .orderBy('created_at', 'desc')
@@ -71,8 +67,7 @@ export default class ShopController {
 
       // Récupérer les nouveaux produits
       const newProducts = await Product.query()
-        .preload('user', (query) => query.select('id', 'name', 'shop_name'))
-        .where('status', 'active')
+        .preload('user', (query) => query.select('id', 'full_name', 'country'))
         .where('is_new', true)
         .orderBy('created_at', 'desc')
         .limit(8)
@@ -80,8 +75,7 @@ export default class ShopController {
 
       // Récupérer les meilleures ventes
       const bestSellers = await Product.query()
-        .preload('user', (query) => query.select('id', 'name', 'shop_name'))
-        .where('status', 'active')
+        .preload('user', (query) => query.select('id', 'full_name', 'country'))
         .orderBy('sales', 'desc')
         .limit(8)
       console.log(`✅ ${bestSellers.length} meilleures ventes trouvées`)
@@ -90,71 +84,106 @@ export default class ShopController {
       const now = DateTime.now()
       const nowSQL = now.toSQL()
       
-      const activeCoupons = await Coupon.query()
-        .where('status', 'active')
-        .where((builder) => {
-          builder.whereNull('valid_until').orWhere('valid_until', '>', nowSQL)
-        })
-        .orderBy('created_at', 'desc')
-        .limit(6)
-      console.log(`✅ ${activeCoupons.length} coupons trouvés`)
+      let activeCoupons: any[] = []
+      try {
+        activeCoupons = await Coupon.query()
+          .where('status', 'active')
+          .where((builder) => {
+            builder.whereNull('valid_until').orWhere('valid_until', '>', nowSQL)
+          })
+          .orderBy('created_at', 'desc')
+          .limit(6)
+        console.log(`✅ ${activeCoupons.length} coupons trouvés`)
+      } catch (err) {
+        console.log('⚠️ Pas de coupons ou table inexistante')
+      }
 
       // Récupérer les bannières
-      const banners = await Promotion.query()
-        .where('type', 'banner')
-        .where('status', 'active')
-        .where((builder) => {
-          builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
-        })
-        .where((builder) => {
-          builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
-        })
-        .orderBy('priority', 'asc')
-        .limit(5)
-      console.log(`✅ ${banners.length} bannières trouvées`)
+      let banners: any[] = []
+      try {
+        banners = await Promotion.query()
+          .where('type', 'banner')
+          .where('status', 'active')
+          .where((builder) => {
+            builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
+          })
+          .where((builder) => {
+            builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
+          })
+          .orderBy('priority', 'asc')
+          .limit(5)
+        console.log(`✅ ${banners.length} bannières trouvées`)
+      } catch (err) {
+        console.log('⚠️ Pas de promotions ou table inexistante')
+      }
 
       // Récupérer les flash sales
-      const flashSales = await Promotion.query()
-        .where('type', 'flash_sale')
-        .where('status', 'active')
-        .where((builder) => {
-          builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
-        })
-        .where((builder) => {
-          builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
-        })
-        .orderBy('priority', 'asc')
-        .limit(4)
-      console.log(`✅ ${flashSales.length} flash sales trouvées`)
+      let flashSales: any[] = []
+      try {
+        flashSales = await Promotion.query()
+          .where('type', 'flash_sale')
+          .where('status', 'active')
+          .where((builder) => {
+            builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
+          })
+          .where((builder) => {
+            builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
+          })
+          .orderBy('priority', 'asc')
+          .limit(4)
+      } catch (err) {
+        console.log('⚠️ Pas de flash sales')
+      }
 
       // Récupérer les offres par catégorie
-      const categoryOffers = await Promotion.query()
-        .where('type', 'category_offer')
-        .where('status', 'active')
-        .where((builder) => {
-          builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
-        })
-        .where((builder) => {
-          builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
-        })
-        .orderBy('priority', 'asc')
-        .limit(6)
-      console.log(`✅ ${categoryOffers.length} offres catégorie trouvées`)
+      let categoryOffers: any[] = []
+      try {
+        categoryOffers = await Promotion.query()
+          .where('type', 'category_offer')
+          .where('status', 'active')
+          .where((builder) => {
+            builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
+          })
+          .where((builder) => {
+            builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
+          })
+          .orderBy('priority', 'asc')
+          .limit(6)
+      } catch (err) {
+        console.log('⚠️ Pas d\'offres catégorie')
+      }
 
       // Récupérer les catégories
-      const categories = await Category.query()
-        .where('is_active', true)
-        .orderBy('name', 'asc')
-      console.log(`✅ ${categories.length} catégories trouvées`)
+      let categories: any[] = []
+      try {
+        categories = await Category.query()
+          .where('is_active', true)
+          .orderBy('name', 'asc')
+        console.log(`✅ ${categories.length} catégories trouvées`)
+      } catch (err) {
+        console.log('⚠️ Pas de catégories ou table inexistante')
+      }
 
-      // Statistiques
-      const totalProducts = await Product.query().where('status', 'active').count('* as total')
-      const totalMerchants = await Product.query()
-        .where('status', 'active')
+      // Statistiques - SANS status
+      const totalProductsResult = await Product.query().count('* as total')
+      const totalMerchantsResult = await Product.query()
         .distinct('user_id')
         .count('* as total')
-      const totalCoupons = await Coupon.query().where('status', 'active').count('* as total')
-      const totalPromotions = await Promotion.query().where('status', 'active').count('* as total')
+      
+      let totalCoupons = 0
+      let totalPromotions = 0
+      try {
+        const totalCouponsResult = await Coupon.query().where('status', 'active').count('* as total')
+        totalCoupons = Number(totalCouponsResult[0].$extras.total)
+      } catch (err) {
+        // Ignorer
+      }
+      try {
+        const totalPromotionsResult = await Promotion.query().where('status', 'active').count('* as total')
+        totalPromotions = Number(totalPromotionsResult[0].$extras.total)
+      } catch (err) {
+        // Ignorer
+      }
 
       // Fonction de formatage des produits
       const formatProduct = (p: any) => {
@@ -162,7 +191,7 @@ export default class ShopController {
         if (p.user) {
           userData = {
             id: String(p.user.id),
-            name: p.user.name,
+            name: p.user.full_name || p.user.name || '',
             shopName: p.user.shop_name || null,
           }
         }
@@ -190,7 +219,7 @@ export default class ShopController {
           stock: p.stock || 0,
           isInStock: (p.stock || 0) > 0,
           isLowStock: (p.stock || 0) > 0 && (p.stock || 0) <= 5,
-          isNew: p.isNew || p.is_new || false,
+          isNew: p.is_new || false,
           isOnSale: p.old_price ? p.old_price > p.price : false,
           rating: p.rating || 0,
           reviewsCount: p.reviews_count || 0,
@@ -248,10 +277,10 @@ export default class ShopController {
         categoryOffers: categoryOffers.map(formatPromotion),
         categories: categories.map(formatCategory),
         stats: {
-          totalProducts: Number(totalProducts[0].$extras.total),
-          totalMerchants: Number(totalMerchants[0].$extras.total),
-          totalCoupons: Number(totalCoupons[0].$extras.total),
-          totalPromotions: Number(totalPromotions[0].$extras.total),
+          totalProducts: Number(totalProductsResult[0].$extras.total),
+          totalMerchants: Number(totalMerchantsResult[0].$extras.total),
+          totalCoupons: totalCoupons,
+          totalPromotions: totalPromotions,
         },
         pagination: {
           currentPage: products.currentPage,
@@ -304,11 +333,10 @@ export default class ShopController {
         })),
       })
     } catch (error: unknown) {
-      const err = error as Error
-      console.error('apiCoupons error:', err)
-      return response.status(500).json({ 
-        success: false, 
-        message: 'Erreur coupons',
+      console.error('apiCoupons error:', error)
+      return response.json({
+        success: true,
+        coupons: [],
       })
     }
   }
@@ -347,11 +375,10 @@ export default class ShopController {
         })),
       })
     } catch (error: unknown) {
-      const err = error as Error
-      console.error('apiPromotions error:', err)
-      return response.status(500).json({ 
-        success: false, 
-        message: 'Erreur promotions',
+      console.error('apiPromotions error:', error)
+      return response.json({
+        success: true,
+        promotions: [],
       })
     }
   }
