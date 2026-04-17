@@ -30,7 +30,7 @@ server.use([
   () => import('#middleware/block_unauthorized_origin_middleware'),
   () => import('#middleware/rate_limit_middleware'),
   () => import('#middleware/brute_force_middleware'),
-  () => import('#middleware/detect_api_browser_middleware'),
+  () => import('#middleware/DetectApiBrowser'),
   () => import('#middleware/secure_headers_middleware'),
   () => import('#middleware/input_sanitizer_middleware'),
   () => import('#middleware/bot_detector_middleware'),
