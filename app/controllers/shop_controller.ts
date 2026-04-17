@@ -1,10 +1,11 @@
 // app/controllers/shop_controller.ts
 // app/controllers/shop_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
-import Product from '#models/product'   // ← keep as-is; fix is in tsconfig paths
 import Coupon from '#models/coupon'
 import Promotion from '#models/promotion'
-import Category from '#models/category' // ← keep as-is
+import Product from '#models/Product'
+import Category from '#models/categories'
+import Coupon from '#models/coupon'
 import { DateTime } from 'luxon'
 
 export default class ShopController {
