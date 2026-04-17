@@ -3,6 +3,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+const ShopController = () => import('#controllers/shop_controller')
 const OtpController = () => import('#controllers/OtpController')
 const ContactsController = () => import('#controllers/contacts_controller')
 const MerchantsController = () => import('#controllers/merchants_controller')
@@ -286,5 +287,16 @@ router.group(() => {
   router.get('/reviews/:id', [ReviewsController, 'show'])
   router.patch('/reviews/:id/approve', [ReviewsController, 'approve'])
   router.patch('/reviews/:id/reject', [ReviewsController, 'reject'])
+
+
+  
+router.get('/shop', [ShopController, 'index']).as('shop.index')
+router.get('/boutique', [ShopController, 'index']).as('boutique.index')
+
+// Routes API
+
+  router.get('/shop', [ShopController, 'apiIndex']).as('api.shop.index')
+  router.get('/shop/coupons', [ShopController, 'apiCoupons']).as('api.shop.coupons')
+  router.get('/shop/promotions', [ShopController, 'apiPromotions']).as('api.shop.promotions')
 
 }).prefix('/api')
