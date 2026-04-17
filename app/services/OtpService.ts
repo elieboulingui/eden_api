@@ -192,6 +192,9 @@ export default class OtpService {
     const frontendUrl = env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')
     const verificationUrl = `${frontendUrl}/verify-otp?code=${otp}&email=${encodeURIComponent(email)}&purpose=${purpose}`
 
+    // URL de l'image (serveur backend)
+    const imageUrl = env.get('APP_URL', 'http://localhost:3333') + '/Eden.png'
+
     return `
       <!DOCTYPE html>
       <html>
@@ -220,6 +223,11 @@ export default class OtpService {
           .logo {
             text-align: center;
             margin-bottom: 30px;
+          }
+          .logo img {
+            max-width: 80px;
+            height: auto;
+            margin-bottom: 10px;
           }
           .logo h1 {
             color: #0b6f5b;
@@ -305,7 +313,8 @@ export default class OtpService {
         <div class="container">
           <div class="card">
             <div class="logo">
-              <h1>🌿 Eden </h1>
+              <img src="${imageUrl}" alt="Eden Logo" />
+              <h1>🌿 Eden Marketplace</h1>
             </div>
 
             <p style="font-size: 16px;">Bonjour,</p>
@@ -351,7 +360,7 @@ export default class OtpService {
             <div class="footer">
               <p>Cet email a été envoyé automatiquement, merci de ne pas y répondre.</p>
               <p>
-                © ${new Date().getFullYear()} Eden Marketplace. Tous droits réservés.<br>
+                © ${new Date().getFullYear()} Eden . Tous droits réservés.<br>
                 <a href="#">Politique de confidentialité</a> ·
                 <a href="#">Conditions d'utilisation</a>
               </p>
