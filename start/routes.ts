@@ -292,7 +292,6 @@ router.group(() => {
 
 
   
-router.get('/boutique', [ShopController, 'index']).as('boutique.index')
 
 // Routes API
 
