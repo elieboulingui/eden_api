@@ -1,363 +1,432 @@
+// app/controllers/shop_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
-import Product from '#models/Product'
-import Coupon from '#models/Coupon'
-import Promotion from '#models/Promotion'
-import Category from '#models/categories'
-import User from '#models/user'
+import Product from '#models/product'
+import Coupon from '#models/coupon'
+import Promotion from '#models/promotion'
+import Category from '#models/category'
+import { DateTime } from 'luxon'
 
 export default class ShopController {
   /**
-   * Page boutique - Affiche tous les produits, promotions et coupons actifs
+   * Page principale de la boutique
    */
-  async index({ view, request }: HttpContext) {
+  async index({ request, view }: HttpContext) {
     const page = request.input('page', 1)
-    const limit = request.input('limit', 12)
     const category = request.input('category')
     const search = request.input('search')
-    const sort = request.input('sort', 'newest') // newest, price_asc, price_desc, popular
+    const sort = request.input('sort', 'newest')
+    const limit = 12
 
-    // ============================================================
-    // 1. RÉCUPÉRER LES PRODUITS
-    // ============================================================
-    let productQuery = Product.query()
-      .where('status', 'active')
+    // Base query for products
+    let productsQuery = Product.query()
       .preload('user', (query) => {
-        query.select('id', 'full_name', 'email', 'role')
+        query.select('id', 'name', 'shopName')
       })
-      .preload('categoryRelation', (query) => {
-        query.select('id', 'name', 'slug')
-      })
-      .preload('reviews', (query) => {
-        query.orderBy('created_at', 'desc').limit(3)
-      })
+      .preload('category')
+      .where('isActive', true)
 
-    // Filtre par catégorie
+    // Apply category filter
     if (category) {
-      productQuery.where('category', category)
+      productsQuery = productsQuery.whereHas('category', (builder: any) => {
+        builder.where('slug', category)
+      })
     }
 
-    // Recherche
+    // Apply search filter
     if (search) {
-      productQuery.where((builder) => {
-        builder.where('name', 'LIKE', `%${search}%`)
+      productsQuery = productsQuery.where((builder: any) => {
+        builder
+          .where('name', 'LIKE', `%${search}%`)
           .orWhere('description', 'LIKE', `%${search}%`)
       })
     }
 
-    // Tri
+    // Apply sorting
     switch (sort) {
       case 'price_asc':
-        productQuery.orderBy('price', 'asc')
+        productsQuery = productsQuery.orderBy('price', 'asc')
         break
       case 'price_desc':
-        productQuery.orderBy('price', 'desc')
+        productsQuery = productsQuery.orderBy('price', 'desc')
         break
       case 'popular':
-        productQuery.orderBy('sales', 'desc')
+        productsQuery = productsQuery.orderBy('sales', 'desc')
         break
+      case 'newest':
       default:
-        productQuery.orderBy('created_at', 'desc')
+        productsQuery = productsQuery.orderBy('createdAt', 'desc')
+        break
     }
 
-    const products = await productQuery.paginate(page, limit)
+    const products = await productsQuery.paginate(page, limit)
 
-    // ============================================================
-    // 2. RÉCUPÉRER LES PRODUITS EN PROMOTION (FLASH SALES)
-    // ============================================================
+    // Get products on sale
     const productsOnSale = await Product.query()
-      .where('status', 'active')
-      .where('isOnSale', true)
-      .whereNotNull('old_price')
-      .preload('user', (query) => {
-        query.select('id', 'full_name', 'commercial_name', 'shop_name')
+      .preload('user', (query: any) => {
+        query.select('id', 'name', 'shopName')
       })
-      .orderBy('discount_percentage', 'desc')
+      .where('isActive', true)
+      .whereNotNull('oldPrice')
+      .where('oldPrice', '>', 0)
+      .orderBy('createdAt', 'desc')
       .limit(8)
 
-    // ============================================================
-    // 3. RÉCUPÉRER LES NOUVEAUX PRODUITS
-    // ============================================================
+    // Get new products
     const newProducts = await Product.query()
-      .where('status', 'active')
-      .where('isNew', true)
-      .preload('user', (query) => {
-        query.select('id', 'full_name', 'commercial_name')
+      .preload('user', (query: any) => {
+        query.select('id', 'name', 'shopName')
       })
-      .orderBy('created_at', 'desc')
+      .where('isActive', true)
+      .where('isNew', true)
+      .orderBy('createdAt', 'desc')
       .limit(8)
 
-    // ============================================================
-    // 4. RÉCUPÉRER LES PRODUITS LES PLUS VENDUS
-    // ============================================================
+    // Get best sellers
     const bestSellers = await Product.query()
-      .where('status', 'active')
-      .where('sales', '>', 0)
-      .preload('user', (query) => {
-        query.select('id', 'full_name', 'commercial_name')
+      .preload('user', (query: any) => {
+        query.select('id', 'name', 'shopName')
       })
+      .where('isActive', true)
       .orderBy('sales', 'desc')
       .limit(8)
 
-    // ============================================================
-    // 5. RÉCUPÉRER LES COUPONS ACTIFS
-    // ============================================================
+    // Get active coupons
     const now = DateTime.now()
-    
     const activeCoupons = await Coupon.query()
-      .where('status', 'active')
-      .where((builder) => {
-        builder.whereNull('valid_until')
-          .orWhere('valid_until', '>', now.toSQL())
+      .preload('product')
+      .where('isActive', true)
+      .where((builder: any) => {
+        builder
+          .whereNull('validUntil')
+          .orWhere('validUntil', '>', now.toSQL())
       })
-      .where((builder) => {
-        builder.whereNull('valid_from')
-          .orWhere('valid_from', '<=', now.toSQL())
-      })
-      .where((builder) => {
-        builder.whereNull('usage_limit')
-          .orWhereRaw('used_count < usage_limit')
-      })
-      .preload('product', (query) => {
-        query.select('id', 'name', 'price', 'image_url')
-      })
-      .orderBy('created_at', 'desc')
+      .orderBy('createdAt', 'desc')
       .limit(6)
 
-    // ============================================================
-    // 6. RÉCUPÉRER LES PROMOTIONS (BANNIÈRES ET OFFRES)
-    // ============================================================
-    const activePromotions = await Promotion.query()
-      .where('status', 'active')
-      .where((builder) => {
-        builder.whereNull('end_date')
-          .orWhere('end_date', '>', now.toSQL())
+    // Get banners
+    const banners = await Promotion.query()
+      .where('type', 'banner')
+      .where('isActive', true)
+      .where((builder: any) => {
+        builder
+          .whereNull('startDate')
+          .orWhere('startDate', '<=', now.toSQL())
       })
-      .where((builder) => {
-        builder.whereNull('start_date')
-          .orWhere('start_date', '<=', now.toSQL())
+      .where((builder: any) => {
+        builder
+          .whereNull('endDate')
+          .orWhere('endDate', '>=', now.toSQL())
       })
-      .orderBy('priority', 'desc')
-      .orderBy('created_at', 'desc')
+      .orderBy('priority', 'asc')
+      .orderBy('createdAt', 'desc')
+      .limit(5)
 
-    // Séparer par type
-    const banners = activePromotions.filter(p => p.type === 'banner')
-    const flashSales = activePromotions.filter(p => p.type === 'flash_sale')
-    const categoryOffers = activePromotions.filter(p => p.type === 'category_offer')
+    // Get flash sales
+    const flashSales = await Promotion.query()
+      .where('type', 'flash_sale')
+      .where('isActive', true)
+      .where((builder: any) => {
+        builder
+          .whereNull('startDate')
+          .orWhere('startDate', '<=', now.toSQL())
+      })
+      .where((builder: any) => {
+        builder
+          .whereNull('endDate')
+          .orWhere('endDate', '>=', now.toSQL())
+      })
+      .orderBy('priority', 'asc')
+      .limit(4)
 
-    // ============================================================
-    // 7. RÉCUPÉRER TOUTES LES CATÉGORIES (pour les filtres)
-    // ============================================================
+    // Get category offers
+    const categoryOffers = await Promotion.query()
+      .where('type', 'category_offer')
+      .where('isActive', true)
+      .where((builder: any) => {
+        builder
+          .whereNull('startDate')
+          .orWhere('startDate', '<=', now.toSQL())
+      })
+      .where((builder: any) => {
+        builder
+          .whereNull('endDate')
+          .orWhere('endDate', '>=', now.toSQL())
+      })
+      .orderBy('priority', 'asc')
+      .limit(6)
+
+    // Get all categories
     const categories = await Category.query()
-      .where('status', 'active')
+      .where('isActive', true)
       .orderBy('name', 'asc')
 
-    // ============================================================
-    // 8. STATISTIQUES GÉNÉRALES
-    // ============================================================
+    // Format products for response
+    const formatProduct = (p: Product) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      formattedPrice: new Intl.NumberFormat('fr-FR', {
+        style: 'currency',
+        currency: 'XOF',
+      }).format(p.price),
+      oldPrice: p.oldPrice,
+      formattedOldPrice: p.oldPrice
+        ? new Intl.NumberFormat('fr-FR', {
+            style: 'currency',
+            currency: 'XOF',
+          }).format(p.oldPrice)
+        : null,
+      discountPercentage: p.oldPrice
+        ? Math.round(((p.oldPrice - p.price) / p.oldPrice) * 100)
+        : null,
+      image: p.image,
+      stock: p.stock,
+      isInStock: p.stock > 0,
+      isLowStock: p.stock > 0 && p.stock <= 5,
+      isNew: p.isNew || false,
+      isOnSale: p.oldPrice ? p.oldPrice > p.price : false,
+      rating: p.rating || 0,
+      reviewsCount: p.reviewsCount || 0,
+      sales: p.sales || 0,
+      likes: p.likes || 0,
+      category: p.category?.name || null,
+      user: p.user
+        ? {
+            id: p.user.id,
+            name: p.user.name,
+            shopName: p.user.shopName,
+          }
+        : null,
+    })
+
+    // Format coupons
+    const formatCoupon = (c: Coupon) => ({
+      id: c.id,
+      code: c.code,
+      discount: c.discount,
+      type: c.type,
+      description: c.description,
+      validUntil: c.validUntil,
+      isValid: c.validUntil
+        ? DateTime.fromJSDate(c.validUntil).toMillis() > DateTime.now().toMillis()
+        : true,
+      product: c.product
+        ? {
+            id: c.product.id,
+            name: c.product.name,
+            price: c.product.price,
+          }
+        : null,
+    })
+
+    // Format promotions
+    const formatPromotion = (p: Promotion) => ({
+      id: p.id,
+      title: p.title,
+      description: p.description,
+      image: p.image,
+      type: p.type,
+      discountPercentage: p.discountPercentage,
+      discountAmount: p.discountAmount,
+      link: p.link,
+      buttonText: p.buttonText,
+      startDate: p.startDate,
+      endDate: p.endDate,
+      priority: p.priority,
+    })
+
+    // Get stats
     const stats = {
-      totalProducts: await Product.query().where('status', 'active').count('* as total'),
-      totalMerchants: await User.query().whereIn('role', ['merchant', 'marchant']).where('is_verified', true).count('* as total'),
-      totalCoupons: activeCoupons.length,
-      totalPromotions: activePromotions.length,
+      totalProducts: await Product.query().where('isActive', true).count('* as total'),
+      totalMerchants: await Product.query()
+        .where('isActive', true)
+        .distinct('user_id')
+        .count('* as total'),
+      totalCoupons: await Coupon.query().where('isActive', true).count('* as total'),
+      totalPromotions: await Promotion.query().where('isActive', true).count('* as total'),
     }
 
-    // ============================================================
-    // 9. RENVOYER LA VUE
-    // ============================================================
-    if (request.accepts(['json'])) {
-      // Réponse API
-      return {
-        success: true,
-        products: products.all().map(p => this.formatProduct(p)),
-        productsOnSale: productsOnSale.map(p => this.formatProduct(p)),
-        newProducts: newProducts.map(p => this.formatProduct(p)),
-        bestSellers: bestSellers.map(p => this.formatProduct(p)),
-        activeCoupons: activeCoupons.map(c => this.formatCoupon(c)),
-        banners: banners.map(p => this.formatPromotion(p)),
-        flashSales: flashSales.map(p => this.formatPromotion(p)),
-        categoryOffers: categoryOffers.map(p => this.formatPromotion(p)),
-        categories: categories.map(c => ({ id: c.id, name: c.name, slug: c.slug })),
-        stats: {
-          totalProducts: stats.totalProducts[0].$extras.total,
-          totalMerchants: stats.totalMerchants[0].$extras.total,
-          totalCoupons: stats.totalCoupons,
-          totalPromotions: stats.totalPromotions,
-        },
-        pagination: {
-          currentPage: products.currentPage,
-          lastPage: products.lastPage,
-          perPage: products.perPage,
-          total: products.total,
-        },
-      }
-    }
-
-    // Réponse Web (vue)
-    return view.render('pages/shop/index', {
-      title: 'Boutique - Tous nos produits',
-      products: products.all().map(p => this.formatProduct(p)),
-      productsOnSale: productsOnSale.map(p => this.formatProduct(p)),
-      newProducts: newProducts.map(p => this.formatProduct(p)),
-      bestSellers: bestSellers.map(p => this.formatProduct(p)),
-      activeCoupons: activeCoupons.map(c => this.formatCoupon(c)),
-      banners: banners.map(p => this.formatPromotion(p)),
-      flashSales: flashSales.map(p => this.formatPromotion(p)),
-      categoryOffers: categoryOffers.map(p => this.formatPromotion(p)),
-      categories: categories.map(c => ({ id: c.id, name: c.name, slug: c.slug })),
+    return view.render('shop/index', {
+      success: true,
+      products: products.map(formatProduct),
+      productsOnSale: productsOnSale.map(formatProduct),
+      newProducts: newProducts.map(formatProduct),
+      bestSellers: bestSellers.map(formatProduct),
+      activeCoupons: activeCoupons.map(formatCoupon),
+      banners: banners.map(formatPromotion),
+      flashSales: flashSales.map(formatPromotion),
+      categoryOffers: categoryOffers.map(formatPromotion),
+      categories: categories.map((c: Category) => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+      })),
       stats: {
         totalProducts: stats.totalProducts[0].$extras.total,
         totalMerchants: stats.totalMerchants[0].$extras.total,
-        totalCoupons: stats.totalCoupons,
-        totalPromotions: stats.totalPromotions,
+        totalCoupons: stats.totalCoupons[0].$extras.total,
+        totalPromotions: stats.totalPromotions[0].$extras.total,
       },
       pagination: {
         currentPage: products.currentPage,
         lastPage: products.lastPage,
         perPage: products.perPage,
         total: products.total,
-        hasPrevious: products.hasPrevious,
-        hasNext: products.hasNext,
+        hasPrevious: products.currentPage > 1,
+        hasNext: products.currentPage < products.lastPage,
       },
       filters: {
-        category,
-        search,
-        sort,
+        category: category || null,
+        search: search || null,
+        sort: sort,
       },
     })
   }
 
   /**
-   * Formater un produit pour l'affichage
+   * API endpoint for shop data (JSON response)
    */
-  private formatProduct(product: Product) {
-    return {
-      id: product.id,
-      name: product.name,
-      description: product.description?.substring(0, 150) + '...',
-      price: product.price,
-      formattedPrice: product.formattedPrice,
-      oldPrice: product.old_price,
-      formattedOldPrice: product.formattedOldPrice,
-      discountPercentage: product.discountPercentage,
-      image: product.image_url,
-      stock: product.stock,
-      isInStock: product.isInStock,
-      isLowStock: product.isLowStock,
-      isNew: product.isNew,
-      isOnSale: product.isOnSale,
-      rating: product.rating || 4.5,
-      reviewsCount: product.reviews_count || 0,
-      sales: product.sales || 0,
-      likes: product.likes || 0,
-      category: product.category,
-      user: product.user ? {
-        id: product.user.id,
-        name: product.user.full_name,
-        shopName: product.user.shop_name || product.user.commercial_name,
-      } : null,
-      categoryRelation: product.categoryRelation ? {
-        id: product.categoryRelation.id,
-        name: product.categoryRelation.name,
-        slug: product.categoryRelation.slug,
-      } : null,
-      createdAt: product.created_at?.toISO(),
-    }
-  }
+  async apiIndex({ request, response }: HttpContext) {
+    try {
+      const page = request.input('page', 1)
+      const category = request.input('category')
+      const search = request.input('search')
+      const sort = request.input('sort', 'newest')
+      const limit = 12
 
-  /**
-   * Formater un coupon pour l'affichage
-   */
-  private formatCoupon(coupon: Coupon) {
-    return {
-      id: coupon.id,
-      code: coupon.code,
-      discount: coupon.discount,
-      type: coupon.type,
-      description: coupon.description,
-      validUntil: coupon.valid_until?.toISO(),
-      isValid: coupon.isValid(),
-      product: coupon.product ? {
-        id: coupon.product.id,
-        name: coupon.product.name,
-        price: coupon.product.price,
-      } : null,
-    }
-  }
+      let productsQuery = Product.query()
+        .preload('user', (query: any) => {
+          query.select('id', 'name', 'shopName')
+        })
+        .preload('category')
+        .where('isActive', true)
 
-  /**
-   * Formater une promotion pour l'affichage
-   */
-  private formatPromotion(promotion: Promotion) {
-    return {
-      id: promotion.id,
-      title: promotion.title,
-      description: promotion.description,
-      image: promotion.image_url || promotion.banner_image,
-      type: promotion.type,
-      discountPercentage: promotion.discount_percentage,
-      discountAmount: promotion.discount_amount,
-      link: promotion.link,
-      buttonText: promotion.button_text,
-      startDate: promotion.start_date?.toISO(),
-      endDate: promotion.end_date?.toISO(),
-      priority: promotion.priority,
-    }
-  }
+      if (category) {
+        productsQuery = productsQuery.whereHas('category', (builder: any) => {
+          builder.where('slug', category)
+        })
+      }
 
-  /**
-   * API - Récupérer tous les produits (JSON)
-   */
-  async apiIndex({ response }: HttpContext) {
-    const products = await Product.query()
-      .where('status', 'active')
-      .preload('user')
-      .preload('categoryRelation')
-      .orderBy('created_at', 'desc')
+      if (search) {
+        productsQuery = productsQuery.where((builder: any) => {
+          builder
+            .where('name', 'LIKE', `%${search}%`)
+            .orWhere('description', 'LIKE', `%${search}%`)
+        })
+      }
 
-    return response.json({
-      success: true,
-      products: products.map(p => this.formatProduct(p)),
-    })
-  }
+      switch (sort) {
+        case 'price_asc':
+          productsQuery = productsQuery.orderBy('price', 'asc')
+          break
+        case 'price_desc':
+          productsQuery = productsQuery.orderBy('price', 'desc')
+          break
+        case 'popular':
+          productsQuery = productsQuery.orderBy('sales', 'desc')
+          break
+        case 'newest':
+        default:
+          productsQuery = productsQuery.orderBy('createdAt', 'desc')
+          break
+      }
 
-  /**
-   * API - Récupérer les coupons actifs (JSON)
-   */
-  async apiCoupons({ response }: HttpContext) {
-    const now = DateTime.now()
-    
-    const coupons = await Coupon.query()
-      .where('status', 'active')
-      .where((builder) => {
-        builder.whereNull('valid_until')
-          .orWhere('valid_until', '>', now.toSQL())
+      const products = await productsQuery.paginate(page, limit)
+
+      // Rest of the code similar to index but returning JSON
+      const now = DateTime.now()
+      const activeCoupons = await Coupon.query()
+        .preload('product')
+        .where('isActive', true)
+        .where((builder: any) => {
+          builder
+            .whereNull('validUntil')
+            .orWhere('validUntil', '>', now.toSQL())
+        })
+        .orderBy('createdAt', 'desc')
+        .limit(6)
+
+      const formatProduct = (p: Product) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        formattedPrice: new Intl.NumberFormat('fr-FR', {
+          style: 'currency',
+          currency: 'XOF',
+        }).format(p.price),
+        oldPrice: p.oldPrice,
+        formattedOldPrice: p.oldPrice
+          ? new Intl.NumberFormat('fr-FR', {
+              style: 'currency',
+              currency: 'XOF',
+            }).format(p.oldPrice)
+          : null,
+        discountPercentage: p.oldPrice
+          ? Math.round(((p.oldPrice - p.price) / p.oldPrice) * 100)
+          : null,
+        image: p.image,
+        stock: p.stock,
+        isInStock: p.stock > 0,
+        isLowStock: p.stock > 0 && p.stock <= 5,
+        isNew: p.isNew || false,
+        isOnSale: p.oldPrice ? p.oldPrice > p.price : false,
+        rating: p.rating || 0,
+        reviewsCount: p.reviewsCount || 0,
+        sales: p.sales || 0,
+        likes: p.likes || 0,
+        category: p.category?.name || null,
+        user: p.user
+          ? {
+              id: p.user.id,
+              name: p.user.name,
+              shopName: p.user.shopName,
+            }
+          : null,
       })
-      .preload('product')
-      .orderBy('created_at', 'desc')
 
-    return response.json({
-      success: true,
-      coupons: coupons.map(c => this.formatCoupon(c)),
-    })
-  }
-
-  /**
-   * API - Récupérer les promotions actives (JSON)
-   */
-  async apiPromotions({ response }: HttpContext) {
-    const now = DateTime.now()
-    
-    const promotions = await Promotion.query()
-      .where('status', 'active')
-      .where((builder) => {
-        builder.whereNull('end_date')
-          .orWhere('end_date', '>', now.toSQL())
+      return response.json({
+        success: true,
+        products: products.map(formatProduct),
+        activeCoupons: activeCoupons.map((c: Coupon) => ({
+          id: c.id,
+          code: c.code,
+          discount: c.discount,
+          type: c.type,
+          description: c.description,
+          validUntil: c.validUntil,
+          isValid: c.validUntil
+            ? DateTime.fromJSDate(c.validUntil).toMillis() > DateTime.now().toMillis()
+            : true,
+          product: c.product
+            ? {
+                id: c.product.id,
+                name: c.product.name,
+                price: c.product.price,
+              }
+            : null,
+        })),
+        pagination: {
+          currentPage: products.currentPage,
+          lastPage: products.lastPage,
+          perPage: products.perPage,
+          total: products.total,
+          hasPrevious: products.currentPage > 1,
+          hasNext: products.currentPage < products.lastPage,
+        },
+        filters: {
+          category: category || null,
+          search: search || null,
+          sort: sort,
+        },
       })
-      .orderBy('priority', 'desc')
-
-    return response.json({
-      success: true,
-      promotions: promotions.map(p => this.formatPromotion(p)),
-    })
+    } catch (error) {
+      console.error('Shop API error:', error)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors du chargement de la boutique',
+      })
+    }
   }
 }
