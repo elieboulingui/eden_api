@@ -25,15 +25,15 @@ export default class ShopController {
         .where('status', 'active')
 
       // Filtre par catégorie
-      if (category && category !== 'all') {
+      if (category && category !== 'all' && category !== '') {
         productsQuery = productsQuery.whereHas('categoryRelation', (builder) => {
           builder.where('slug', category)
         })
       }
 
       // Recherche
-      if (search) {
-        const searchTerm = `%${search}%`
+      if (search && search.trim() !== '') {
+        const searchTerm = `%${search.trim()}%`
         productsQuery = productsQuery.where((builder) => {
           builder.where('name', 'LIKE', searchTerm)
             .orWhere('description', 'LIKE', searchTerm)
@@ -59,6 +59,33 @@ export default class ShopController {
       const products = await productsQuery.paginate(page, limit)
       console.log(`✅ ${products.length} produits trouvés`)
 
+      // Récupérer les produits en promotion
+      const productsOnSale = await Product.query()
+        .preload('user', (query) => query.select('id', 'name', 'shop_name'))
+        .where('status', 'active')
+        .whereNotNull('old_price')
+        .where('old_price', '>', 0)
+        .orderBy('created_at', 'desc')
+        .limit(8)
+      console.log(`✅ ${productsOnSale.length} produits en promo trouvés`)
+
+      // Récupérer les nouveaux produits
+      const newProducts = await Product.query()
+        .preload('user', (query) => query.select('id', 'name', 'shop_name'))
+        .where('status', 'active')
+        .where('is_new', true)
+        .orderBy('created_at', 'desc')
+        .limit(8)
+      console.log(`✅ ${newProducts.length} nouveaux produits trouvés`)
+
+      // Récupérer les meilleures ventes
+      const bestSellers = await Product.query()
+        .preload('user', (query) => query.select('id', 'name', 'shop_name'))
+        .where('status', 'active')
+        .orderBy('sales', 'desc')
+        .limit(8)
+      console.log(`✅ ${bestSellers.length} meilleures ventes trouvées`)
+
       // Récupérer les coupons actifs
       const now = DateTime.now()
       const nowSQL = now.toSQL()
@@ -68,6 +95,7 @@ export default class ShopController {
         .where((builder) => {
           builder.whereNull('valid_until').orWhere('valid_until', '>', nowSQL)
         })
+        .orderBy('created_at', 'desc')
         .limit(6)
       console.log(`✅ ${activeCoupons.length} coupons trouvés`)
 
@@ -75,8 +103,43 @@ export default class ShopController {
       const banners = await Promotion.query()
         .where('type', 'banner')
         .where('status', 'active')
+        .where((builder) => {
+          builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
+        })
+        .where((builder) => {
+          builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
+        })
+        .orderBy('priority', 'asc')
         .limit(5)
       console.log(`✅ ${banners.length} bannières trouvées`)
+
+      // Récupérer les flash sales
+      const flashSales = await Promotion.query()
+        .where('type', 'flash_sale')
+        .where('status', 'active')
+        .where((builder) => {
+          builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
+        })
+        .where((builder) => {
+          builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
+        })
+        .orderBy('priority', 'asc')
+        .limit(4)
+      console.log(`✅ ${flashSales.length} flash sales trouvées`)
+
+      // Récupérer les offres par catégorie
+      const categoryOffers = await Promotion.query()
+        .where('type', 'category_offer')
+        .where('status', 'active')
+        .where((builder) => {
+          builder.whereNull('start_date').orWhere('start_date', '<=', nowSQL)
+        })
+        .where((builder) => {
+          builder.whereNull('end_date').orWhere('end_date', '>=', nowSQL)
+        })
+        .orderBy('priority', 'asc')
+        .limit(6)
+      console.log(`✅ ${categoryOffers.length} offres catégorie trouvées`)
 
       // Récupérer les catégories
       const categories = await Category.query()
@@ -84,20 +147,28 @@ export default class ShopController {
         .orderBy('name', 'asc')
       console.log(`✅ ${categories.length} catégories trouvées`)
 
-      // Formater les produits
+      // Statistiques
+      const totalProducts = await Product.query().where('status', 'active').count('* as total')
+      const totalMerchants = await Product.query()
+        .where('status', 'active')
+        .distinct('user_id')
+        .count('* as total')
+      const totalCoupons = await Coupon.query().where('status', 'active').count('* as total')
+      const totalPromotions = await Promotion.query().where('status', 'active').count('* as total')
+
+      // Fonction de formatage des produits
       const formatProduct = (p: any) => {
-        // Gérer l'utilisateur (peut être préchargé ou non)
         let userData = null
         if (p.user) {
           userData = {
-            id: p.user.id,
+            id: String(p.user.id),
             name: p.user.name,
-            shopName: p.user.shop_name || p.user.shopName || null,
+            shopName: p.user.shop_name || null,
           }
         }
 
         return {
-          id: p.id,
+          id: String(p.id),
           name: p.name,
           description: p.description,
           price: p.price,
@@ -130,26 +201,9 @@ export default class ShopController {
         }
       }
 
-      const allProducts = products.map(formatProduct)
-
-      // Produits en promotion (avec old_price)
-      const productsOnSale = allProducts
-        .filter(p => p.oldPrice && p.oldPrice > p.price)
-        .slice(0, 8)
-
-      // Nouveaux produits
-      const newProducts = allProducts
-        .filter(p => p.isNew)
-        .slice(0, 8)
-
-      // Meilleures ventes
-      const bestSellers = [...allProducts]
-        .sort((a, b) => (b.sales || 0) - (a.sales || 0))
-        .slice(0, 8)
-
       // Formater les coupons
-      const formattedCoupons = activeCoupons.map((c: any) => ({
-        id: c.id,
+      const formatCoupon = (c: any) => ({
+        id: String(c.id),
         code: c.code,
         discount: c.discount,
         type: c.type,
@@ -157,11 +211,11 @@ export default class ShopController {
         validUntil: c.valid_until,
         isValid: true,
         product: null,
-      }))
+      })
 
-      // Formater les bannières
-      const formattedBanners = banners.map((p: any) => ({
-        id: p.id,
+      // Formater les promotions
+      const formatPromotion = (p: any) => ({
+        id: String(p.id),
         title: p.title,
         description: p.description,
         image: p.image_url ?? p.banner_image ?? null,
@@ -173,61 +227,50 @@ export default class ShopController {
         startDate: p.start_date,
         endDate: p.end_date,
         priority: p.priority,
-      }))
+      })
 
       // Formater les catégories
-      const formattedCategories = categories.map((c: any) => ({
-        id: c.id,
+      const formatCategory = (c: any) => ({
+        id: String(c.id),
         name: c.name,
         slug: c.slug,
-      }))
-
-      // Statistiques
-      const stats = {
-        totalProducts: products.total,
-        totalMerchants: 0,
-        totalCoupons: activeCoupons.length,
-        totalPromotions: banners.length,
-      }
-
-      // Pagination
-      const pagination = {
-        currentPage: products.currentPage,
-        lastPage: products.lastPage,
-        perPage: products.perPage,
-        total: products.total,
-        hasPrevious: products.currentPage > 1,
-        hasNext: products.currentPage < products.lastPage,
-      }
+      })
 
       return response.json({
         success: true,
-        products: allProducts,
-        productsOnSale: productsOnSale,
-        newProducts: newProducts,
-        bestSellers: bestSellers,
-        activeCoupons: formattedCoupons,
-        banners: formattedBanners,
-        flashSales: [],
-        categoryOffers: [],
-        categories: formattedCategories,
-        stats: stats,
-        pagination: pagination,
-        filters: { 
-          category: category || null, 
-          search: search || null, 
-          sort 
+        products: products.map(formatProduct),
+        productsOnSale: productsOnSale.map(formatProduct),
+        newProducts: newProducts.map(formatProduct),
+        bestSellers: bestSellers.map(formatProduct),
+        activeCoupons: activeCoupons.map(formatCoupon),
+        banners: banners.map(formatPromotion),
+        flashSales: flashSales.map(formatPromotion),
+        categoryOffers: categoryOffers.map(formatPromotion),
+        categories: categories.map(formatCategory),
+        stats: {
+          totalProducts: Number(totalProducts[0].$extras.total),
+          totalMerchants: Number(totalMerchants[0].$extras.total),
+          totalCoupons: Number(totalCoupons[0].$extras.total),
+          totalPromotions: Number(totalPromotions[0].$extras.total),
+        },
+        pagination: {
+          currentPage: products.currentPage,
+          lastPage: products.lastPage,
+          perPage: products.perPage,
+          total: products.total,
+          hasPrevious: products.currentPage > 1,
+          hasNext: products.currentPage < products.lastPage,
+        },
+        filters: {
+          category: category || null,
+          search: search || null,
+          sort: sort,
         },
       })
       
     } catch (error: unknown) {
       const err = error as Error
       console.error('❌ Shop API error:', err)
-      console.error('Error details:', {
-        message: err.message,
-        stack: err.stack,
-        name: err.name,
-      })
       
       return response.status(500).json({
         success: false,
@@ -251,7 +294,7 @@ export default class ShopController {
       return response.json({
         success: true,
         coupons: coupons.map((c: any) => ({
-          id: c.id,
+          id: String(c.id),
           code: c.code,
           discount: c.discount,
           type: c.type,
@@ -266,7 +309,6 @@ export default class ShopController {
       return response.status(500).json({ 
         success: false, 
         message: 'Erreur coupons',
-        error: err.message,
       })
     }
   }
@@ -290,7 +332,7 @@ export default class ShopController {
       return response.json({
         success: true,
         promotions: promotions.map((p: any) => ({
-          id: p.id,
+          id: String(p.id),
           title: p.title,
           description: p.description,
           image: p.image_url ?? p.banner_image ?? null,
@@ -310,7 +352,6 @@ export default class ShopController {
       return response.status(500).json({ 
         success: false, 
         message: 'Erreur promotions',
-        error: err.message,
       })
     }
   }
