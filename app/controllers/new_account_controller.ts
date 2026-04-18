@@ -4,7 +4,8 @@ import User from '#models/user'
 import Wallet from '#models/wallet'
 import type { HttpContext } from '@adonisjs/core/http'
 import jwt from 'jsonwebtoken'
-import hash from '@adonisjs/core/services/hash'
+// ❌ SUPPRIMER CET IMPORT - Le modèle User gère déjà le hashage
+// import hash from '@adonisjs/core/services/hash'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'linemarket'
 
@@ -26,16 +27,16 @@ export default class NewAccountController {
         })
       }
 
-      // Hasher le mot de passe
-      const hashedPassword = await hash.make(rawData.password)
-      console.log('🔐 [NewAccountController] Mot de passe hashé')
+      // ❌ NE PAS HASHER ICI - Le modèle User le fera automatiquement
+      // const hashedPassword = await hash.make(rawData.password)
+      // console.log('🔐 [NewAccountController] Mot de passe hashé')
 
-      // ✅ Utiliser EXACTEMENT les noms de colonnes de la base de données (avec underscores)
+      // ✅ Utiliser le mot de passe EN CLAIR - le modèle va le hasher
       const userData: any = {
         // Champs de base
         full_name: rawData.full_name,
         email: rawData.email,
-        password: hashedPassword,
+        password: rawData.password, // ⚠️ MOT DE PASSE EN CLAIR
         role: rawData.role || 'client',
 
         // Localisation
@@ -64,11 +65,10 @@ export default class NewAccountController {
         shop_image: rawData.logo_url || rawData.shop_image || null,
         cover_photo_url: rawData.cover_photo_url || null,
 
-        // Bloc 4 - Boutique physique (NOMS AVEC UNDERSCORES)
+        // Bloc 4 - Boutique physique
         shop_address: rawData.shop_address || null,
         shop_latitude: rawData.shop_latitude || null,
         shop_longitude: rawData.shop_longitude || null,
-        // ✅ Correction : facade_photo_1_url (avec underscore avant le chiffre)
         facade_photo_1_url: rawData.facade_photo1_url || rawData.facadePhoto1Url || rawData.facade_photo_1_url || null,
         facade_photo_2_url: rawData.facade_photo2_url || rawData.facadePhoto2Url || rawData.facade_photo_2_url || null,
         interior_photo_1_url: rawData.interior_photo1_url || rawData.interiorPhoto1Url || rawData.interior_photo_1_url || null,
@@ -97,7 +97,7 @@ export default class NewAccountController {
         accept_escrow: true,
       }
 
-      // ✅ Références (NOMS AVEC UNDERSCORES)
+      // ✅ Références
       if (rawData.reference1) {
         userData.reference_1_name = rawData.reference1.name || null
         userData.reference_1_phone = rawData.reference1.phone || null
@@ -128,8 +128,9 @@ export default class NewAccountController {
       })
 
       console.log('💾 [NewAccountController] Création utilisateur avec', Object.keys(userData).length, 'champs')
+      console.log('🔑 Password avant création:', userData.password ? '******' : 'MANQUANT')
 
-      // ✅ Créer l'utilisateur
+      // ✅ Créer l'utilisateur - le hook @beforeSave va hasher le mot de passe
       const user = await User.create(userData)
 
       console.log('✅ [NewAccountController] Utilisateur créé avec succès!')
