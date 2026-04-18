@@ -8,7 +8,7 @@ export default class SessionController {
   /**
    * Connexion utilisateur - Supporte web et API
    */
-  async store({ request, response }: HttpContext) {
+  async store({ request, response, session }: HttpContext) {
     try {
       const { email, password } = request.only(['email', 'password'])
 
@@ -28,10 +28,11 @@ export default class SessionController {
           })
         }
         
-        // Sinon, retour à la vue web
-        return response.redirect().back().withErrors({
+        // Sinon, retour à la vue web avec flash messages
+        session.flash('errors', {
           email: 'Email ou mot de passe incorrect',
         })
+        return response.redirect().back()
       }
 
       // Vérifier le mot de passe
@@ -47,9 +48,10 @@ export default class SessionController {
           })
         }
         
-        return response.redirect().back().withErrors({
+        session.flash('errors', {
           password: 'Email ou mot de passe incorrect',
         })
+        return response.redirect().back()
       }
 
       // Générer le token JWT
@@ -88,7 +90,11 @@ export default class SessionController {
         })
       }
 
-      // Réponse pour Web
+      // Réponse pour Web - stocker le token dans la session
+      session.put('user', userData)
+      session.put('token', token)
+      session.flash('success', 'Connexion réussie')
+      
       return response.redirect().toPath('/')
 
     } catch (error) {
@@ -103,9 +109,10 @@ export default class SessionController {
         })
       }
       
-      return response.redirect().back().withErrors({
+      session.flash('errors', {
         server: 'Erreur serveur lors de la connexion',
       })
+      return response.redirect().back()
     }
   }
 
@@ -267,7 +274,10 @@ export default class SessionController {
   /**
    * Déconnexion
    */
-  async destroy({ response }: HttpContext) {
+  async destroy({ response, session }: HttpContext) {
+    // Nettoyer la session pour le web
+    session.clear()
+    
     return response.status(200).json({
       success: true,
       message: 'Déconnexion réussie',
