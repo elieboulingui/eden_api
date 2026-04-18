@@ -78,15 +78,13 @@ export default class SessionController {
         updated_at: user.updated_at,
       }
 
-      // Réponse pour API
+      // Réponse pour API - Format PLAT sans "data"
       if (request.accepts(['json'])) {
         return response.status(200).json({
           success: true,
           message: 'Connexion réussie',
-          data: {
-            user: userData,
-            token,
-          }
+          user: userData,    // Directement à la racine
+          token,             // Directement à la racine
         })
       }
 
@@ -150,17 +148,15 @@ export default class SessionController {
 
       return response.status(200).json({
         success: true,
-        data: { 
-          user: {
-            id: user.id,
-            full_name: user.full_name,
-            email: user.email,
-            role: user.role,
-            phone: user.phone,
-            address: user.address,
-            created_at: user.created_at,
-            updated_at: user.updated_at,
-          }
+        user: {
+          id: user.id,
+          full_name: user.full_name,
+          email: user.email,
+          role: user.role,
+          phone: user.phone,
+          address: user.address,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
         },
       })
     } catch (error) {
@@ -195,15 +191,13 @@ export default class SessionController {
       return response.status(200).json({
         success: true,
         message: 'Profil mis à jour avec succès',
-        data: {
-          user: {
-            id: user.id,
-            full_name: user.full_name,
-            email: user.email,
-            role: user.role,
-            phone: user.phone,
-            address: user.address,
-          }
+        user: {
+          id: user.id,
+          full_name: user.full_name,
+          email: user.email,
+          role: user.role,
+          phone: user.phone,
+          address: user.address,
         },
       })
     } catch (error) {
