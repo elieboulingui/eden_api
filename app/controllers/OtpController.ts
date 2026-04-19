@@ -282,20 +282,4 @@ export default class OtpController {
 
     return token
   }
-
-  private verifyResetJWT(email: string, token: string): boolean {
-    console.log("🔍 Vérification JWT pour:", email)
-
-    try {
-      const secret = env.get('APP_KEY')
-      const decoded = jwt.verify(token, Buffer.from(secret)) as { email: string; purpose: string }
-
-      console.log("📦 Décodé:", decoded)
-
-      return decoded.email === email && decoded.purpose === 'password_reset'
-    } catch (error) {
-      console.error("❌ JWT invalide:", error)
-      return false
-    }
-  }
 }
