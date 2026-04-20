@@ -70,7 +70,7 @@ export default class KYCsController {
       const kycUrl = `https://apist.onrender.com/api/mypvit/kyc/marchant?customerAccountNumber=${numeroTelephone}`
 
       const externalResponse = await fetch(kycUrl)
-      const externalData = await externalResponse.json()
+      const externalData: any = await externalResponse.json()
 
       // Prendre les données telles quelles de l'API Render
       const nomComplet = externalData.data.full_name
@@ -104,7 +104,7 @@ export default class KYCsController {
         updatedAt: kycRecord.updatedAt
       })
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur KYC:', error)
       return response.status(500).json({
         success: false,
