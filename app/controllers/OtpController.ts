@@ -158,15 +158,15 @@ export default class OtpController {
     }
   }
 
-  // ✅ Reset password
+  // ✅ Reset password - SANS TOKEN
   public async resetPassword({ request, response }: HttpContext) {
     console.log("➡️ [RESET PASSWORD] Requête reçue")
 
     try {
-      const { email, resetToken, newPassword, confirmPassword } = request.body()
+      const { email, password, password_confirmation } = request.body()
       console.log("📩 Email:", email)
 
-      if (!email || !resetToken || !newPassword || !confirmPassword) {
+      if (!email || !password || !password_confirmation) {
         console.log("❌ Champs manquants")
         return response.status(400).json({
           success: false,
@@ -174,22 +174,18 @@ export default class OtpController {
         })
       }
 
-      const isValidToken = this.verifyResetJWT(email, resetToken)
-      console.log("🔐 Token valide ?", isValidToken)
-
-      if (!isValidToken) {
-        console.log("❌ Token invalide")
-        return response.status(400).json({
-          success: false,
-          message: 'Token invalide ou expiré'
-        })
-      }
-
-      if (newPassword !== confirmPassword) {
+      if (password !== password_confirmation) {
         console.log("❌ Mots de passe différents")
         return response.status(400).json({
           success: false,
           message: 'Les mots de passe ne correspondent pas'
+        })
+      }
+
+      if (password.length < 8) {
+        return response.status(400).json({
+          success: false,
+          message: 'Le mot de passe doit contenir au moins 8 caractères'
         })
       }
 
@@ -205,7 +201,7 @@ export default class OtpController {
       }
 
       console.log("🔄 Mise à jour du mot de passe...")
-      user.password = newPassword
+      user.password = password
       await user.save()
 
       console.log("✅ Mot de passe modifié")
@@ -285,21 +281,5 @@ export default class OtpController {
     console.log("🔑 JWT généré:", token)
 
     return token
-  }
-
-  private verifyResetJWT(email: string, token: string): boolean {
-    console.log("🔍 Vérification JWT pour:", email)
-
-    try {
-      const secret = env.get('APP_KEY')
-      const decoded = jwt.verify(token, Buffer.from(secret)) as { email: string; purpose: string }
-
-      console.log("📦 Décodé:", decoded)
-
-      return decoded.email === email && decoded.purpose === 'password_reset'
-    } catch (error) {
-      console.error("❌ JWT invalide:", error)
-      return false
-    }
   }
 }

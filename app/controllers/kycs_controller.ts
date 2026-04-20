@@ -3,7 +3,7 @@ import KYC from '#models/kyc'
 
 export default class KYCsController {
   /**
-   * Afficher tous les enregistrements (API JSON)
+   * Afficher tous les enregistrements
    */
   async index({ response }: HttpContext) {
     const kycs = await KYC.query().orderBy('createdAt', 'desc')
@@ -26,19 +26,17 @@ export default class KYCsController {
   }
 
   /**
-   * Créer un nouvel enregistrement KYC
+   * Créer un nouvel enregistrement KYC (manuel)
    */
   async store({ request, response }: HttpContext) {
     const payload = request.only(['nomComplet', 'numeroTelephone', 'operateur'])
 
-    // Validation basique
     if (!payload.nomComplet || !payload.numeroTelephone || !payload.operateur) {
       return response.status(400).json({
         message: 'Tous les champs sont obligatoires'
       })
     }
 
-    // Vérifier si le numéro existe déjà
     const existing = await KYC.findBy('numeroTelephone', payload.numeroTelephone)
     if (existing) {
       return response.status(400).json({
@@ -46,7 +44,6 @@ export default class KYCsController {
       })
     }
 
-    // Créer le KYC
     const kyc = await KYC.create(payload)
 
     return response.status(201).json({
@@ -56,75 +53,62 @@ export default class KYCsController {
   }
 
   /**
-   * Vérifier un numéro via API externe et enregistrer
+   * Vérifier un numéro via API Render et enregistrer
    */
   async verifyAndStore({ request, response }: HttpContext) {
-    const { numeroTelephone, nomComplet, operateur } = request.only([
-      'numeroTelephone',
-      'nomComplet',
-      'operateur'
-    ])
+    const { numeroTelephone } = request.only(['numeroTelephone'])
 
-    // Validation basique
     if (!numeroTelephone) {
       return response.status(400).json({
+        success: false,
         message: 'Le numéro de téléphone est obligatoire'
       })
     }
 
     try {
-      // 1. Appel à l'API externe
+      // Appel à l'API Render
       const kycUrl = `https://apist.onrender.com/api/mypvit/kyc/marchant?customerAccountNumber=${numeroTelephone}`
 
-      const externalResponse = await fetch(kycUrl, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      })
-
-      if (!externalResponse.ok) {
-        return response.status(externalResponse.status).json({
-          message: 'Erreur lors de la vérification du numéro',
-          error: await externalResponse.text()
-        })
-      }
-
+      const externalResponse = await fetch(kycUrl)
       const externalData = await externalResponse.json()
 
-      // 2. Vérifier si le numéro existe déjà dans notre base
+      // Prendre les données telles quelles de l'API Render
+      const nomComplet = externalData.data.full_name
+      const operateur = externalData.data.operator
+
+      // Vérifier si le numéro existe déjà
       const existing = await KYC.findBy('numeroTelephone', numeroTelephone)
 
       let kycRecord
 
       if (existing) {
-        // Mettre à jour avec les nouvelles données de l'API
-        existing.merge({
-          nomComplet: nomComplet || externalData.name || existing.nomComplet,
-          operateur: operateur || externalData.operator || existing.operateur
-        })
+        existing.nomComplet = nomComplet
+        existing.operateur = operateur
         await existing.save()
         kycRecord = existing
       } else {
-        // Créer un nouvel enregistrement
         kycRecord = await KYC.create({
-          nomComplet: nomComplet || externalData.name || 'Inconnu',
+          nomComplet: nomComplet,
           numeroTelephone: numeroTelephone,
-          operateur: operateur || externalData.operator || 'INCONNU'
+          operateur: operateur
         })
       }
 
-      // 3. Renvoyer les données combinées au front
+      // Renvoyer uniquement les données enregistrées
       return response.status(200).json({
-        message: 'Vérification KYC effectuée avec succès',
-        kyc: kycRecord,
-        externalData: externalData
+        id: kycRecord.id,
+        numeroTelephone: kycRecord.numeroTelephone,
+        nomComplet: kycRecord.nomComplet,
+        operateur: kycRecord.operateur,
+        createdAt: kycRecord.createdAt,
+        updatedAt: kycRecord.updatedAt
       })
 
     } catch (error) {
       console.error('Erreur KYC:', error)
       return response.status(500).json({
-        message: 'Erreur serveur lors de la vérification KYC',
+        success: false,
+        message: 'Erreur serveur',
         error: error.message
       })
     }
@@ -144,7 +128,6 @@ export default class KYCsController {
 
     const payload = request.only(['nomComplet', 'numeroTelephone', 'operateur'])
 
-    // Vérifier si le nouveau numéro existe déjà (si modifié)
     if (payload.numeroTelephone && payload.numeroTelephone !== kyc.numeroTelephone) {
       const existing = await KYC.findBy('numeroTelephone', payload.numeroTelephone)
       if (existing) {

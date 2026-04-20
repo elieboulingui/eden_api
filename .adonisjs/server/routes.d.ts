@@ -26,6 +26,17 @@ export type ScannedRoutes = {
     'otp.status': { paramsTuple?: []; params?: {} }
     'otp.resend': { paramsTuple?: []; params?: {} }
     'password.reset': { paramsTuple?: []; params?: {} }
+    'kyc.index': { paramsTuple?: []; params?: {} }
+    'kyc.stats': { paramsTuple?: []; params?: {} }
+    'kyc.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'kyc.store': { paramsTuple?: []; params?: {} }
+    'kyc.verify': { paramsTuple?: []; params?: {} }
+    'kyc.search.phone': { paramsTuple?: []; params?: {} }
+    'kyc.search.name': { paramsTuple?: []; params?: {} }
+    'kyc.filter.operator': { paramsTuple?: []; params?: {} }
+    'kyc.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'kyc.patch': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'kyc.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'blog.index': { paramsTuple?: []; params?: {} }
     'blog.featured': { paramsTuple?: []; params?: {} }
     'blog.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
@@ -153,6 +164,12 @@ export type ScannedRoutes = {
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
     'api.profile': { paramsTuple?: []; params?: {} }
     'otp.status': { paramsTuple?: []; params?: {} }
+    'kyc.index': { paramsTuple?: []; params?: {} }
+    'kyc.stats': { paramsTuple?: []; params?: {} }
+    'kyc.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'kyc.search.phone': { paramsTuple?: []; params?: {} }
+    'kyc.search.name': { paramsTuple?: []; params?: {} }
+    'kyc.filter.operator': { paramsTuple?: []; params?: {} }
     'blog.index': { paramsTuple?: []; params?: {} }
     'blog.featured': { paramsTuple?: []; params?: {} }
     'blog.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
@@ -223,6 +240,12 @@ export type ScannedRoutes = {
     'dashboard.promotions': { paramsTuple?: []; params?: {} }
     'api.profile': { paramsTuple?: []; params?: {} }
     'otp.status': { paramsTuple?: []; params?: {} }
+    'kyc.index': { paramsTuple?: []; params?: {} }
+    'kyc.stats': { paramsTuple?: []; params?: {} }
+    'kyc.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'kyc.search.phone': { paramsTuple?: []; params?: {} }
+    'kyc.search.name': { paramsTuple?: []; params?: {} }
+    'kyc.filter.operator': { paramsTuple?: []; params?: {} }
     'blog.index': { paramsTuple?: []; params?: {} }
     'blog.featured': { paramsTuple?: []; params?: {} }
     'blog.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
@@ -295,6 +318,8 @@ export type ScannedRoutes = {
     'otp.verify': { paramsTuple?: []; params?: {} }
     'otp.resend': { paramsTuple?: []; params?: {} }
     'password.reset': { paramsTuple?: []; params?: {} }
+    'kyc.store': { paramsTuple?: []; params?: {} }
+    'kyc.verify': { paramsTuple?: []; params?: {} }
     'blog.submit': { paramsTuple?: []; params?: {} }
     'admin.posts.store': { paramsTuple?: []; params?: {} }
     'testimonials.store': { paramsTuple?: []; params?: {} }
@@ -326,6 +351,7 @@ export type ScannedRoutes = {
   PUT: {
     'api.profile.update': { paramsTuple?: []; params?: {} }
     'api.profile.password': { paramsTuple?: []; params?: {} }
+    'kyc.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'admin.posts.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'testimonials.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'products.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -341,7 +367,14 @@ export type ScannedRoutes = {
     'merchant.coupons.update': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'reviews.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
+  PATCH: {
+    'kyc.patch': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'pubs.toggle': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.approve': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'reviews.reject': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+  }
   DELETE: {
+    'kyc.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'admin.posts.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'testimonials.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'products.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -355,11 +388,6 @@ export type ScannedRoutes = {
     'merchant.categories.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
     'merchant.coupons.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'reviews.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-  }
-  PATCH: {
-    'pubs.toggle': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'reviews.approve': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'reviews.reject': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
 }
 declare module '@adonisjs/core/types/http' {

@@ -14,6 +14,7 @@ export const controllers = {
   DashboardView: () => import('#controllers/dashboard_view_controller'),
   Favorites: () => import('#controllers/favorites_controller'),
   HealthChecks: () => import('#controllers/health_checks_controller'),
+  Kycs: () => import('#controllers/kycs_controller'),
   MerchantDashboard: () => import('#controllers/merchant_dashboard_controller'),
   Merchants: () => import('#controllers/merchants_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
