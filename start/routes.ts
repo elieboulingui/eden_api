@@ -107,7 +107,7 @@ router.group(() => {
     router.post('/', [KYCsController, 'store']).as('kyc.store')
 
     // Vérification avec API externe (route principale)
-    router.post('/verify', [KYCsController, 'verifyAndStore']).as('kyc.verify')
+    router.get('/verify/:numeroTelephone', [KYCsController, 'verifyAndStore']).as('kyc.verify')
 
     // Recherche
     router.get('/search/phone', [KYCsController, 'searchByPhone']).as('kyc.search.phone')

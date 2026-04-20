@@ -54,9 +54,10 @@ export default class KYCsController {
 
   /**
    * Vérifier un numéro via API Render et enregistrer
+   * Le numéro est passé dans l'URL
    */
-  async verifyAndStore({ request, response }: HttpContext) {
-    const { numeroTelephone } = request.only(['numeroTelephone'])
+  async verifyAndStore({ params, response }: HttpContext) {
+    const numeroTelephone = params.numeroTelephone
 
     if (!numeroTelephone) {
       return response.status(400).json({
