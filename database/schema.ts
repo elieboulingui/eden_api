@@ -201,6 +201,23 @@ export class FavoriteSchema extends BaseModel {
   declare userId: string
 }
 
+export class KycSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'nomComplet', 'numeroTelephone', 'operateur', 'updatedAt'] as const
+  $columns = KycSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare nomComplet: string
+  @column()
+  declare numeroTelephone: string
+  @column()
+  declare operateur: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
 export class MerchantWithdrawalSchema extends BaseModel {
   static $columns = ['accountName', 'accountNumber', 'amount', 'createdAt', 'id', 'notes', 'operator', 'paymentMethod', 'processedAt', 'processedBy', 'reference', 'status', 'transactionId', 'updatedAt', 'userId'] as const
   $columns = MerchantWithdrawalSchema.$columns

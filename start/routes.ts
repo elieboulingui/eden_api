@@ -3,6 +3,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+const KYCsController = () => import('#controllers/kycs_controller')
 const ShopController = () => import('#controllers/shop_controller')
 const OtpController = () => import('#controllers/OtpController')
 const ContactsController = () => import('#controllers/contacts_controller')
@@ -45,13 +46,13 @@ router.group(() => {
   router.get('signup', async ({ view }) => {
     return view.render('pages/auth/signup')
   }).as('new_account.create')
-  
+
   router.post('signup', [NewAccountController, 'store']).as('new_account.web.store')
 
   router.get('login', async ({ view }) => {
     return view.render('pages/auth/login')
   }).as('session.create')
-  
+
   router.post('login', [SessionController, 'store']).as('session.web.store')
 }).use(middleware.guest())
 
@@ -92,6 +93,32 @@ router.group(() => {
   router.get('/otp/status', [OtpController, 'status']).as('otp.status')
   router.post('/otp/resend', [OtpController, 'resend']).as('otp.resend')
   router.post('/password/reset', [OtpController, 'resetPassword']).as('password.reset')
+
+  // ----------------------------------------------------------
+  // KYC (Know Your Customer)
+  // ----------------------------------------------------------
+  router.group(() => {
+    // Routes de base
+    router.get('/', [KYCsController, 'index']).as('kyc.index')
+    router.get('/stats', [KYCsController, 'stats']).as('kyc.stats')
+    router.get('/:id', [KYCsController, 'show']).as('kyc.show')
+
+    // Création simple
+    router.post('/', [KYCsController, 'store']).as('kyc.store')
+
+    // Vérification avec API externe (route principale)
+    router.post('/verify', [KYCsController, 'verifyAndStore']).as('kyc.verify')
+
+    // Recherche
+    router.get('/search/phone', [KYCsController, 'searchByPhone']).as('kyc.search.phone')
+    router.get('/search/name', [KYCsController, 'searchByName']).as('kyc.search.name')
+    router.get('/filter/operator', [KYCsController, 'filterByOperator']).as('kyc.filter.operator')
+
+    // Modification et suppression
+    router.put('/:id', [KYCsController, 'update']).as('kyc.update')
+    router.patch('/:id', [KYCsController, 'update']).as('kyc.patch')
+    router.delete('/:id', [KYCsController, 'destroy']).as('kyc.destroy')
+  }).prefix('/kyc')
 
   // ----------------------------------------------------------
   // BLOG (PUBLIC)
@@ -291,9 +318,9 @@ router.group(() => {
   router.patch('/reviews/:id/reject', [ReviewsController, 'reject'])
 
 
-  
 
-// Routes API
+
+  // Routes API
 
   router.get('/shop', [ShopController, 'apiIndex']).as('api.shop.index')
   router.get('/shop/coupons', [ShopController, 'apiCoupons']).as('api.shop.coupons')
