@@ -7,7 +7,13 @@ import WithdrawalHistory from '#models/WithdrawalHistory'
 import UserWithdrawalStats from '#models/UserWithdrawalStats'
 import { DateTime } from 'luxon'
 import env from '#start/env'
-import jwt from 'jsonwebtoken'
+import jwt, { type JwtPayload } from 'jsonwebtoken'
+
+// Clés API fixes
+const API_KEYS = {
+  public: 'pk_1773325888803_dt8diavuh3h',
+  secret: 'sk_1773325888803_qt015a3cr5'
+}
 
 export default class GiveChangeController {
   /**
@@ -31,16 +37,16 @@ export default class GiveChangeController {
       }
 
       // Vérifier et décoder le token
-      const JWT_SECRET = env.get('JWT_SECRET', env.get('APP_KEY'))
+      const JWT_SECRET = env.get('JWT_SECRET')
 
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; email: string }
+      const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload & { userId: string; email: string }
 
       // Récupérer l'utilisateur
       const user = await User.find(decoded.userId)
 
       return user
     } catch (error) {
-      console.error('Erreur vérification JWT:', error.message)
+      console.error('Erreur vérification JWT:', error instanceof Error ? error.message : String(error))
       return null
     }
   }
@@ -73,16 +79,12 @@ export default class GiveChangeController {
         amount,
         customer_account_number,
         operator_code,
-        payment_api_key_public,
-        payment_api_key_secret,
         notes
       } = request.body()
 
       // Récupérer les configurations
-      const MIN_WITHDRAWAL_AMOUNT = Number(env.get('MIN_WITHDRAWAL_AMOUNT', 150))
-      const WITHDRAWAL_FEE_TYPE = env.get('WITHDRAWAL_FEE_TYPE', 'fixed')
-      const WITHDRAWAL_FEE_AMOUNT = Number(env.get('WITHDRAWAL_FEE_AMOUNT', 0))
-      const EXTERNAL_API_TIMEOUT = Number(env.get('EXTERNAL_API_TIMEOUT', 30000))
+      const MIN_WITHDRAWAL_AMOUNT = env.get('MIN_WITHDRAWAL_AMOUNT', 150)
+      const EXTERNAL_API_TIMEOUT = env.get('EXTERNAL_API_TIMEOUT', 30000)
 
       // Validation du montant
       if (!amount || amount <= 0) {
@@ -119,22 +121,16 @@ export default class GiveChangeController {
         })
       }
 
-      // Calculer les frais
-      let fee = 0
-      if (WITHDRAWAL_FEE_TYPE === 'fixed') {
-        fee = WITHDRAWAL_FEE_AMOUNT
-      } else if (WITHDRAWAL_FEE_TYPE === 'percentage') {
-        fee = (amount * WITHDRAWAL_FEE_AMOUNT) / 100
-      }
-
-      const netAmount = amount - fee
+      // Frais à 0
+      const fee = 0
+      const netAmount = amount
       const totalRequired = amount
 
       // Vérifier le solde
       if (wallet.balance < totalRequired) {
         return response.badRequest({
           success: false,
-          message: `Solde insuffisant. Votre solde actuel est de ${wallet.balance.toLocaleString()} FCFA. Montant demandé: ${amount.toLocaleString()} FCFA${fee > 0 ? ` (frais: ${fee.toLocaleString()} FCFA)` : ''}`
+          message: `Solde insuffisant. Votre solde actuel est de ${wallet.balance.toLocaleString()} FCFA. Montant demandé: ${amount.toLocaleString()} FCFA`
         })
       }
 
@@ -168,10 +164,8 @@ export default class GiveChangeController {
         ip_address: request.ip(),
         user_agent: request.header('user-agent'),
         metadata: {
-          payment_api_key_public: payment_api_key_public ? payment_api_key_public.substring(0, 10) + '...' : null,
-          payment_api_key_secret: payment_api_key_secret ? '***' : null,
-          fee_type: WITHDRAWAL_FEE_TYPE,
-          fee_amount: WITHDRAWAL_FEE_AMOUNT,
+          fee_type: 'fixed',
+          fee_amount: 0,
         },
       })
 
@@ -182,21 +176,19 @@ export default class GiveChangeController {
         action: 'created',
         new_status: 'pending',
         amount,
-        notes: `Demande de retrait de ${amount} FCFA${fee > 0 ? ` (frais: ${fee} FCFA)` : ''}`,
+        notes: `Demande de retrait de ${amount} FCFA`,
         ip_address: request.ip(),
       })
 
       // Débiter le wallet immédiatement
       await wallet.subtractBalance(totalRequired)
 
-      let externalApiResponse = null
+      let externalApiResponse: any = null
       let externalApiSuccess = false
-      let externalApiError = null
+      let externalApiError: string | null = null
 
       // Essayer d'appeler l'API externe si configurée
       const externalApiUrl = env.get('PAYMENT_API_URL')
-      const paymentPublicKey = payment_api_key_public || env.get('PAYMENT_PUBLIC_KEY')
-      const paymentSecretKey = payment_api_key_secret || env.get('PAYMENT_SECRET_KEY')
 
       if (externalApiUrl) {
         try {
@@ -208,16 +200,14 @@ export default class GiveChangeController {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': request.header('Authorization') || '',
+              'X-API-Public-Key': API_KEYS.public,
+              'X-API-Secret-Key': API_KEYS.secret,
             },
             body: JSON.stringify({
               userId: user.id,
               amount: netAmount,
-              original_amount: amount,
-              fee: fee,
               customer_account_number,
               operator_code: operator,
-              payment_api_key_public: paymentPublicKey,
-              payment_api_key_secret: paymentSecretKey,
               notes: notes || `Retrait depuis dashboard marchand ${user.full_name}`,
               reference: withdrawal.reference,
             }),
@@ -229,18 +219,22 @@ export default class GiveChangeController {
           if (apiResponse.ok) {
             const result = await apiResponse.json()
             externalApiResponse = result
-            externalApiSuccess = result.success || result.status === 'success' || false
+            externalApiSuccess = (result as any).success || (result as any).status === 'success' || false
           } else {
             externalApiError = `API externe a répondu avec le statut ${apiResponse.status}`
             console.error('API externe erreur:', await apiResponse.text())
           }
         } catch (error) {
-          if (error.name === 'AbortError') {
-            externalApiError = `Timeout lors de l'appel à l'API externe (${EXTERNAL_API_TIMEOUT / 1000} secondes)`
-          } else if (error.message?.includes('fetch')) {
-            externalApiError = 'Impossible de contacter l\'API externe. Service peut-être indisponible.'
+          if (error instanceof Error) {
+            if (error.name === 'AbortError') {
+              externalApiError = `Timeout lors de l'appel à l'API externe (${EXTERNAL_API_TIMEOUT / 1000} secondes)`
+            } else if (error.message?.includes('fetch')) {
+              externalApiError = 'Impossible de contacter l\'API externe. Service peut-être indisponible.'
+            } else {
+              externalApiError = error.message
+            }
           } else {
-            externalApiError = error.message
+            externalApiError = String(error)
           }
           console.error('Erreur API externe:', error)
         }
@@ -250,7 +244,10 @@ export default class GiveChangeController {
 
       // Mettre à jour le retrait selon la réponse de l'API externe
       if (externalApiSuccess) {
-        await withdrawal.markAsCompleted(externalApiResponse?.transaction_id || externalApiResponse?.reference)
+        await withdrawal.markAsCompleted(
+          (externalApiResponse as any)?.transaction_id ||
+          (externalApiResponse as any)?.reference
+        )
 
         await WithdrawalHistory.create({
           withdrawal_id: withdrawal.id,
@@ -332,7 +329,7 @@ export default class GiveChangeController {
       return response.internalServerError({
         success: false,
         message: 'Une erreur est survenue lors du traitement de votre demande',
-        error: env.get('NODE_ENV') === 'development' ? error.message : null,
+        error: env.get('NODE_ENV') === 'development' ? (error instanceof Error ? error.message : String(error)) : null,
       })
     }
   }
