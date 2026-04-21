@@ -365,7 +365,6 @@ router.group(() => {
   // ==========================================================
   router.group(() => {
     // Effectuer un retrait
-    router.post('give-change', [GiveChangeController, 'giveChange']).as('merchant.give-change')
 
     // Vérifier le statut d'un retrait par référence
     router.get('give-change/:reference/status', [GiveChangeController, 'checkStatus']).as('merchant.give-change.status')
