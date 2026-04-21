@@ -320,7 +320,7 @@ export default class MerchantDashboardController {
         )
       `)
 
-      let withdrawals = []
+      let withdrawals: any[] = []
 
       if (hasWithdrawalsTable.rows[0].exists) {
         withdrawals = await Database
@@ -753,7 +753,7 @@ export default class MerchantDashboardController {
     const products = await Product.query()
       .where('user_id', user.id)
       .preload('categoryRelation')
-      .orderBy('created_at', 'desc')
+      .orderBy('createdAt', 'desc')  // ✅ Correction: createdAt au lieu de created_at
 
     // Récupérer les catégories du marchand
     const categories = await Category.query()
@@ -799,7 +799,7 @@ export default class MerchantDashboardController {
         likes: 0,
         sales: p.sales || 0,
         status: p.status || 'active',
-        createdAt: p.created_at
+        createdAt: p.createdAt  // ✅ Correction: createdAt au lieu de created_at
       }
     })
 
@@ -857,7 +857,7 @@ export default class MerchantDashboardController {
       const products = await Product.query()
         .where('user_id', user.id)
         .preload('categoryRelation')
-        .orderBy('created_at', 'desc')
+        .orderBy('createdAt', 'desc')  // ✅ Correction: createdAt
         .paginate(page, limit)
 
       const productArray = products.all()
@@ -901,7 +901,7 @@ export default class MerchantDashboardController {
           likes: favoritesCountMap[product.id] || 0,
           sales: product.sales || 0,
           status: product.status || 'active',
-          created_at: product.created_at
+          created_at: product.createdAt  // ✅ Correction: utiliser createdAt du modèle
         }
       })
 
@@ -940,7 +940,7 @@ export default class MerchantDashboardController {
         return response.forbidden({ success: false, message: 'Non autorisé' })
       }
 
-      let categoryId = null
+      let categoryId: string | null = null
 
       // Gérer la catégorie
       if (category_name && category_name.trim() !== '') {
@@ -1052,7 +1052,7 @@ export default class MerchantDashboardController {
         return response.notFound({ success: false, message: 'Produit non trouvé' })
       }
 
-      let categoryId = null
+      let categoryId: string | null = null
 
       if (category_name && category_name.trim() !== '') {
         const category = await Category.query()
@@ -1114,7 +1114,7 @@ export default class MerchantDashboardController {
       }
 
       // Vérifier si le produit est déjà archivé
-      if (product.is_archived) {
+      if (product.isArchived) {  // ✅ Correction: isArchived au lieu de is_archived
         return response.badRequest({
           success: false,
           message: 'Ce produit est déjà archivé'
@@ -1129,8 +1129,8 @@ export default class MerchantDashboardController {
         message: 'Produit archivé avec succès',
         data: {
           id: product.id,
-          is_archived: product.is_archived,
-          archived_at: product.archived_at
+          is_archived: product.isArchived,  // ✅ Correction: retourner isArchived
+          archived_at: product.updatedAt     // ✅ Correction: utiliser updatedAt
         }
       })
     } catch (error: any) {
@@ -1442,7 +1442,7 @@ export default class MerchantDashboardController {
 
       const totalProducts = await Product.query()
         .where('user_id', user.id)
-        .whereNull('deleted_at')
+        .where('isArchived', false)  // ✅ Correction: isArchived
         .count('* as total')
 
       return response.ok({
