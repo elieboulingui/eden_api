@@ -30,10 +30,6 @@ interface PaymentInfo {
 export default class OrdersController {
 
   // ========== GÉNÉRER QR CODE SANS CRÉER DE COMMANDE ==========
-  /**
-   * POST /api/orders/generate-qr-code
-   * Génère un QR Code pour le paiement SANS créer de commande
-   */
   async generateQRCode({ request, response }: HttpContext) {
     console.log('🔵 [QRCode] ========== GÉNÉRATION QR CODE ==========')
     
@@ -62,7 +58,6 @@ export default class OrdersController {
         'userId'
       ])
 
-      // Validation
       if (!amount || amount <= 0) {
         return response.status(400).json({
           success: false,
@@ -84,10 +79,8 @@ export default class OrdersController {
         itemsCount: items?.length || 0
       })
 
-      // Générer une référence unique pour cette transaction
       const transactionRef = `QR-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`
 
-      // Appel à l'API de paiement pour générer le QR Code
       console.log('🔵 Appel API génération QR Code...')
       
       const qrResponse = await axios.post(
@@ -114,9 +107,6 @@ export default class OrdersController {
       })
 
       if (qrData.success && qrData.data) {
-        // Stocker les informations de la transaction en attente (dans une table temporaire ou cache)
-        // Pour l'instant, on les retourne simplement au frontend
-        
         return response.status(200).json({
           success: true,
           message: 'QR Code généré avec succès',
@@ -124,9 +114,8 @@ export default class OrdersController {
             qr_code_url: qrData.data.qr_code_url,
             reference_id: qrData.data.reference_id || transactionRef,
             amount: amount,
-            expires_in: 600, // 10 minutes
+            expires_in: 600,
             transaction_ref: transactionRef,
-            // Données de commande à sauvegarder côté frontend
             order_data: {
               userId,
               items,
@@ -159,10 +148,6 @@ export default class OrdersController {
   }
 
   // ========== VÉRIFIER STATUT QR CODE ET CRÉER COMMANDE ==========
-  /**
-   * POST /api/orders/confirm-qr-payment
-   * Vérifie le statut du paiement QR et crée la commande si succès
-   */
   async confirmQRPayment({ request, response }: HttpContext) {
     console.log('🔵 [QRCode] ========== CONFIRMATION PAIEMENT QR ==========')
     
@@ -188,7 +173,6 @@ export default class OrdersController {
 
       console.log('🔑 Vérification référence:', reference_id)
 
-      // Vérifier le statut du paiement
       const statusResponse = await axios.get(
         `https://apist.onrender.com/api/check-status/${reference_id}`,
         { timeout: 10000 }
@@ -204,7 +188,6 @@ export default class OrdersController {
       if (statusData.is_success === true) {
         console.log('✅ PAIEMENT QR CONFIRMÉ - CRÉATION DE LA COMMANDE...')
         
-        // Extraire les données de commande
         const {
           userId,
           items,
@@ -215,10 +198,8 @@ export default class OrdersController {
           deliveryPrice,
           shippingAddress,
           notes,
-          amount
         } = order_data
 
-        // Vérifier que l'utilisateur existe
         const user = await User.findBy('id', userId)
         if (!user) {
           return response.status(400).json({
@@ -227,7 +208,6 @@ export default class OrdersController {
           })
         }
 
-        // Calculer le sous-total à partir des items
         let subtotal = 0
         for (const item of items) {
           subtotal += item.price * item.quantity
@@ -236,7 +216,6 @@ export default class OrdersController {
         const total = subtotal + (deliveryPrice || 0)
         const orderNumber = `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
 
-        // Créer la commande
         const order = await Order.create({
           user_id: userId,
           order_number: orderNumber,
@@ -245,7 +224,7 @@ export default class OrdersController {
           subtotal: subtotal,
           shipping_cost: deliveryPrice || 0,
           delivery_method: deliveryMethod || 'standard',
-          customer_name: customerName || user.fullName || 'Client',
+          customer_name: customerName || user.full_name || 'Client',
           customer_phone: customerAccountNumber,
           payment_method: 'QR Code',
           customer_email: customerEmail || user.email,
@@ -256,7 +235,6 @@ export default class OrdersController {
 
         console.log(`✅ Commande créée: ${order.order_number}`)
 
-        // Créer les items de la commande
         for (const item of items) {
           const product = await Product.findBy('id', item.productId || item.id)
           
@@ -273,14 +251,12 @@ export default class OrdersController {
               subtotal: item.price * item.quantity,
             })
 
-            // Mettre à jour le stock
             product.stock = product.stock - item.quantity
             await product.save()
             console.log(`📦 Stock mis à jour: ${product.name} → ${product.stock}`)
           }
         }
 
-        // Ajouter le tracking
         await OrderTracking.create({
           order_id: order.id,
           status: 'paid',
@@ -288,7 +264,6 @@ export default class OrdersController {
           tracked_at: DateTime.now(),
         })
 
-        // Vider le panier si l'utilisateur en a un
         const cart = await Cart.query()
           .where('user_id', userId)
           .first()
@@ -298,7 +273,6 @@ export default class OrdersController {
           console.log('✅ Panier vidé')
         }
 
-        // Créditer les vendeurs (0.5% pour superadmin, reste pour vendeurs)
         await this.creditSellersAndAdmin(order.id, total)
 
         await order.load('items')
@@ -363,7 +337,6 @@ export default class OrdersController {
 
       const items = await OrderItem.query().where('order_id', orderId)
       
-      // Regrouper par vendeur
       const sellerSales: Map<string, number> = new Map()
       
       for (const item of items) {
@@ -375,7 +348,6 @@ export default class OrdersController {
         }
       }
 
-      // Créditer superadmin (0.5%)
       const superAdminFee = totalAmount * 0.005
       const superAdmin = await User.query().where('role', 'superadmin').first()
       
@@ -394,7 +366,6 @@ export default class OrdersController {
         console.log(`✅ Superadmin crédité: ${superAdminFee} FCFA`)
       }
 
-      // Créditer les vendeurs
       for (const [sellerId, amount] of sellerSales.entries()) {
         let wallet = await Wallet.query().where('user_id', sellerId).first()
         if (!wallet) {
@@ -562,7 +533,6 @@ export default class OrdersController {
         'mobileOperatorName',
       ])
 
-      // Validation
       if (!userId) {
         return response.status(400).json({ success: false, message: 'userId est requis' })
       }
@@ -570,7 +540,6 @@ export default class OrdersController {
         return response.status(400).json({ success: false, message: 'customerAccountNumber est requis' })
       }
 
-      // KYC
       console.log('🔵 Appel API KYC...')
       const kycUrl = `https://apist.onrender.com/api/mypvit/kyc/marchant?customerAccountNumber=${customerAccountNumber}`
 
@@ -591,7 +560,6 @@ export default class OrdersController {
         console.log('🟡 KYC injoignable, fallback sur données frontend')
       }
 
-      // Utilisateur
       const isGuest = !isValidUuid(userId)
       if (isGuest) {
         return response.status(400).json({
@@ -603,7 +571,6 @@ export default class OrdersController {
       const user = await User.findBy('id', userId)
       console.log('👤 Utilisateur:', user ? user.email : 'Introuvable')
 
-      // Panier
       const cart = await Cart.query()
         .where('user_id', userId)
         .preload('items')
@@ -613,7 +580,6 @@ export default class OrdersController {
         return response.status(400).json({ success: false, message: 'Votre panier est vide' })
       }
 
-      // Calcul total
       let subtotal = 0
       const orderItems: any[] = []
       const sellerSales: Map<string, { sellerId: string; amount: number; products: any[] }> = new Map()
@@ -669,7 +635,6 @@ export default class OrdersController {
       const total = subtotal + deliveryPrice
       console.log(`🔵 Total: ${subtotal} + ${deliveryPrice} = ${total}`)
 
-      // Paiement Mobile Money
       let paymentResult: any = null
       let paymentInfo: PaymentInfo | null = null
       let paymentSuccess = false
@@ -788,7 +753,6 @@ export default class OrdersController {
         })
       }
 
-      // Création commande
       console.log('💰 PAIEMENT CONFIRMÉ - CRÉATION DE LA COMMANDE...')
 
       const orderNumber = `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
@@ -812,7 +776,6 @@ export default class OrdersController {
 
       console.log(`✅ Commande créée: ${order.order_number}`)
 
-      // Items + Stock
       for (const item of orderItems) {
         await OrderItem.create({
           order_id: order.id,
@@ -834,7 +797,6 @@ export default class OrdersController {
         }
       }
 
-      // Tracking
       await OrderTracking.create({
         order_id: order.id,
         status: 'paid',
@@ -842,11 +804,9 @@ export default class OrdersController {
         tracked_at: DateTime.now(),
       })
 
-      // Vider panier
       await CartItem.query().where('cart_id', cart.id).delete()
       console.log('✅ Panier vidé')
 
-      // Créditer vendeurs et admin
       await this.creditSellersAndAdmin(order.id, total)
 
       await order.load('items')
