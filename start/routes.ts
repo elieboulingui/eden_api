@@ -35,8 +35,6 @@ const CouponsController = () => import('#controllers/coupons_controller')
 // ============================================================
 
 // Page d'accueil
-
-
 router.get('/', async ({ view }) => {
   return view.render('pages/home')
 }).as('home')
@@ -98,23 +96,14 @@ router.group(() => {
   // KYC (Know Your Customer)
   // ----------------------------------------------------------
   router.group(() => {
-    // Routes de base
     router.get('/', [KYCsController, 'index']).as('kyc.index')
     router.get('/stats', [KYCsController, 'stats']).as('kyc.stats')
     router.get('/:id', [KYCsController, 'show']).as('kyc.show')
-
-    // Création simple
     router.post('/', [KYCsController, 'store']).as('kyc.store')
-
-    // Vérification avec API externe (route principale)
     router.get('/verify/:numeroTelephone', [KYCsController, 'verifyAndStore']).as('kyc.verify')
-
-    // Recherche
     router.get('/search/phone', [KYCsController, 'searchByPhone']).as('kyc.search.phone')
     router.get('/search/name', [KYCsController, 'searchByName']).as('kyc.search.name')
     router.get('/filter/operator', [KYCsController, 'filterByOperator']).as('kyc.filter.operator')
-
-    // Modification et suppression
     router.put('/:id', [KYCsController, 'update']).as('kyc.update')
     router.patch('/:id', [KYCsController, 'update']).as('kyc.patch')
     router.delete('/:id', [KYCsController, 'destroy']).as('kyc.destroy')
@@ -195,21 +184,131 @@ router.group(() => {
   router.get('/favorites', [FavoritesController, 'index']).as('favorites.index')
   router.get('/favorites/check', [FavoritesController, 'check']).as('favorites.check')
 
-  // ----------------------------------------------------------
-  // COMMANDES
-  // ----------------------------------------------------------
+  // ============================================================
+  // COMMANDES (ORDERS) - TOUTES LES ROUTES
+  // ============================================================
+  
+  // --- ROUTES STANDARD (MOBILE MONEY) ---
+  
+  // Créer une commande avec paiement Mobile Money
   router.post('/orders', [OrdersController, 'store']).as('orders.store')
+  
+  // Toutes les commandes (admin)
   router.get('/orders/all', [OrdersController, 'allOrders']).as('orders.all')
+  
+  // Commandes d'un utilisateur
   router.get('/orders/:userId', [OrdersController, 'index']).as('orders.user.index')
+  
+  // Commande spécifique d'un utilisateur
   router.get('/orders/:orderId/user/:userId', [OrdersController, 'show']).as('orders.show')
+  
+  // Annuler une commande
   router.post('/orders/:orderId/cancel', [OrdersController, 'cancel']).as('orders.cancel')
+  
+  // Facture d'une commande
   router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice']).as('orders.invoice')
+  
+  // Mise à jour du statut (admin)
   router.put('/orders/:orderId/status', [OrdersController, 'updateStatus']).as('orders.status.update')
 
-  // API PONT VERS MYPVIT
+  // --- ROUTES PAIEMENT QR CODE ---
+  
+  /**
+   * Générer un QR Code de paiement (sans créer la commande)
+   * POST /api/orders/generate-qr
+   * 
+   * Body:
+   * {
+   *   amount: number,
+   *   customerAccountNumber: string,
+   *   customerName: string,
+   *   customerEmail?: string,
+   *   items: Array<{id: string, price: number, quantity: number}>,
+   *   deliveryMethod: string,
+   *   deliveryPrice: number,
+   *   shippingAddress: string,
+   *   notes?: string,
+   *   userId: string
+   * }
+   * 
+   * Response:
+   * {
+   *   success: true,
+   *   data: {
+   *     qr_code_url: string,
+   *     reference_id: string,
+   *     amount: number,
+   *     expires_in: number,
+   *     transaction_ref: string,
+   *     order_data: object
+   *   }
+   * }
+   */
+  router.post('/orders/generate-qr', [OrdersController, 'generateQRCode']).as('orders.qr.generate')
+  
+  /**
+   * Confirmer un paiement QR et créer la commande
+   * POST /api/orders/confirm-qr-payment
+   * 
+   * Body:
+   * {
+   *   reference_id: string,
+   *   order_data: object
+   * }
+   * 
+   * Response:
+   * {
+   *   success: true,
+   *   data: {
+   *     orderId: string,
+   *     orderNumber: string,
+   *     total: number,
+   *     status: string,
+   *     payment: object
+   *   }
+   * }
+   */
+  router.post('/orders/confirm-qr-payment', [OrdersController, 'confirmQRPayment']).as('orders.qr.confirm')
+  
+  /**
+   * Vérifier le statut d'un paiement QR
+   * GET /api/orders/check-qr-payment/:referenceId
+   * 
+   * Response:
+   * {
+   *   success: true,
+   *   data: {
+   *     reference_id: string,
+   *     status: string,
+   *     is_success: boolean,
+   *     is_pending: boolean,
+   *     is_failed: boolean,
+   *     amount: number,
+   *     message: string | null
+   *   }
+   * }
+   */
+  router.get('/orders/check-qr-payment/:referenceId', [OrdersController, 'checkQRPaymentStatus']).as('orders.qr.status')
+  
+  /**
+   * Statut de paiement d'une commande existante
+   * GET /api/orders/:orderId/payment-status
+   */
+  router.get('/orders/:orderId/payment-status', [OrdersController, 'getPaymentStatus']).as('orders.payment-status')
+
+  // --- API PONT VERS MYPVIT (PROXY) ---
+  
+  /**
+   * Proxy pour obtenir tous les statuts sans ID
+   * GET /api/give-all-without-id
+   */
   router.get('/give-all-without-id', [OrdersController, 'giveAllWithoutId']).as('payment.without-id')
+  
+  /**
+   * Proxy pour vérifier le statut d'un paiement via référence
+   * GET /api/payment/status/:referenceId
+   */
   router.get('/payment/status/:referenceId', [OrdersController, 'checkPaymentStatus']).as('payment.status')
-  router.get('/orders/:orderId/payment-status', [OrdersController, 'checkPaymentStatus']).as('orders.payment-status')
 
   // ----------------------------------------------------------
   // SUIVI DE COMMANDE
@@ -317,13 +416,24 @@ router.group(() => {
   router.patch('/reviews/:id/approve', [ReviewsController, 'approve'])
   router.patch('/reviews/:id/reject', [ReviewsController, 'reject'])
 
-
-
-
-  // Routes API
-
+  // ----------------------------------------------------------
+  // SHOP (ROUTES API)
+  // ----------------------------------------------------------
   router.get('/shop', [ShopController, 'apiIndex']).as('api.shop.index')
   router.get('/shop/coupons', [ShopController, 'apiCoupons']).as('api.shop.coupons')
   router.get('/shop/promotions', [ShopController, 'apiPromotions']).as('api.shop.promotions')
 
 }).prefix('/api')
+
+// ============================================================
+// RÉSUMÉ DES ROUTES QR CODE AJOUTÉES
+// ============================================================
+//
+// POST   /api/orders/generate-qr               - Générer un QR Code de paiement
+// POST   /api/orders/confirm-qr-payment        - Confirmer paiement QR et créer commande
+// GET    /api/orders/check-qr-payment/:refId   - Vérifier statut d'un paiement QR
+// GET    /api/orders/:orderId/payment-status   - Statut de paiement d'une commande
+// GET    /api/give-all-without-id              - Proxy statuts sans ID
+// GET    /api/payment/status/:referenceId      - Proxy statut par référence
+//
+// ============================================================
