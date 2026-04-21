@@ -183,7 +183,7 @@ export default class ProductsController {
       if (product.user_id !== user_id) {
         return response.status(403).json({
           success: false,
-          message: 'Vous n\'êtes pas autorisé à modifier ce produit'
+          message: 'Vous n\'êtes pas autorisé  à modifier ce produit'
         })
       }
 
