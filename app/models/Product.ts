@@ -296,5 +296,6 @@ export default class ProductsController {
         error: error.message
       })
     }
+    
   }
 }
