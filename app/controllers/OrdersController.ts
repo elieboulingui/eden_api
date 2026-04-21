@@ -131,19 +131,20 @@ export default class OrdersController {
 
       const transactionRef = `QR-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`
 
-      // Appel à l'API de génération QR Code
-      const qrResponse = await axios.post<QRCodeResponse>(
+      // ✅ CORRECTION : Utiliser GET au lieu de POST avec des paramètres de requête
+      console.log('📡 Appel API GET pour génération QR Code...')
+      
+      const qrResponse = await axios.get<QRCodeResponse>(
         `${PAYMENT_API_URL}/api/mypvit/qr-code/direct/generate`,
         {
-          amount: payload.amount,
-          payment_api_key_public: API_KEYS.public,
-          payment_api_key_secret: API_KEYS.secret,
-          customer_account_number: payload.customerAccountNumber,
-          description: `Commande e-commerce - ${payload.items?.length || 0} article(s)`,
-          external_reference: transactionRef
-        },
-        {
-          headers: { 'Content-Type': 'application/json' },
+          params: {
+            amount: payload.amount,
+            payment_api_key_public: API_KEYS.public,
+            payment_api_key_secret: API_KEYS.secret,
+            customer_account_number: payload.customerAccountNumber,
+            description: `Commande e-commerce - ${payload.items?.length || 0} article(s)`,
+            external_reference: transactionRef
+          },
           timeout: 30000
         }
       )
@@ -188,6 +189,15 @@ export default class OrdersController {
 
     } catch (error: any) {
       console.error('❌ [QRCode] Erreur:', error.message)
+      
+      // Log détaillé pour le débogage
+      if (error.response) {
+        console.error('📡 Réponse erreur API:', {
+          status: error.response.status,
+          data: error.response.data
+        })
+      }
+      
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la génération du QR Code',
@@ -348,7 +358,7 @@ export default class OrdersController {
   private async createOrderFromQRPayment(
     orderData: OrderData,
     referenceId: string,
-    _paymentStatus: any  // ✅ FIX TS6133: préfixe _ pour paramètre intentionnellement inutilisé
+    _paymentStatus: any
   ): Promise<Order> {
     const user = await User.findBy('id', orderData.userId)
     if (!user) {
