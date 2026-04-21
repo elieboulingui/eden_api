@@ -7,6 +7,7 @@ import Cart from '#models/Cart'
 import CartItem from '#models/CartItem'
 import User from '#models/user'
 import Product from '#models/Product'
+import Wallet from '#models/wallet'
 import axios from 'axios'
 import { DateTime } from 'luxon'
 
@@ -27,12 +28,31 @@ interface PaymentInfo {
   transaction_type: string
   check_status_url: string
   code_url: string
+  qr_code_url?: string
 }
 
 interface KYCInfo {
   operator: string
   fullName: string
   accountNumber: string
+}
+
+interface OrderData {
+  userId: string
+  items: Array<{
+    productId?: string
+    id?: string
+    price: number
+    quantity: number
+  }>
+  customerAccountNumber: string
+  customerName: string
+  customerEmail?: string
+  deliveryMethod: string
+  deliveryPrice: number
+  shippingAddress: string
+  notes?: string
+  amount: number
 }
 
 // ==================== UTILITAIRES ====================
@@ -51,7 +71,7 @@ function getStatusDescription(status: string): string {
     shipped: 'Votre commande a été expédiée',
     delivered: 'Votre commande a été livrée avec succès',
     paid: 'Paiement effectué avec succès',
-    payment_pending: 'Paiement en attente de confirmation',
+    pending_payment: 'Paiement en attente de confirmation',
     payment_failed: 'Le paiement a échoué',
     cancelled: 'Votre commande a été annulée',
   }
@@ -170,7 +190,6 @@ export default class OrdersController {
           continue
         }
 
-        // Autre statut
         if (attempt < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, retryDelay))
         }
@@ -226,7 +245,7 @@ export default class OrdersController {
         paymentBody,
         { 
           headers: { 'Content-Type': 'application/json' },
-          timeout: 0 // Pas de timeout pour le paiement
+          timeout: 0
         }
       )
 
@@ -307,7 +326,444 @@ export default class OrdersController {
     return { subtotal, itemsCount }
   }
 
-  // ==================== MÉTHODES PUBLIQUES ====================
+  /**
+   * Créer une commande depuis un paiement QR Code
+   */
+  private async createOrderFromQRPayment(
+    orderData: OrderData,
+    referenceId: string,
+    _paymentStatus: any
+  ): Promise<Order> {
+    const user = await User.findBy('id', orderData.userId)
+    if (!user) {
+      throw new Error('Utilisateur non trouvé')
+    }
+
+    let subtotal = 0
+    for (const item of orderData.items) {
+      subtotal += item.price * item.quantity
+    }
+
+    const total = subtotal + (orderData.deliveryPrice || 0)
+    const orderNumber = generateOrderNumber()
+
+    const order = await Order.create({
+      user_id: orderData.userId,
+      order_number: orderNumber,
+      status: 'paid',
+      total,
+      subtotal,
+      shipping_cost: orderData.deliveryPrice || 0,
+      delivery_method: orderData.deliveryMethod || 'standard',
+      customer_name: orderData.customerName || user.full_name || 'Client',
+      customer_phone: orderData.customerAccountNumber,
+      payment_method: 'QR Code',
+      customer_email: orderData.customerEmail || user.email,
+      shipping_address: orderData.shippingAddress || 'Non renseigné',
+      billing_address: orderData.shippingAddress || 'Non renseigné',
+      notes: orderData.notes || null,
+    })
+
+    console.log(`✅ Commande créée: ${order.order_number}`)
+
+    // Sauvegarder les items et mettre à jour le stock
+    for (const item of orderData.items) {
+      const productId = item.productId || item.id
+      const product = await Product.findBy('id', productId)
+
+      if (product) {
+        await OrderItem.create({
+          order_id: order.id,
+          product_id: product.id,
+          product_name: product.name,
+          product_description: product.description,
+          price: item.price,
+          quantity: item.quantity,
+          category: product.category,
+          image: product.image_url,
+          subtotal: item.price * item.quantity,
+        })
+
+        product.stock = product.stock - item.quantity
+        await product.save()
+        console.log(`📦 Stock: ${product.name} → ${product.stock}`)
+      }
+    }
+
+    // Tracking
+    await OrderTracking.create({
+      order_id: order.id,
+      status: 'paid',
+      description: `Paiement QR Code confirmé - Réf: ${referenceId} - Montant: ${total} FCFA`,
+      tracked_at: DateTime.now(),
+    })
+
+    // Vider le panier
+    const cart = await Cart.query().where('user_id', orderData.userId).first()
+    if (cart) {
+      await CartItem.query().where('cart_id', cart.id).delete()
+      console.log('✅ Panier vidé')
+    }
+
+    // Créditer vendeurs et admin
+    await this.creditSellersAndAdminByOrder(order.id, total)
+
+    await order.load('items')
+    return order
+  }
+
+  /**
+   * Créditer les vendeurs et l'admin après une commande
+   */
+  private async creditSellersAndAdminByOrder(orderId: string, totalAmount: number): Promise<void> {
+    try {
+      const items = await OrderItem.query().where('order_id', orderId)
+      const sellerSales = new Map<string, number>()
+
+      for (const item of items) {
+        const product = await Product.findBy('id', item.product_id)
+        if (product) {
+          const current = sellerSales.get(product.user_id) || 0
+          sellerSales.set(product.user_id, current + item.subtotal)
+        }
+      }
+
+      // Superadmin (0.5%)
+      const superAdminFee = totalAmount * 0.005
+      const superAdmin = await User.query().where('role', 'superadmin').first()
+      
+      if (superAdmin) {
+        await this.creditWallet(superAdmin.id, superAdminFee)
+        console.log(`✅ Superadmin crédité: ${superAdminFee} FCFA`)
+      }
+
+      // Vendeurs
+      for (const [sellerId, amount] of sellerSales.entries()) {
+        await this.creditWallet(sellerId, amount)
+        console.log(`✅ Vendeur ${sellerId} crédité: ${amount} FCFA`)
+      }
+
+    } catch (error: any) {
+      console.error('❌ Erreur crédit vendeurs:', error.message)
+    }
+  }
+
+  /**
+   * Créditer le wallet d'un utilisateur
+   */
+  private async creditWallet(userId: string, amount: number): Promise<void> {
+    let wallet = await Wallet.query().where('user_id', userId).first()
+    
+    if (!wallet) {
+      wallet = await Wallet.create({
+        user_id: userId,
+        balance: 0,
+        currency: 'XAF',
+        status: 'active'
+      })
+    }
+
+    wallet.balance = (wallet.balance || 0) + amount
+    await wallet.save()
+  }
+
+  // ==================== MÉTHODES PUBLIQUES - QR CODE ====================
+
+  /**
+   * Générer un QR Code de paiement (sans créer la commande)
+   * POST /api/orders/generate-qr
+   */
+  async generateQRCode({ request, response }: HttpContext) {
+    console.log('🔵 [QRCode] ========== GÉNÉRATION QR CODE ==========')
+
+    try {
+      const payload = request.only([
+        'amount',
+        'customerAccountNumber',
+        'customerName',
+        'customerEmail',
+        'items',
+        'deliveryMethod',
+        'deliveryPrice',
+        'shippingAddress',
+        'notes',
+        'userId'
+      ])
+
+      // Validation
+      if (!payload.amount || payload.amount <= 0) {
+        return response.status(400).json({
+          success: false,
+          message: 'Le montant est requis et doit être supérieur à 0'
+        })
+      }
+
+      console.log('📊 Données QR:', {
+        amount: payload.amount,
+        customerAccountNumber: payload.customerAccountNumber,
+        itemsCount: payload.items?.length || 0
+      })
+
+      const transactionRef = `QR-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`
+
+      // Appel à l'API Express qui génère le QR Code (retourne une image PNG)
+      console.log('📡 Appel API GET pour génération QR Code...')
+      
+      const qrResponse = await axios.get(
+        `${PAYMENT_API_URL}/api/mypvit/qr-code/direct/generate`,
+        {
+          params: {
+            amount: payload.amount,
+            payment_api_key_public: API_KEYS.public,
+            payment_api_key_secret: API_KEYS.secret
+          },
+          responseType: 'arraybuffer',
+          timeout: 30000
+        }
+      )
+
+      const contentType = qrResponse.headers['content-type']
+      console.log('📡 Type de réponse:', contentType)
+
+      // Si c'est une image PNG
+      if (contentType && contentType.includes('image/png')) {
+        const base64Image = Buffer.from(qrResponse.data).toString('base64')
+        const qrCodeDataUrl = `data:image/png;base64,${base64Image}`
+
+        const reference = qrResponse.headers['x-reference'] || transactionRef
+        const merchantId = qrResponse.headers['x-merchant-id'] || null
+        const merchantName = qrResponse.headers['x-merchant-name'] || null
+        const terminalId = qrResponse.headers['x-terminal-id'] || null
+        const responseAmount = qrResponse.headers['x-amount'] || payload.amount
+
+        console.log('✅ QR Code généré avec succès')
+        console.log('📋 Headers:', { reference, merchantId, terminalId, amount: responseAmount })
+
+        return response.status(200).json({
+          success: true,
+          message: 'QR Code généré avec succès',
+          data: {
+            qr_code_url: qrCodeDataUrl,
+            reference_id: reference,
+            amount: Number(responseAmount),
+            expires_in: 600,
+            transaction_ref: transactionRef,
+            merchant_id: merchantId,
+            merchant_name: merchantName,
+            terminal_id: terminalId,
+            order_data: {
+              userId: payload.userId,
+              items: payload.items,
+              customerAccountNumber: payload.customerAccountNumber,
+              customerName: payload.customerName,
+              customerEmail: payload.customerEmail,
+              deliveryMethod: payload.deliveryMethod,
+              deliveryPrice: payload.deliveryPrice,
+              shippingAddress: payload.shippingAddress,
+              notes: payload.notes,
+              amount: payload.amount
+            }
+          }
+        })
+      }
+
+      // Si ce n'est pas une image, c'est probablement une erreur JSON
+      let errorData = null
+      try {
+        const jsonString = Buffer.from(qrResponse.data).toString('utf8')
+        errorData = JSON.parse(jsonString)
+        console.error('❌ Erreur API (JSON):', errorData)
+      } catch (e) {
+        console.error('❌ Réponse non-JSON reçue')
+      }
+
+      return response.status(400).json({
+        success: false,
+        message: errorData?.message || 'Échec de la génération du QR Code',
+        details: errorData
+      })
+
+    } catch (error: any) {
+      console.error('❌ [QRCode] Erreur:', error.message)
+      
+      if (error.response) {
+        console.error('📡 Réponse erreur API:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          headers: error.response.headers
+        })
+        
+        if (error.response.data) {
+          try {
+            const errorString = Buffer.from(error.response.data).toString('utf8')
+            const errorJson = JSON.parse(errorString)
+            console.error('📡 Détails erreur:', errorJson)
+            
+            return response.status(error.response.status).json({
+              success: false,
+              message: errorJson.message || 'Erreur lors de la génération du QR Code',
+              error: errorJson
+            })
+          } catch (e) {
+            // Ce n'est pas du JSON
+          }
+        }
+      }
+      
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la génération du QR Code',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Confirmer un paiement QR et créer la commande
+   * POST /api/orders/confirm-qr-payment
+   */
+  async confirmQRPayment({ request, response }: HttpContext) {
+    console.log('🔵 [QRCode] ========== CONFIRMATION PAIEMENT QR ==========')
+
+    try {
+      const { reference_id, order_data } = request.only(['reference_id', 'order_data'])
+
+      if (!reference_id) {
+        return response.status(400).json({
+          success: false,
+          message: 'reference_id est requis'
+        })
+      }
+
+      if (!order_data) {
+        return response.status(400).json({
+          success: false,
+          message: 'order_data est requis'
+        })
+      }
+
+      console.log('🔑 Vérification référence:', reference_id)
+
+      const statusResponse = await axios.get(
+        `${PAYMENT_API_URL}/api/check-status/${reference_id}`,
+        { timeout: 10000 }
+      )
+
+      const statusData = statusResponse.data
+      console.log('📊 Statut paiement:', {
+        success: statusData.success,
+        is_success: statusData.is_success,
+        status: statusData.status
+      })
+
+      // Paiement en attente
+      if (statusData.is_pending === true) {
+        return response.status(202).json({
+          success: true,
+          is_pending: true,
+          message: 'Paiement en attente. Veuillez scanner le QR Code.',
+          data: { reference_id, status: statusData.status }
+        })
+      }
+
+      // Paiement échoué
+      if (statusData.is_success !== true) {
+        return response.status(400).json({
+          success: false,
+          is_failed: true,
+          message: 'Le paiement a échoué ou a expiré.',
+          data: { reference_id, status: statusData.status }
+        })
+      }
+
+      // Paiement réussi → Créer la commande
+      console.log('✅ PAIEMENT QR CONFIRMÉ - CRÉATION DE LA COMMANDE...')
+      
+      const orderData = order_data as OrderData
+      const order = await this.createOrderFromQRPayment(
+        orderData,
+        reference_id,
+        statusData
+      )
+
+      return response.status(201).json({
+        success: true,
+        message: '✅ Paiement confirmé et commande créée avec succès !',
+        data: {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          total: order.total,
+          status: order.status,
+          customerName: order.customer_name,
+          paymentMethod: order.payment_method,
+          itemsCount: order.items?.length || 0,
+          payment: {
+            success: true,
+            reference_id,
+            status: statusData.status,
+            amount: statusData.amount
+          }
+        }
+      })
+
+    } catch (error: any) {
+      console.error('❌ [QRCode] Erreur confirmation:', error.message)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la confirmation du paiement QR',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Vérifier le statut d'un paiement QR
+   * GET /api/orders/check-qr-payment/:referenceId
+   */
+  async checkQRPaymentStatus({ params, response }: HttpContext) {
+    try {
+      const { referenceId } = params
+
+      if (!referenceId) {
+        return response.status(400).json({
+          success: false,
+          message: 'referenceId est requis'
+        })
+      }
+
+      console.log(`🔍 Vérification statut QR: ${referenceId}`)
+
+      const statusResponse = await axios.get(
+        `${PAYMENT_API_URL}/api/check-status/${referenceId}`,
+        { timeout: 10000 }
+      )
+
+      const statusData = statusResponse.data
+
+      return response.status(200).json({
+        success: true,
+        data: {
+          reference_id: referenceId,
+          status: statusData.status,
+          is_success: statusData.is_success === true,
+          is_pending: statusData.is_pending === true,
+          is_failed: statusData.is_failed === true,
+          amount: statusData.amount,
+          message: statusData.message || null
+        }
+      })
+
+    } catch (error: any) {
+      console.error('❌ Erreur vérification statut QR:', error.message)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la vérification du statut',
+        error: error.message
+      })
+    }
+  }
+
+  // ==================== MÉTHODES PUBLIQUES - COMMANDE STANDARD ====================
 
   /**
    * Créer une commande avec paiement Mobile Money
@@ -398,7 +854,7 @@ export default class OrdersController {
         user_id: payload.userId,
         order_number: orderNumber,
         status: 'pending',
-        total: 0, // Sera mis à jour après création des items
+        total: 0,
         subtotal: 0,
         shipping_cost: deliveryPrice,
         delivery_method: payload.deliveryMethod || 'standard',
@@ -512,6 +968,8 @@ export default class OrdersController {
     }
   }
 
+  // ==================== MÉTHODES PUBLIQUES - CONSULTATION ====================
+
   /**
    * Vérifier le statut d'un paiement
    * GET /api/orders/check-payment/:referenceId
@@ -550,6 +1008,91 @@ export default class OrdersController {
         details: error.response?.data || null
       })
     }
+  }
+
+  /**
+   * Récupérer le statut de paiement d'une commande
+   * GET /api/orders/:orderId/payment-status
+   */
+  async getPaymentStatus({ params, response }: HttpContext) {
+    try {
+      const { orderId } = params
+      
+      let order: Order | null = null
+      
+      if (orderId.startsWith('CMD-')) {
+        order = await Order.findBy('order_number', orderId)
+      } else {
+        order = await Order.find(orderId)
+      }
+      
+      if (!order) {
+        return response.status(404).json({
+          success: false,
+          message: 'Commande non trouvée'
+        })
+      }
+      
+      const lastPaymentTracking = await OrderTracking.query()
+        .where('order_id', order.id)
+        .whereIn('status', ['paid', 'pending_payment', 'payment_failed'])
+        .orderBy('tracked_at', 'desc')
+        .first()
+      
+      let paymentStatus = 'unknown'
+      let isPaid = false
+      let isPending = false
+      let isFailed = false
+      
+      if (order.status === 'paid' || order.status === 'processing' || 
+          order.status === 'shipped' || order.status === 'delivered') {
+        paymentStatus = 'paid'
+        isPaid = true
+      } else if (order.status === 'pending_payment') {
+        paymentStatus = 'pending'
+        isPending = true
+      } else if (order.status === 'payment_failed') {
+        paymentStatus = 'failed'
+        isFailed = true
+      }
+      
+      return response.status(200).json({
+        success: true,
+        data: {
+          orderId: order.order_number,
+          order_id: order.id,
+          payment_status: paymentStatus,
+          is_paid: isPaid,
+          is_pending: isPending,
+          is_failed: isFailed,
+          payment_method: order.payment_method,
+          payment_reference: lastPaymentTracking?.description?.match(/Réf: (\S+)/)?.[1] || null,
+          amount: order.total,
+          status: order.status,
+          last_update: order.updated_at
+        }
+      })
+      
+    } catch (error: any) {
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la vérification du statut de paiement',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Récupérer toutes les commandes (admin)
+   * GET /api/orders/all
+   */
+  async allOrders({ response }: HttpContext) {
+    const orders = await Order.query()
+      .preload('items')
+      .preload('tracking')
+      .orderBy('created_at', 'desc')
+
+    return response.ok({ success: true, data: orders })
   }
 
   /**
@@ -729,7 +1272,7 @@ export default class OrdersController {
         })
       }
 
-      const cancellableStatuses = ['pending', 'payment_pending']
+      const cancellableStatuses = ['pending', 'paid', 'pending_payment']
       if (!cancellableStatuses.includes(order.status)) {
         return response.status(400).json({ 
           success: false, 
@@ -885,6 +1428,43 @@ export default class OrdersController {
         success: false, 
         message: 'Erreur lors de la récupération du suivi', 
         error: error.message 
+      })
+    }
+  }
+
+  /**
+   * Proxy pour check-status sans référence (compatibilité)
+   * GET /api/orders/give-all-without-id/:referenceId
+   */
+  async giveAllWithoutId({ params, response }: HttpContext) {
+    const { referenceId } = params
+
+    if (!referenceId) {
+      return response.status(400).json({
+        success: false,
+        message: 'referenceId est requis'
+      })
+    }
+
+    console.log(`📡 [giveAllWithoutId] Proxy check-status pour: ${referenceId}`)
+
+    try {
+      const apiResponse = await axios.get(
+        `${PAYMENT_API_URL}/api/check-status/${referenceId}`,
+        { timeout: 10000 }
+      )
+      return response.status(200).json(apiResponse.data)
+
+    } catch (error: any) {
+      return response.status(200).json({
+        success: false,
+        reference_id: referenceId,
+        status: 'SERVICE_UNAVAILABLE',
+        is_success: false,
+        is_pending: false,
+        is_failed: true,
+        last_update: new Date().toISOString(),
+        error_message: error.message,
       })
     }
   }
