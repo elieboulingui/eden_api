@@ -1,262 +1,300 @@
-// app/models/Product.ts
+// app/controllers/products_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import Product from '#models/Product'
 import { DateTime } from 'luxon'
-import { BaseModel, column, beforeCreate, belongsTo, hasMany } from '@adonisjs/lucid/orm'
-import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
-import crypto from 'node:crypto'
-import User from './user.js'
-import Category from './categories.js'
-import Review from './review.js'
-import OrderItem from './OrderItem.js'
 
-export default class Product extends BaseModel {
-  static table = 'products'
+export default class ProductsController {
 
-  @column({ isPrimary: true })
-  declare id: string  // UUID
+  /**
+   * Vérifier et mettre à jour le statut "isNew" d'un produit
+   * Si le produit a plus de 7 jours, isNew devient false
+   */
+  private async checkAndUpdateNewStatus(product: Product): Promise<Product> {
+    const createdAt = product.createdAt instanceof Date
+      ? DateTime.fromJSDate(product.createdAt)
+      : DateTime.fromISO(product.createdAt.toString())
 
-  @column()
-  declare name: string
+    const daysSinceCreation = Math.floor(DateTime.now().diff(createdAt, 'days').days)
 
-  @column()
-  declare price: number
+    // Si le produit a plus de 7 jours et qu'il est encore marqué comme nouveau
+    if (daysSinceCreation >= 7 && product.isNew === true) {
+      product.isNew = false
+      await product.save()
+      console.log(`✅ Produit ${product.id} : isNew mis à false après ${daysSinceCreation} jours`)
+    }
 
-  @column()
-  declare old_price: number | null
+    return product
+  }
 
-  @column()
-  declare description: string
+  /**
+   * Vérifier et mettre à jour le statut "isNew" pour plusieurs produits
+   */
+  private async checkAndUpdateNewStatusForMany(products: Product[]): Promise<Product[]> {
+    const updatedProducts: Product[] = []
 
-  @column()
-  declare stock: number
+    for (const product of products) {
+      const updatedProduct = await this.checkAndUpdateNewStatus(product)
+      updatedProducts.push(updatedProduct)
+    }
 
-  @column()
-  declare rating: number
+    return updatedProducts
+  }
 
-  @column()
-  declare reviews_count: number
+  // 🔥 Récupérer tous les produits + pays du vendeur
+  async index({ response }: HttpContext) {
+    try {
+      const products = await Product
+        .query()
+        .preload('user', (query) => {
+          query.select(['id', 'full_name', 'country'])
+        })
 
-  @column()
-  declare user_id: string
+      // Vérifier et mettre à jour le statut "isNew" pour chaque produit
+      const updatedProducts = await this.checkAndUpdateNewStatusForMany(products)
 
-  @column({ columnName: 'category_id' })
-  declare category_id: string | null
-
-  @column({ columnName: 'image_url' })
-  declare image_url: string | null
-
-  @column()
-  declare category: string | null
-
-  @column()
-  declare origin: string | null
-
-  @column()
-  declare weight: string | null
-
-  @column()
-  declare packaging: string | null
-
-  @column()
-  declare conservation: string | null
-
-  @column()
-  declare isNew: boolean
-
-  @column()
-  declare isOnSale: boolean
-
-  @column()
-  declare sales: number
-
-  @column()
-  declare likes: number
-
-  @column()
-  declare status: string  // 'active', 'inactive', 'draft'
-
-  // ✅ NOUVEAU CHAMP : Archivage (par défaut false)
-  @column({ columnName: 'is_archived' })
-  declare is_archived: boolean
-
-  @column.dateTime({ columnName: 'archived_at' })
-  declare archived_at: DateTime | null
-
-  @column.dateTime({ autoCreate: true })
-  declare created_at: DateTime
-
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updated_at: DateTime
-
-  @beforeCreate()
-  static assignUuid(product: Product) {
-    if (!product.id) {
-      product.id = crypto.randomUUID()
+      return response.status(200).json({
+        success: true,
+        data: updatedProducts,
+        count: updatedProducts.length
+      })
+    } catch (error: any) {
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la récupération des produits',
+        error: error.message
+      })
     }
   }
 
-  @beforeCreate()
-  static setDefaults(product: Product) {
-    product.is_archived = product.is_archived ?? false
-    product.status = product.status ?? 'active'
-    product.rating = product.rating ?? 0
-    product.reviews_count = product.reviews_count ?? 0
-    product.sales = product.sales ?? 0
-    product.likes = product.likes ?? 0
-    product.isNew = product.isNew ?? true
-    product.isOnSale = product.isOnSale ?? false
-  }
+  // 🔥 Récupérer les produits nouveaux uniquement
+  async newProducts({ response }: HttpContext) {
+    try {
+      const products = await Product
+        .query()
+        .where('is_new', true)
+        .preload('user', (query) => {
+          query.select(['id', 'full_name', 'country'])
+        })
 
-  // ================= RELATIONS =================
+      // Vérifier et mettre à jour le statut "isNew" pour chaque produit
+      const updatedProducts = await this.checkAndUpdateNewStatusForMany(products)
 
-  @belongsTo(() => User, {
-    foreignKey: 'user_id',
-  })
-  declare user: BelongsTo<typeof User>
+      // Filtrer pour ne garder que ceux qui sont encore nouveaux
+      const trulyNewProducts = updatedProducts.filter(p => p.isNew === true)
 
-  @belongsTo(() => Category, {
-    foreignKey: 'category_id',
-  })
-  declare categoryRelation: BelongsTo<typeof Category>
-
-  @hasMany(() => Review, {
-    foreignKey: 'product_id',
-  })
-  declare reviews: HasMany<typeof Review>
-
-  @hasMany(() => OrderItem, {
-    foreignKey: 'product_id',
-  })
-  declare orderItems: HasMany<typeof OrderItem>
-
-  // ================= MÉTHODES UTILITAIRES =================
-
-  /**
-   * Calcule la réduction en pourcentage
-   */
-  get discountPercentage(): number | null {
-    if (this.old_price && this.old_price > this.price) {
-      return Math.round(((this.old_price - this.price) / this.old_price) * 100)
+      return response.status(200).json({
+        success: true,
+        data: trulyNewProducts,
+        count: trulyNewProducts.length
+      })
+    } catch (error: any) {
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la récupération des nouveaux produits',
+        error: error.message
+      })
     }
-    return null
   }
 
-  /**
-   * Vérifie si le produit est en stock
-   */
-  get isInStock(): boolean {
-    return this.stock > 0
-  }
+  // 🔥 Récupérer un produit + pays du vendeur
+  async show({ params, response }: HttpContext) {
+    try {
+      const product = await Product
+        .query()
+        .where('id', params.id)
+        .preload('user', (query) => {
+          query.select(['id', 'full_name', 'country'])
+        })
+        .firstOrFail()
 
-  /**
-   * Vérifie si le stock est faible
-   */
-  get isLowStock(): boolean {
-    return this.stock > 0 && this.stock <= 5
-  }
+      // Vérifier et mettre à jour le statut "isNew"
+      const updatedProduct = await this.checkAndUpdateNewStatus(product)
 
-  /**
-   * Vérifie si le produit est archivé
-   */
-  get isArchived(): boolean {
-    return this.is_archived === true
-  }
-
-  /**
-   * Vérifie si le produit est actif (non archivé ET statut 'active')
-   */
-  get isActive(): boolean {
-    return !this.is_archived && this.status === 'active'
-  }
-
-  /**
-   * Formate le prix pour l'affichage
-   */
-  get formattedPrice(): string {
-    return new Intl.NumberFormat('fr-FR').format(this.price) + ' FCFA'
-  }
-
-  /**
-   * Formate l'ancien prix pour l'affichage
-   */
-  get formattedOldPrice(): string | null {
-    if (this.old_price) {
-      return new Intl.NumberFormat('fr-FR').format(this.old_price) + ' FCFA'
+      return response.status(200).json({
+        success: true,
+        data: updatedProduct
+      })
+    } catch {
+      return response.status(404).json({
+        success: false,
+        message: 'Produit non trouvé'
+      })
     }
-    return null
   }
 
-  // ================= MÉTHODES D'ARCHIVAGE =================
+  // 🔥 Créer un produit
+  async store({ request, response }: HttpContext) {
+    try {
+      const data = request.only([
+        'name', 'price', 'description', 'stock', 'user_id',
+        'image_url', 'category', 'origin', 'weight',
+        'packaging', 'conservation', 'isNew', 'is_on_sale'
+      ])
 
-  /**
-   * Archive le produit
-   */
-  async archive(): Promise<void> {
-    this.is_archived = true
-    this.archived_at = DateTime.now()
-    await this.save()
+      if (!data.user_id) {
+        return response.status(400).json({
+          success: false,
+          message: 'L\'ID de l\'utilisateur est requis'
+        })
+      }
+
+      // Par défaut, un nouveau produit est marqué comme nouveau
+      if (data.isNew === undefined) {
+        data.isNew = true
+      }
+
+      const product = await Product.create(data)
+
+      // 🔥 Recharge avec le pays
+      await product.load('user', (query) => {
+        query.select(['id', 'full_name', 'country'])
+      })
+
+      return response.status(201).json({
+        success: true,
+        message: 'Produit créé avec succès',
+        data: product,
+        info: {
+          isNewUntil: DateTime.now().plus({ days: 7 }).toFormat('dd/MM/yyyy HH:mm')
+        }
+      })
+    } catch (error: any) {
+      return response.status(400).json({
+        success: false,
+        message: 'Erreur lors de la création du produit',
+        error: error.message
+      })
+    }
+  }
+
+  // 🔥 Mettre à jour
+  async update({ params, request, response }: HttpContext) {
+    try {
+      const product = await Product.findOrFail(params.id)
+      const user_id = request.input('user_id')
+
+      if (!user_id) {
+        return response.status(400).json({
+          success: false,
+          message: 'L\'ID de l\'utilisateur est requis'
+        })
+      }
+
+      if (product.user_id !== user_id) {
+        return response.status(403).json({
+          success: false,
+          message: 'Vous n\'êtes pas autorisé à modifier ce produit'
+        })
+      }
+
+      const data = request.only([
+        'name', 'price', 'old_price', 'description', 'stock',
+        'image_url', 'category', 'origin', 'weight',
+        'packaging', 'conservation', 'isNew', 'is_on_sale'
+      ])
+
+      product.merge(data)
+      await product.save()
+
+      // 🔥 Vérifier le statut "isNew" après mise à jour
+      const updatedProduct = await this.checkAndUpdateNewStatus(product)
+
+      // 🔥 Charger le pays
+      await updatedProduct.load('user', (query) => {
+        query.select(['id', 'full_name', 'country'])
+      })
+
+      return response.status(200).json({
+        success: true,
+        message: 'Produit mis à jour avec succès',
+        data: updatedProduct
+      })
+    } catch (error: any) {
+      return response.status(400).json({
+        success: false,
+        message: 'Erreur lors de la mise à jour du produit',
+        error: error.message
+      })
+    }
+  }
+
+  // 🔥 Supprimer
+  async destroy({ params, request, response }: HttpContext) {
+    try {
+      const product = await Product.findOrFail(params.id)
+      const user_id = request.input('user_id')
+
+      if (!user_id) {
+        return response.status(400).json({
+          success: false,
+          message: 'L\'ID de l\'utilisateur est requis'
+        })
+      }
+
+      if (product.user_id !== user_id) {
+        return response.status(403).json({
+          success: false,
+          message: 'Vous n\'êtes pas autorisé à supprimer ce produit'
+        })
+      }
+
+      await product.delete()
+
+      return response.status(200).json({
+        success: true,
+        message: 'Produit supprimé avec succès'
+      })
+    } catch (error: any) {
+      return response.status(400).json({
+        success: false,
+        message: 'Erreur lors de la suppression du produit',
+        error: error.message
+      })
+    }
   }
 
   /**
-   * Désarchive le produit
+   * Tâche CRON à exécuter quotidiennement pour mettre à jour tous les produits
+   * Cette méthode peut être appelée par un scheduler
+   * Exemple : 0 0 * * * (tous les jours à minuit)
    */
-  async unarchive(): Promise<void> {
-    this.is_archived = false
-    this.archived_at = null
-    await this.save()
-  }
+  async updateAllProductsNewStatus({ response }: HttpContext) {
+    try {
+      // Récupérer tous les produits marqués comme nouveaux
+      const products = await Product
+        .query()
+        .where('is_new', true)
 
-  /**
-   * Active le produit
-   */
-  async activate(): Promise<void> {
-    this.status = 'active'
-    await this.save()
-  }
+      let updatedCount = 0
 
-  /**
-   * Désactive le produit
-   */
-  async deactivate(): Promise<void> {
-    this.status = 'inactive'
-    await this.save()
-  }
+      for (const product of products) {
+        const createdAt = product.createdAt instanceof Date
+          ? DateTime.fromJSDate(product.createdAt)
+          : DateTime.fromISO(product.createdAt.toString())
 
-  // ================= SCOPES DE REQUÊTE =================
+        const daysSinceCreation = Math.floor(DateTime.now().diff(createdAt, 'days').days)
 
-  /**
-   * Scope pour les produits actifs (non archivés ET statut 'active')
-   */
-  static active() {
-    return this.query()
-      .where('is_archived', false)
-      .where('status', 'active')
-  }
+        if (daysSinceCreation >= 7) {
+          product.isNew = false
+          await product.save()
+          updatedCount++
+        }
+      }
 
-  /**
-   * Scope pour les produits archivés
-   */
-  static archived() {
-    return this.query().where('is_archived', true)
-  }
-
-  /**
-   * Scope pour les produits non archivés
-   */
-  static notArchived() {
-    return this.query().where('is_archived', false)
-  }
-
-  /**
-   * Scope pour les produits en stock
-   */
-  static inStock() {
-    return this.query().where('stock', '>', 0)
-  }
-
-  /**
-   * Scope pour les produits en promotion
-   */
-  static onSale() {
-    return this.query().where('isOnSale', true)
+      return response.status(200).json({
+        success: true,
+        message: `Mise à jour terminée : ${updatedCount} produit(s) ne sont plus marqués comme nouveaux`,
+        data: {
+          total_checked: products.length,
+          updated: updatedCount
+        }
+      })
+    } catch (error: any) {
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la mise à jour des statuts des produits',
+        error: error.message
+      })
+    }
   }
 }
