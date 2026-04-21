@@ -30,7 +30,7 @@ export type ScannedRoutes = {
     'kyc.stats': { paramsTuple?: []; params?: {} }
     'kyc.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'kyc.store': { paramsTuple?: []; params?: {} }
-    'kyc.verify': { paramsTuple?: []; params?: {} }
+    'kyc.verify': { paramsTuple: [ParamValue]; params: {'numeroTelephone': ParamValue} }
     'kyc.search.phone': { paramsTuple?: []; params?: {} }
     'kyc.search.name': { paramsTuple?: []; params?: {} }
     'kyc.filter.operator': { paramsTuple?: []; params?: {} }
@@ -167,6 +167,7 @@ export type ScannedRoutes = {
     'kyc.index': { paramsTuple?: []; params?: {} }
     'kyc.stats': { paramsTuple?: []; params?: {} }
     'kyc.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'kyc.verify': { paramsTuple: [ParamValue]; params: {'numeroTelephone': ParamValue} }
     'kyc.search.phone': { paramsTuple?: []; params?: {} }
     'kyc.search.name': { paramsTuple?: []; params?: {} }
     'kyc.filter.operator': { paramsTuple?: []; params?: {} }
@@ -243,6 +244,7 @@ export type ScannedRoutes = {
     'kyc.index': { paramsTuple?: []; params?: {} }
     'kyc.stats': { paramsTuple?: []; params?: {} }
     'kyc.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'kyc.verify': { paramsTuple: [ParamValue]; params: {'numeroTelephone': ParamValue} }
     'kyc.search.phone': { paramsTuple?: []; params?: {} }
     'kyc.search.name': { paramsTuple?: []; params?: {} }
     'kyc.filter.operator': { paramsTuple?: []; params?: {} }
@@ -319,7 +321,6 @@ export type ScannedRoutes = {
     'otp.resend': { paramsTuple?: []; params?: {} }
     'password.reset': { paramsTuple?: []; params?: {} }
     'kyc.store': { paramsTuple?: []; params?: {} }
-    'kyc.verify': { paramsTuple?: []; params?: {} }
     'blog.submit': { paramsTuple?: []; params?: {} }
     'admin.posts.store': { paramsTuple?: []; params?: {} }
     'testimonials.store': { paramsTuple?: []; params?: {} }

@@ -694,6 +694,43 @@ export class TransactionSchema extends BaseModel {
   declare walletId: string | null
 }
 
+export class UserWithdrawalStatSchema extends BaseModel {
+  static $columns = ['averageWithdrawal', 'completedAmount', 'completedCount', 'createdAt', 'failedAmount', 'failedCount', 'id', 'largestWithdrawal', 'lastWithdrawalAmount', 'lastWithdrawalAt', 'pendingAmount', 'pendingCount', 'totalAmount', 'totalWithdrawals', 'updatedAt', 'userId'] as const
+  $columns = UserWithdrawalStatSchema.$columns
+  @column()
+  declare averageWithdrawal: string | null
+  @column()
+  declare completedAmount: string | null
+  @column()
+  declare completedCount: number | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare failedAmount: string | null
+  @column()
+  declare failedCount: number | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare largestWithdrawal: string | null
+  @column()
+  declare lastWithdrawalAmount: string | null
+  @column.dateTime()
+  declare lastWithdrawalAt: DateTime | null
+  @column()
+  declare pendingAmount: string | null
+  @column()
+  declare pendingCount: number | null
+  @column()
+  declare totalAmount: string | null
+  @column()
+  declare totalWithdrawals: number | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string | null
+}
+
 export class UserSchema extends BaseModel {
   static $columns = ['acceptEscrow', 'accountHolderName', 'address', 'addressProofUrl', 'airtelNumber', 'avatar', 'bankName', 'birthDate', 'certifyTruth', 'commercialName', 'country', 'coverPhotoUrl', 'createdAt', 'email', 'facadePhoto1Url', 'facadePhoto2Url', 'facadePhoto1Url', 'facadePhoto2Url', 'facebookUrl', 'fullName', 'id', 'idBackUrl', 'idFrontUrl', 'idNumber', 'instagramUrl', 'interiorPhoto1Url', 'interiorPhoto2Url', 'interiorPhoto1Url', 'interiorPhoto2Url', 'isEmailVerified', 'isPhoneVerified', 'isVerified', 'isWhatsappVerified', 'logoUrl', 'moovNumber', 'neighborhood', 'nifNumber', 'password', 'paymentMethod', 'personalPhone', 'phone', 'rccmDocumentUrl', 'rccmNumber', 'reference1Name', 'reference1Phone', 'reference2Name', 'reference2Phone', 'reference1Name', 'reference1Phone', 'reference2Name', 'reference2Phone', 'rejectionReason', 'residenceAddress', 'ribDocumentUrl', 'role', 'seegOrLeaseUrl', 'selfieUrl', 'shopAddress', 'shopDescription', 'shopImage', 'shopLatitude', 'shopLongitude', 'shopName', 'signature', 'stockAddress', 'stockVideoUrl', 'tiktokUrl', 'updatedAt', 'vendorType', 'verificationStatus', 'verifiedAt', 'verifiedBy', 'whatsappPhone'] as const
   $columns = UserSchema.$columns
@@ -846,4 +883,88 @@ export class WalletSchema extends BaseModel {
   declare updatedAt: DateTime | null
   @column()
   declare userId: string | null
+}
+
+export class WithdrawalHistorySchema extends BaseModel {
+  static $columns = ['action', 'amount', 'createdAt', 'id', 'ipAddress', 'metadata', 'newStatus', 'notes', 'oldStatus', 'performedBy', 'userId', 'withdrawalId'] as const
+  $columns = WithdrawalHistorySchema.$columns
+  @column()
+  declare action: string
+  @column()
+  declare amount: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare ipAddress: string | null
+  @column()
+  declare metadata: any | null
+  @column()
+  declare newStatus: string
+  @column()
+  declare notes: string | null
+  @column()
+  declare oldStatus: string | null
+  @column()
+  declare performedBy: string | null
+  @column()
+  declare userId: string | null
+  @column()
+  declare withdrawalId: string | null
+}
+
+export class WithdrawalSchema extends BaseModel {
+  static $columns = ['accountName', 'accountNumber', 'amount', 'bankName', 'createdAt', 'currency', 'externalReference', 'failureReason', 'fee', 'id', 'ipAddress', 'metadata', 'netAmount', 'notes', 'operator', 'paymentMethod', 'processedAt', 'processedBy', 'reference', 'status', 'transactionId', 'updatedAt', 'userAgent', 'userId', 'walletId'] as const
+  $columns = WithdrawalSchema.$columns
+  @column()
+  declare accountName: string
+  @column()
+  declare accountNumber: string
+  @column()
+  declare amount: string
+  @column()
+  declare bankName: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare currency: string | null
+  @column()
+  declare externalReference: string | null
+  @column()
+  declare failureReason: string | null
+  @column()
+  declare fee: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare ipAddress: string | null
+  @column()
+  declare metadata: any | null
+  @column()
+  declare netAmount: string
+  @column()
+  declare notes: string | null
+  @column()
+  declare operator: string | null
+  @column()
+  declare paymentMethod: string
+  @column.dateTime()
+  declare processedAt: DateTime | null
+  @column()
+  declare processedBy: string | null
+  @column()
+  declare reference: string
+  @column()
+  declare status: string | null
+  @column()
+  declare transactionId: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userAgent: string | null
+  @column()
+  declare userId: string | null
+  @column()
+  declare walletId: string | null
 }

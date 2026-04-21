@@ -29,14 +29,14 @@ const BlogController = () => import('#controllers/blog_controller')
 const OrderTrackingController = () => import('#controllers/order_trackings_controller')
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
 const CouponsController = () => import('#controllers/coupons_controller')
+// NOUVEAU CONTROLLER
+const GiveChangeController = () => import('#controllers/give_change_controller')
 
 // ============================================================
 // ROUTES WEB (PAGES)
 // ============================================================
 
 // Page d'accueil
-
-
 router.get('/', async ({ view }) => {
   return view.render('pages/home')
 }).as('home')
@@ -98,23 +98,14 @@ router.group(() => {
   // KYC (Know Your Customer)
   // ----------------------------------------------------------
   router.group(() => {
-    // Routes de base
     router.get('/', [KYCsController, 'index']).as('kyc.index')
     router.get('/stats', [KYCsController, 'stats']).as('kyc.stats')
     router.get('/:id', [KYCsController, 'show']).as('kyc.show')
-
-    // Création simple
     router.post('/', [KYCsController, 'store']).as('kyc.store')
-
-    // Vérification avec API externe (route principale)
     router.get('/verify/:numeroTelephone', [KYCsController, 'verifyAndStore']).as('kyc.verify')
-
-    // Recherche
     router.get('/search/phone', [KYCsController, 'searchByPhone']).as('kyc.search.phone')
     router.get('/search/name', [KYCsController, 'searchByName']).as('kyc.search.name')
     router.get('/filter/operator', [KYCsController, 'filterByOperator']).as('kyc.filter.operator')
-
-    // Modification et suppression
     router.put('/:id', [KYCsController, 'update']).as('kyc.update')
     router.patch('/:id', [KYCsController, 'update']).as('kyc.patch')
     router.delete('/:id', [KYCsController, 'destroy']).as('kyc.destroy')
@@ -259,8 +250,28 @@ router.group(() => {
   router.post('/push-subscriptions', [PushSubscriptionsController, 'store']).as('push.store')
   router.delete('/push-subscriptions/:id', [PushSubscriptionsController, 'destroy']).as('push.destroy')
 
+  // ==========================================================
+  // === NOUVELLES ROUTES GIVE-CHANGE (RETRAITS) ==============
+  // ==========================================================
+  router.group(() => {
+    // Effectuer un retrait
+    router.post('give-change', [GiveChangeController, 'giveChange']).as('merchant.give-change')
+
+    // Vérifier le statut d'un retrait par référence
+    router.get('give-change/:reference/status', [GiveChangeController, 'checkStatus']).as('merchant.give-change.status')
+
+    // Historique des retraits (paginé)
+    router.get('give-change/history', [GiveChangeController, 'history']).as('merchant.give-change.history')
+
+    // Statistiques détaillées des retraits
+    router.get('give-change/stats', [GiveChangeController, 'stats']).as('merchant.give-change.stats')
+
+    // Annuler un retrait en attente
+    router.post('give-change/:id/cancel', [GiveChangeController, 'cancel']).as('merchant.give-change.cancel')
+  }).prefix('/merchant')
+
   // ----------------------------------------------------------
-  // MARCHAND (MERCHANT)
+  // MARCHAND (MERCHANT) - ROUTES EXISTANTES
   // ----------------------------------------------------------
   router.post('/merchant/give-change', [MerchantDashboardController, 'giveChange']).as('merchant.withdraw')
   router.get('/merchant/withdrawals/:userId', [MerchantDashboardController, 'getWithdrawalHistory']).as('merchant.withdrawals')
@@ -317,11 +328,9 @@ router.group(() => {
   router.patch('/reviews/:id/approve', [ReviewsController, 'approve'])
   router.patch('/reviews/:id/reject', [ReviewsController, 'reject'])
 
-
-
-
-  // Routes API
-
+  // ----------------------------------------------------------
+  // SHOP
+  // ----------------------------------------------------------
   router.get('/shop', [ShopController, 'apiIndex']).as('api.shop.index')
   router.get('/shop/coupons', [ShopController, 'apiCoupons']).as('api.shop.coupons')
   router.get('/shop/promotions', [ShopController, 'apiPromotions']).as('api.shop.promotions')
