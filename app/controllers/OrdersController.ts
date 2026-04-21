@@ -24,89 +24,467 @@ interface PaymentInfo {
   transaction_type: string
   check_status_url: string
   code_url: string
+  qr_code_url?: string
 }
 
 export default class OrdersController {
 
+  // ========== GÉNÉRER QR CODE SANS CRÉER DE COMMANDE ==========
+  /**
+   * POST /api/orders/generate-qr-code
+   * Génère un QR Code pour le paiement SANS créer de commande
+   */
+  async generateQRCode({ request, response }: HttpContext) {
+    console.log('🔵 [QRCode] ========== GÉNÉRATION QR CODE ==========')
+    
+    try {
+      const {
+        amount,
+        customerAccountNumber,
+        customerName,
+        customerEmail,
+        items,
+        deliveryMethod,
+        deliveryPrice,
+        shippingAddress,
+        notes,
+        userId
+      } = request.only([
+        'amount',
+        'customerAccountNumber',
+        'customerName',
+        'customerEmail',
+        'items',
+        'deliveryMethod',
+        'deliveryPrice',
+        'shippingAddress',
+        'notes',
+        'userId'
+      ])
 
-  // Dans OrdersController.ts
+      // Validation
+      if (!amount || amount <= 0) {
+        return response.status(400).json({
+          success: false,
+          message: 'Le montant est requis et doit être supérieur à 0'
+        })
+      }
 
-/**
- * Vérifier le statut de paiement d'une commande spécifique
- * GET /api/orders/:orderId/payment-status
- */
-async getPaymentStatus({ params, response }: HttpContext) {
-  try {
-    const { orderId } = params
-    
-    // Trouver la commande
-    let order: Order | null = null
-    
-    if (orderId.startsWith('CMD-')) {
-      order = await Order.findBy('order_number', orderId)
-    } else {
-      order = await Order.find(orderId)
-    }
-    
-    if (!order) {
-      return response.status(404).json({
+      if (!customerAccountNumber) {
+        return response.status(400).json({
+          success: false,
+          message: 'Le numéro de téléphone est requis'
+        })
+      }
+
+      console.log('📊 Données reçues:', {
+        amount,
+        customerAccountNumber,
+        customerName,
+        itemsCount: items?.length || 0
+      })
+
+      // Générer une référence unique pour cette transaction
+      const transactionRef = `QR-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`
+
+      // Appel à l'API de paiement pour générer le QR Code
+      console.log('🔵 Appel API génération QR Code...')
+      
+      const qrResponse = await axios.post(
+        'https://apist.onrender.com/api/mypvit/qr-code/direct/generate',
+        {
+          amount: amount,
+          payment_api_key_public: "pk_1773325888803_dt8diavuh3h",
+          payment_api_key_secret: "sk_1773325888803_qt015a3cr5",
+          customer_account_number: customerAccountNumber,
+          description: `Commande e-commerce - ${items?.length || 0} article(s)`,
+          external_reference: transactionRef
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 30000
+        }
+      )
+
+      const qrData = qrResponse.data
+      console.log('📡 Réponse QR Code:', {
+        success: qrData.success,
+        hasQrCode: !!qrData.data?.qr_code_url,
+        referenceId: qrData.data?.reference_id
+      })
+
+      if (qrData.success && qrData.data) {
+        // Stocker les informations de la transaction en attente (dans une table temporaire ou cache)
+        // Pour l'instant, on les retourne simplement au frontend
+        
+        return response.status(200).json({
+          success: true,
+          message: 'QR Code généré avec succès',
+          data: {
+            qr_code_url: qrData.data.qr_code_url,
+            reference_id: qrData.data.reference_id || transactionRef,
+            amount: amount,
+            expires_in: 600, // 10 minutes
+            transaction_ref: transactionRef,
+            // Données de commande à sauvegarder côté frontend
+            order_data: {
+              userId,
+              items,
+              customerAccountNumber,
+              customerName,
+              customerEmail,
+              deliveryMethod,
+              deliveryPrice,
+              shippingAddress,
+              notes,
+              amount
+            }
+          }
+        })
+      } else {
+        return response.status(400).json({
+          success: false,
+          message: qrData.message || 'Échec de la génération du QR Code'
+        })
+      }
+
+    } catch (error: any) {
+      console.error('❌ [QRCode] Erreur:', error.message)
+      return response.status(500).json({
         success: false,
-        message: 'Commande non trouvée'
+        message: 'Erreur lors de la génération du QR Code',
+        error: error.message
       })
     }
-    
-    // Récupérer le dernier tracking de paiement
-    const lastPaymentTracking = await OrderTracking.query()
-      .where('order_id', order.id)
-      .whereIn('status', ['paid', 'pending_payment', 'payment_failed'])
-      .orderBy('tracked_at', 'desc')
-      .first()
-    
-    // Déterminer le statut de paiement
-    let paymentStatus = 'unknown'
-    let isPaid = false
-    let isPending = false
-    let isFailed = false
-    
-    if (order.status === 'paid' || order.status === 'processing' || 
-        order.status === 'shipped' || order.status === 'delivered') {
-      paymentStatus = 'paid'
-      isPaid = true
-    } else if (order.status === 'pending_payment') {
-      paymentStatus = 'pending'
-      isPending = true
-    } else if (order.status === 'payment_failed') {
-      paymentStatus = 'failed'
-      isFailed = true
-    }
-    
-    return response.status(200).json({
-      success: true,
-      data: {
-        orderId: order.order_number,
-        order_id: order.id,
-        payment_status: paymentStatus,
-        is_paid: isPaid,
-        is_pending: isPending,
-        is_failed: isFailed,
-        payment_method: order.payment_method,
-        payment_reference: lastPaymentTracking?.description?.match(/Réf: (\S+)/)?.[1] || null,
-        amount: order.total,
-        status: order.status,
-        last_update: order.updated_at
-      }
-    })
-    
-  } catch (error: any) {
-    return response.status(500).json({
-      success: false,
-      message: 'Erreur lors de la vérification du statut de paiement',
-      error: error.message
-    })
   }
-}
 
-  // ========== PROXY CHECK-STATUS POUR LE FRONT ==========
+  // ========== VÉRIFIER STATUT QR CODE ET CRÉER COMMANDE ==========
+  /**
+   * POST /api/orders/confirm-qr-payment
+   * Vérifie le statut du paiement QR et crée la commande si succès
+   */
+  async confirmQRPayment({ request, response }: HttpContext) {
+    console.log('🔵 [QRCode] ========== CONFIRMATION PAIEMENT QR ==========')
+    
+    try {
+      const {
+        reference_id,
+        order_data
+      } = request.only(['reference_id', 'order_data'])
+
+      if (!reference_id) {
+        return response.status(400).json({
+          success: false,
+          message: 'reference_id est requis'
+        })
+      }
+
+      if (!order_data) {
+        return response.status(400).json({
+          success: false,
+          message: 'order_data est requis'
+        })
+      }
+
+      console.log('🔑 Vérification référence:', reference_id)
+
+      // Vérifier le statut du paiement
+      const statusResponse = await axios.get(
+        `https://apist.onrender.com/api/check-status/${reference_id}`,
+        { timeout: 10000 }
+      )
+
+      const statusData = statusResponse.data
+      console.log('📊 Statut paiement:', {
+        success: statusData.success,
+        is_success: statusData.is_success,
+        status: statusData.status
+      })
+
+      if (statusData.is_success === true) {
+        console.log('✅ PAIEMENT QR CONFIRMÉ - CRÉATION DE LA COMMANDE...')
+        
+        // Extraire les données de commande
+        const {
+          userId,
+          items,
+          customerAccountNumber,
+          customerName,
+          customerEmail,
+          deliveryMethod,
+          deliveryPrice,
+          shippingAddress,
+          notes,
+          amount
+        } = order_data
+
+        // Vérifier que l'utilisateur existe
+        const user = await User.findBy('id', userId)
+        if (!user) {
+          return response.status(400).json({
+            success: false,
+            message: 'Utilisateur non trouvé'
+          })
+        }
+
+        // Calculer le sous-total à partir des items
+        let subtotal = 0
+        for (const item of items) {
+          subtotal += item.price * item.quantity
+        }
+
+        const total = subtotal + (deliveryPrice || 0)
+        const orderNumber = `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+
+        // Créer la commande
+        const order = await Order.create({
+          user_id: userId,
+          order_number: orderNumber,
+          status: 'paid',
+          total: total,
+          subtotal: subtotal,
+          shipping_cost: deliveryPrice || 0,
+          delivery_method: deliveryMethod || 'standard',
+          customer_name: customerName || user.fullName || 'Client',
+          customer_phone: customerAccountNumber,
+          payment_method: 'QR Code',
+          customer_email: customerEmail || user.email,
+          shipping_address: shippingAddress || 'Non renseigné',
+          billing_address: shippingAddress || 'Non renseigné',
+          notes: notes || null,
+        })
+
+        console.log(`✅ Commande créée: ${order.order_number}`)
+
+        // Créer les items de la commande
+        for (const item of items) {
+          const product = await Product.findBy('id', item.productId || item.id)
+          
+          if (product) {
+            await OrderItem.create({
+              order_id: order.id,
+              product_id: product.id,
+              product_name: product.name,
+              product_description: product.description,
+              price: item.price,
+              quantity: item.quantity,
+              category: product.category,
+              image: product.image_url,
+              subtotal: item.price * item.quantity,
+            })
+
+            // Mettre à jour le stock
+            product.stock = product.stock - item.quantity
+            await product.save()
+            console.log(`📦 Stock mis à jour: ${product.name} → ${product.stock}`)
+          }
+        }
+
+        // Ajouter le tracking
+        await OrderTracking.create({
+          order_id: order.id,
+          status: 'paid',
+          description: `Paiement QR Code confirmé - Réf: ${reference_id} - Montant: ${total} FCFA`,
+          tracked_at: DateTime.now(),
+        })
+
+        // Vider le panier si l'utilisateur en a un
+        const cart = await Cart.query()
+          .where('user_id', userId)
+          .first()
+        
+        if (cart) {
+          await CartItem.query().where('cart_id', cart.id).delete()
+          console.log('✅ Panier vidé')
+        }
+
+        // Créditer les vendeurs (0.5% pour superadmin, reste pour vendeurs)
+        await this.creditSellersAndAdmin(order.id, total)
+
+        await order.load('items')
+
+        return response.status(201).json({
+          success: true,
+          message: '✅ Paiement confirmé et commande créée avec succès !',
+          data: {
+            orderId: order.id,
+            orderNumber: order.order_number,
+            total: order.total,
+            status: order.status,
+            customerName: order.customer_name,
+            paymentMethod: order.payment_method,
+            itemsCount: order.items.length,
+            payment: {
+              success: true,
+              reference_id: reference_id,
+              status: statusData.status,
+              amount: statusData.amount
+            }
+          }
+        })
+
+      } else if (statusData.is_pending === true) {
+        return response.status(202).json({
+          success: true,
+          is_pending: true,
+          message: 'Paiement en attente. Veuillez scanner le QR Code avec votre application Mobile Money.',
+          data: {
+            reference_id: reference_id,
+            status: statusData.status
+          }
+        })
+      } else {
+        return response.status(400).json({
+          success: false,
+          is_failed: true,
+          message: 'Le paiement a échoué ou a expiré.',
+          data: {
+            reference_id: reference_id,
+            status: statusData.status
+          }
+        })
+      }
+
+    } catch (error: any) {
+      console.error('❌ [QRCode] Erreur confirmation:', error.message)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la confirmation du paiement QR',
+        error: error.message
+      })
+    }
+  }
+
+  // ========== MÉTHODE UTILITAIRE : CRÉDITER VENDEURS ET ADMIN ==========
+  private async creditSellersAndAdmin(orderId: string, totalAmount: number) {
+    try {
+      const order = await Order.find(orderId)
+      if (!order) return
+
+      const items = await OrderItem.query().where('order_id', orderId)
+      
+      // Regrouper par vendeur
+      const sellerSales: Map<string, number> = new Map()
+      
+      for (const item of items) {
+        const product = await Product.findBy('id', item.product_id)
+        if (product) {
+          const sellerId = product.user_id
+          const currentAmount = sellerSales.get(sellerId) || 0
+          sellerSales.set(sellerId, currentAmount + item.subtotal)
+        }
+      }
+
+      // Créditer superadmin (0.5%)
+      const superAdminFee = totalAmount * 0.005
+      const superAdmin = await User.query().where('role', 'superadmin').first()
+      
+      if (superAdmin) {
+        let wallet = await Wallet.query().where('user_id', superAdmin.id).first()
+        if (!wallet) {
+          wallet = await Wallet.create({
+            user_id: superAdmin.id,
+            balance: 0,
+            currency: 'XAF',
+            status: 'active'
+          })
+        }
+        wallet.balance = (wallet.balance || 0) + superAdminFee
+        await wallet.save()
+        console.log(`✅ Superadmin crédité: ${superAdminFee} FCFA`)
+      }
+
+      // Créditer les vendeurs
+      for (const [sellerId, amount] of sellerSales.entries()) {
+        let wallet = await Wallet.query().where('user_id', sellerId).first()
+        if (!wallet) {
+          wallet = await Wallet.create({
+            user_id: sellerId,
+            balance: 0,
+            currency: 'XAF',
+            status: 'active'
+          })
+        }
+        wallet.balance = (wallet.balance || 0) + amount
+        await wallet.save()
+        console.log(`✅ Vendeur ${sellerId} crédité: ${amount} FCFA`)
+      }
+
+    } catch (error: any) {
+      console.error('❌ Erreur crédit vendeurs:', error.message)
+    }
+  }
+
+  // ========== VÉRIFIER STATUT PAIEMENT D'UNE COMMANDE ==========
+  async getPaymentStatus({ params, response }: HttpContext) {
+    try {
+      const { orderId } = params
+      
+      let order: Order | null = null
+      
+      if (orderId.startsWith('CMD-')) {
+        order = await Order.findBy('order_number', orderId)
+      } else {
+        order = await Order.find(orderId)
+      }
+      
+      if (!order) {
+        return response.status(404).json({
+          success: false,
+          message: 'Commande non trouvée'
+        })
+      }
+      
+      const lastPaymentTracking = await OrderTracking.query()
+        .where('order_id', order.id)
+        .whereIn('status', ['paid', 'pending_payment', 'payment_failed'])
+        .orderBy('tracked_at', 'desc')
+        .first()
+      
+      let paymentStatus = 'unknown'
+      let isPaid = false
+      let isPending = false
+      let isFailed = false
+      
+      if (order.status === 'paid' || order.status === 'processing' || 
+          order.status === 'shipped' || order.status === 'delivered') {
+        paymentStatus = 'paid'
+        isPaid = true
+      } else if (order.status === 'pending_payment') {
+        paymentStatus = 'pending'
+        isPending = true
+      } else if (order.status === 'payment_failed') {
+        paymentStatus = 'failed'
+        isFailed = true
+      }
+      
+      return response.status(200).json({
+        success: true,
+        data: {
+          orderId: order.order_number,
+          order_id: order.id,
+          payment_status: paymentStatus,
+          is_paid: isPaid,
+          is_pending: isPending,
+          is_failed: isFailed,
+          payment_method: order.payment_method,
+          payment_reference: lastPaymentTracking?.description?.match(/Réf: (\S+)/)?.[1] || null,
+          amount: order.total,
+          status: order.status,
+          last_update: order.updated_at
+        }
+      })
+      
+    } catch (error: any) {
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la vérification du statut de paiement',
+        error: error.message
+      })
+    }
+  }
+
+  // ========== PROXY CHECK-STATUS ==========
   async giveAllWithoutId({ params, response }: HttpContext) {
     const { referenceId } = params
 
@@ -153,9 +531,9 @@ async getPaymentStatus({ params, response }: HttpContext) {
     })
   }
 
-  // ========== CRÉATION DE COMMANDE ==========
+  // ========== CRÉATION DE COMMANDE (STANDARD - MOBILE MONEY) ==========
   async store({ request, response }: HttpContext) {
-    console.log('🔵 ========== DEBUT CREATION COMMANDE ==========')
+    console.log('🔵 ========== DEBUT CREATION COMMANDE (MOBILE MONEY) ==========')
 
     try {
       const {
@@ -178,15 +556,13 @@ async getPaymentStatus({ params, response }: HttpContext) {
         'notes',
         'deliveryMethod',
         'deliveryPrice',
-        'paymentApiKeyPublic',
-        'paymentApiKeySecret',
         'customerName',
         'customerEmail',
         'mobileOperatorCode',
         'mobileOperatorName',
       ])
 
-      // ========== VALIDATION ==========
+      // Validation
       if (!userId) {
         return response.status(400).json({ success: false, message: 'userId est requis' })
       }
@@ -194,7 +570,7 @@ async getPaymentStatus({ params, response }: HttpContext) {
         return response.status(400).json({ success: false, message: 'customerAccountNumber est requis' })
       }
 
-      // ========== ÉTAPE 1: KYC ==========
+      // KYC
       console.log('🔵 Appel API KYC...')
       const kycUrl = `https://apist.onrender.com/api/mypvit/kyc/marchant?customerAccountNumber=${customerAccountNumber}`
 
@@ -210,17 +586,13 @@ async getPaymentStatus({ params, response }: HttpContext) {
           fullName = kycData.full_name || customerNameFallback || 'non renseigné'
           accountNumber = kycData.customer_account_number || customerAccountNumber
           console.log('✅ KYC OK - opérateur:', operator, '| nom:', fullName)
-        } else {
-          console.log('🟡 KYC success=false, fallback sur données frontend')
         }
       } catch (kycError: any) {
         console.log('🟡 KYC injoignable, fallback sur données frontend')
-        operator = mobileOperatorName || mobileOperatorCode || 'non renseigné'
       }
 
-      // ========== ÉTAPE 2: UTILISATEUR ==========
+      // Utilisateur
       const isGuest = !isValidUuid(userId)
-
       if (isGuest) {
         return response.status(400).json({
           success: false,
@@ -231,7 +603,7 @@ async getPaymentStatus({ params, response }: HttpContext) {
       const user = await User.findBy('id', userId)
       console.log('👤 Utilisateur:', user ? user.email : 'Introuvable')
 
-      // ========== ÉTAPE 3: PANIER ==========
+      // Panier
       const cart = await Cart.query()
         .where('user_id', userId)
         .preload('items')
@@ -241,7 +613,7 @@ async getPaymentStatus({ params, response }: HttpContext) {
         return response.status(400).json({ success: false, message: 'Votre panier est vide' })
       }
 
-      // ========== ÉTAPE 4: CALCUL TOTAL ==========
+      // Calcul total
       let subtotal = 0
       const orderItems: any[] = []
       const sellerSales: Map<string, { sellerId: string; amount: number; products: any[] }> = new Map()
@@ -297,13 +669,13 @@ async getPaymentStatus({ params, response }: HttpContext) {
       const total = subtotal + deliveryPrice
       console.log(`🔵 Total: ${subtotal} + ${deliveryPrice} = ${total}`)
 
-      // ========== ÉTAPE 5: PAIEMENT ==========
+      // Paiement Mobile Money
       let paymentResult: any = null
       let paymentInfo: PaymentInfo | null = null
       let paymentSuccess = false
 
       try {
-        console.log('🔵 Appel API paiement...')
+        console.log('🔵 Appel API paiement Mobile Money...')
 
         const paymentBody: Record<string, any> = {
           amount: total,
@@ -330,8 +702,6 @@ async getPaymentStatus({ params, response }: HttpContext) {
         console.log('✅ Réponse paiement:', JSON.stringify(paymentResult, null, 2))
 
         if (paymentResult.success && paymentResult.data) {
-
-          // ✅ referenceId DYNAMIQUE depuis la réponse /api/payment
           const referenceId = paymentResult.data.reference_id
 
           if (!referenceId) {
@@ -342,11 +712,10 @@ async getPaymentStatus({ params, response }: HttpContext) {
           }
 
           console.log(`🔑 referenceId reçu: ${referenceId}`)
-          console.log('🔍 Polling infini du statut — sans limite de temps...')
+          console.log('🔍 Attente confirmation paiement...')
 
           let attemptCount = 0
 
-          // ✅ Boucle infinie — attend le temps qu'il faut, pas de timeout
           while (true) {
             attemptCount++
 
@@ -362,7 +731,6 @@ async getPaymentStatus({ params, response }: HttpContext) {
                 console.log(`📡 Tentative #${attemptCount} - statut: ${statusData.status}`)
               }
 
-              // Paiement confirmé ✅
               if (statusData.is_success === true) {
                 console.log(`✅ PAIEMENT CONFIRMÉ après ${attemptCount} tentatives`)
                 paymentSuccess = true
@@ -379,14 +747,11 @@ async getPaymentStatus({ params, response }: HttpContext) {
                 break
               }
 
-              // Paiement échoué ❌
               if (statusData.is_failed === true) {
                 console.log(`❌ Paiement échoué après ${attemptCount} tentatives: ${statusData.status}`)
                 paymentSuccess = false
                 break
               }
-
-              // is_pending → on continue à attendre
 
             } catch (pollError: any) {
               if (attemptCount % 20 === 0) {
@@ -394,7 +759,6 @@ async getPaymentStatus({ params, response }: HttpContext) {
               }
             }
 
-            // 3 secondes entre chaque vérification
             await new Promise(resolve => setTimeout(resolve, 3000))
           }
 
@@ -424,7 +788,7 @@ async getPaymentStatus({ params, response }: HttpContext) {
         })
       }
 
-      // ========== ÉTAPE 6: CRÉATION DE LA COMMANDE ==========
+      // Création commande
       console.log('💰 PAIEMENT CONFIRMÉ - CRÉATION DE LA COMMANDE...')
 
       const orderNumber = `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
@@ -448,7 +812,7 @@ async getPaymentStatus({ params, response }: HttpContext) {
 
       console.log(`✅ Commande créée: ${order.order_number}`)
 
-      // ========== ÉTAPE 7: ITEMS + STOCK ==========
+      // Items + Stock
       for (const item of orderItems) {
         await OrderItem.create({
           order_id: order.id,
@@ -470,81 +834,20 @@ async getPaymentStatus({ params, response }: HttpContext) {
         }
       }
 
-      // ========== ÉTAPE 8: TRACKING ==========
+      // Tracking
       await OrderTracking.create({
         order_id: order.id,
         status: 'paid',
-        description: `Paiement effectué avec succès - Réf: ${paymentInfo?.reference_id} - Montant: ${total} FCFA`,
+        description: `Paiement Mobile Money effectué - Réf: ${paymentInfo?.reference_id} - Montant: ${total} FCFA`,
         tracked_at: DateTime.now(),
       })
 
-      // ========== ÉTAPE 9: VIDER LE PANIER ==========
+      // Vider panier
       await CartItem.query().where('cart_id', cart.id).delete()
       console.log('✅ Panier vidé')
 
-      // ========== ÉTAPE 10: PRÉLÈVEMENT SUPERADMIN 0.5% ==========
-      const superAdminFee = total * 0.005
-      console.log(`💰 Prélèvement superadmin: ${superAdminFee} FCFA`)
-
-      try {
-        const superAdmin = await User.query().where('role', 'superadmin').first()
-
-        if (superAdmin) {
-          let superAdminWallet = await Wallet.query().where('user_id', superAdmin.id).first()
-
-          if (!superAdminWallet) {
-            superAdminWallet = await Wallet.create({
-              user_id: superAdmin.id,
-              balance: 0,
-              currency: 'XAF',
-              status: 'active',
-            })
-          }
-
-          superAdminWallet.balance = (superAdminWallet.balance || 0) + superAdminFee
-          await superAdminWallet.save()
-          console.log(`✅ Superadmin crédité: ${superAdminFee} FCFA`)
-        } else {
-          console.log('⚠️ Superadmin non trouvé')
-        }
-      } catch (walletError: any) {
-        console.error('❌ Erreur wallet superadmin:', walletError.message)
-      }
-
-      // ========== ÉTAPE 11: CRÉDITER LES VENDEURS ==========
-      console.log('💰 CRÉDIT DES VENDEURS...')
-      const sellerCredits: any[] = []
-
-      for (const [sellerId, saleData] of sellerSales.entries()) {
-        try {
-          let sellerWallet = await Wallet.query().where('user_id', sellerId).first()
-
-          if (!sellerWallet) {
-            sellerWallet = await Wallet.create({
-              user_id: sellerId,
-              balance: 0,
-              currency: 'XAF',
-              status: 'active',
-            })
-          }
-
-          const previousBalance = sellerWallet.balance || 0
-          sellerWallet.balance = previousBalance + saleData.amount
-          await sellerWallet.save()
-
-          sellerCredits.push({
-            seller_id: sellerId,
-            amount: saleData.amount,
-            products_count: saleData.products.length,
-            previous_balance: previousBalance,
-            new_balance: sellerWallet.balance,
-          })
-
-          console.log(`✅ Vendeur ${sellerId} crédité: ${saleData.amount} FCFA`)
-        } catch (sellerError: any) {
-          console.error(`❌ Erreur crédit vendeur ${sellerId}:`, sellerError.message)
-        }
-      }
+      // Créditer vendeurs et admin
+      await this.creditSellersAndAdmin(order.id, total)
 
       await order.load('items')
       console.log('🟢 ========== COMMANDE CRÉÉE AVEC SUCCÈS ==========')
@@ -562,8 +865,6 @@ async getPaymentStatus({ params, response }: HttpContext) {
           paymentMethod: order.payment_method,
           estimatedDelivery: order.estimated_delivery,
           itemsCount: order.items.length,
-          admin_fee: superAdminFee,
-          seller_credits: sellerCredits,
           payment: paymentInfo ? {
             success: true,
             reference_id: paymentInfo.reference_id,
@@ -581,34 +882,6 @@ async getPaymentStatus({ params, response }: HttpContext) {
       return response.status(500).json({
         success: false,
         message: '❌ Erreur lors de la création de la commande',
-        error: error.message,
-      })
-    }
-  }
-
-  // ========== VÉRIFIER STATUT D'UNE TRANSACTION ==========
-  async checkPaymentStatus({ params, response }: HttpContext) {
-    try {
-      const { referenceId } = params
-
-      if (!referenceId) {
-        return response.status(400).json({ success: false, message: 'referenceId est requis' })
-      }
-
-      const statusResponse = await axios.get(
-        `https://apist.onrender.com/api/check-status/${referenceId}`,
-        { timeout: 15000 }
-      )
-
-      return response.status(200).json({
-        success: true,
-        data: statusResponse.data,
-      })
-
-    } catch (error: any) {
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur lors de la vérification du statut',
         error: error.message,
       })
     }
