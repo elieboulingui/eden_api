@@ -1,8 +1,44 @@
 // app/controllers/products_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import Product from '#models/Product'
+import { DateTime } from 'luxon'
 
 export default class ProductsController {
+
+  /**
+   * Vérifier et mettre à jour le statut "is_new" d'un produit
+   * Si le produit a plus de 7 jours, is_new devient false
+   */
+  private async checkAndUpdateNewStatus(product: Product): Promise<Product> {
+    const createdAt = product.created_at instanceof Date
+      ? DateTime.fromJSDate(product.created_at)
+      : DateTime.fromISO(product.created_at.toString())
+
+    const daysSinceCreation = Math.floor(DateTime.now().diff(createdAt, 'days').days)
+
+    // Si le produit a plus de 7 jours et qu'il est encore marqué comme nouveau
+    if (daysSinceCreation >= 7 && product.is_new === true) {
+      product.is_new = false
+      await product.save()
+      console.log(`✅ Produit ${product.id} : is_new mis à false après ${daysSinceCreation} jours`)
+    }
+
+    return product
+  }
+
+  /**
+   * Vérifier et mettre à jour le statut "is_new" pour plusieurs produits
+   */
+  private async checkAndUpdateNewStatusForMany(products: Product[]): Promise<Product[]> {
+    const updatedProducts: Product[] = []
+
+    for (const product of products) {
+      const updatedProduct = await this.checkAndUpdateNewStatus(product)
+      updatedProducts.push(updatedProduct)
+    }
+
+    return updatedProducts
+  }
 
   // 🔥 Récupérer tous les produits + pays du vendeur
   async index({ response }: HttpContext) {
@@ -13,15 +49,48 @@ export default class ProductsController {
           query.select(['id', 'full_name', 'country'])
         })
 
+      // Vérifier et mettre à jour le statut "is_new" pour chaque produit
+      const updatedProducts = await this.checkAndUpdateNewStatusForMany(products)
+
       return response.status(200).json({
         success: true,
-        data: products,
-        count: products.length
+        data: updatedProducts,
+        count: updatedProducts.length
       })
     } catch (error: any) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des produits',
+        error: error.message
+      })
+    }
+  }
+
+  // 🔥 Récupérer les produits nouveaux uniquement
+  async newProducts({ response }: HttpContext) {
+    try {
+      const products = await Product
+        .query()
+        .where('is_new', true)
+        .preload('user', (query) => {
+          query.select(['id', 'full_name', 'country'])
+        })
+
+      // Vérifier et mettre à jour le statut "is_new" pour chaque produit
+      const updatedProducts = await this.checkAndUpdateNewStatusForMany(products)
+
+      // Filtrer pour ne garder que ceux qui sont encore nouveaux
+      const trulyNewProducts = updatedProducts.filter(p => p.is_new === true)
+
+      return response.status(200).json({
+        success: true,
+        data: trulyNewProducts,
+        count: trulyNewProducts.length
+      })
+    } catch (error: any) {
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la récupération des nouveaux produits',
         error: error.message
       })
     }
@@ -38,9 +107,12 @@ export default class ProductsController {
         })
         .firstOrFail()
 
+      // Vérifier et mettre à jour le statut "is_new"
+      const updatedProduct = await this.checkAndUpdateNewStatus(product)
+
       return response.status(200).json({
         success: true,
-        data: product
+        data: updatedProduct
       })
     } catch {
       return response.status(404).json({
@@ -66,6 +138,11 @@ export default class ProductsController {
         })
       }
 
+      // Par défaut, un nouveau produit est marqué comme nouveau
+      if (data.is_new === undefined) {
+        data.is_new = true
+      }
+
       const product = await Product.create(data)
 
       // 🔥 Recharge avec le pays
@@ -76,7 +153,10 @@ export default class ProductsController {
       return response.status(201).json({
         success: true,
         message: 'Produit créé avec succès',
-        data: product
+        data: product,
+        info: {
+          is_new_until: DateTime.now().plus({ days: 7 }).toFormat('dd/MM/yyyy HH:mm')
+        }
       })
     } catch (error: any) {
       return response.status(400).json({
@@ -116,15 +196,18 @@ export default class ProductsController {
       product.merge(data)
       await product.save()
 
+      // 🔥 Vérifier le statut "is_new" après mise à jour
+      const updatedProduct = await this.checkAndUpdateNewStatus(product)
+
       // 🔥 Charger le pays
-      await product.load('user', (query) => {
+      await updatedProduct.load('user', (query) => {
         query.select(['id', 'full_name', 'country'])
       })
 
       return response.status(200).json({
         success: true,
         message: 'Produit mis à jour avec succès',
-        data: product
+        data: updatedProduct
       })
     } catch (error: any) {
       return response.status(400).json({
@@ -165,6 +248,51 @@ export default class ProductsController {
       return response.status(400).json({
         success: false,
         message: 'Erreur lors de la suppression du produit',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Tâche CRON à exécuter quotidiennement pour mettre à jour tous les produits
+   * Cette méthode peut être appelée par un scheduler
+   * Exemple : 0 0 * * * (tous les jours à minuit)
+   */
+  async updateAllProductsNewStatus({ response }: HttpContext) {
+    try {
+      // Récupérer tous les produits marqués comme nouveaux
+      const products = await Product
+        .query()
+        .where('is_new', true)
+
+      let updatedCount = 0
+
+      for (const product of products) {
+        const createdAt = product.created_at instanceof Date
+          ? DateTime.fromJSDate(product.created_at)
+          : DateTime.fromISO(product.created_at.toString())
+
+        const daysSinceCreation = Math.floor(DateTime.now().diff(createdAt, 'days').days)
+
+        if (daysSinceCreation >= 7) {
+          product.is_new = false
+          await product.save()
+          updatedCount++
+        }
+      }
+
+      return response.status(200).json({
+        success: true,
+        message: `Mise à jour terminée : ${updatedCount} produit(s) ne sont plus marqués comme nouveaux`,
+        data: {
+          total_checked: products.length,
+          updated: updatedCount
+        }
+      })
+    } catch (error: any) {
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la mise à jour des statuts des produits',
         error: error.message
       })
     }

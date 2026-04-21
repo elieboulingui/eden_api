@@ -338,7 +338,7 @@ router.group(() => {
   router.post('/promo', [PromotionsController, 'store']).as('promo.store')
   router.put('/promo/:id', [PromotionsController, 'update']).as('promo.update')
   router.delete('/promo/:id', [PromotionsController, 'destroy']).as('promo.destroy')
-
+  router.post('/cron/update-products-new-status', [ProductsController, 'updateAllProductsNewStatus']).as('cron.update-products-new-status')
   // ----------------------------------------------------------
   // PUBS
   // ----------------------------------------------------------
