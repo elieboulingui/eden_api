@@ -103,7 +103,7 @@ export default class CategoriesController {
           description: product.description,
           stock: product.stock,
           image_url: product.image_url,
-          created_at: product.created_at,
+          created_at: product.createdAt,
         })),
       }
 
