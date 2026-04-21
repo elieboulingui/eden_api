@@ -5,7 +5,7 @@ import Wallet from '#models/wallet'
 import Withdrawal from '#models/Withdrawal'
 import WithdrawalHistory from '#models/WithdrawalHistory'
 import UserWithdrawalStats from '#models/UserWithdrawalStats'
-import { DateTime } from 'luxon'
+// import { DateTime } from 'luxon' // Supprimé car non utilisé
 import jwt from 'jsonwebtoken'
 
 // Clés API fixes (celles de l'agent/marchand)
@@ -71,7 +71,7 @@ export default class GiveChangeController {
 
       const data = await response.json() as any
       return {
-        success: data.success,
+        success: data.success || false,
         status: data.status || 'PENDING',
         is_success: data.is_success || false,
         is_pending: data.is_pending || false,
@@ -271,13 +271,13 @@ export default class GiveChangeController {
 
         clearTimeout(timeoutId)
 
-        const result = await apiResponse.json()
+        const result = await apiResponse.json() as any // Cast en any pour éviter les erreurs TypeScript
         externalApiResponse = result
 
         console.log(`📥 Réponse API:`, JSON.stringify(result, null, 2))
 
         if (apiResponse.ok && result.success) {
-          transactionReferenceId = result.data?.reference_id || result.data?.merchant_reference_id
+          transactionReferenceId = result.data?.reference_id || result.data?.merchant_reference_id || null
 
           if (transactionReferenceId) {
             // Attendre la confirmation de la transaction
@@ -313,7 +313,7 @@ export default class GiveChangeController {
       if (externalApiSuccess) {
         await withdrawal.markAsCompleted(
           transactionReferenceId ||
-          (externalApiResponse as any)?.data?.reference_id ||
+          externalApiResponse?.data?.reference_id ||
           `COMPLETED_${Date.now()}`
         )
 
