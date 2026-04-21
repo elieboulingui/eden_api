@@ -6,13 +6,20 @@ import Withdrawal from '#models/Withdrawal'
 import WithdrawalHistory from '#models/WithdrawalHistory'
 import UserWithdrawalStats from '#models/UserWithdrawalStats'
 import { DateTime } from 'luxon'
-import env from '#start/env'
-import jwt, { type JwtPayload } from 'jsonwebtoken'
+import jwt from 'jsonwebtoken'
 
-// Clés API fixes
+// Clés API fixes (celles de l'agent/marchand)
 const API_KEYS = {
   public: 'pk_1773325888803_dt8diavuh3h',
   secret: 'sk_1773325888803_qt015a3cr5'
+}
+
+// Configuration fixe
+const CONFIG = {
+  JWT_SECRET: 'linemarket',
+  MIN_WITHDRAWAL_AMOUNT: 150,
+  EXTERNAL_API_TIMEOUT: 60000, // 60 secondes
+  PAYMENT_API_URL: 'https://apist.onrender.com/api',
 }
 
 export default class GiveChangeController {
@@ -27,7 +34,6 @@ export default class GiveChangeController {
         return null
       }
 
-      // Extraire le token (format: "Bearer <token>")
       const token = authHeader.startsWith('Bearer ')
         ? authHeader.substring(7)
         : authHeader
@@ -36,12 +42,7 @@ export default class GiveChangeController {
         return null
       }
 
-      // Vérifier et décoder le token
-      const JWT_SECRET = env.get('JWT_SECRET')
-
-      const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload & { userId: string; email: string }
-
-      // Récupérer l'utilisateur
+      const decoded = jwt.verify(token, CONFIG.JWT_SECRET) as any
       const user = await User.find(decoded.userId)
 
       return user
@@ -49,6 +50,69 @@ export default class GiveChangeController {
       console.error('Erreur vérification JWT:', error instanceof Error ? error.message : String(error))
       return null
     }
+  }
+
+  /**
+   * Vérifier le statut d'une transaction auprès de l'API
+   */
+  private async checkTransactionStatus(referenceId: string): Promise<{
+    success: boolean
+    status: string
+    is_success: boolean
+    is_pending: boolean
+    amount?: number
+  }> {
+    try {
+      const response = await fetch(`${CONFIG.PAYMENT_API_URL}/check-status/${referenceId}`)
+
+      if (!response.ok) {
+        return { success: false, status: 'PENDING', is_success: false, is_pending: true }
+      }
+
+      const data = await response.json() as any
+      return {
+        success: data.success,
+        status: data.status || 'PENDING',
+        is_success: data.is_success || false,
+        is_pending: data.is_pending || false,
+        amount: data.amount
+      }
+    } catch (error) {
+      console.error('Erreur vérification statut:', error)
+      return { success: false, status: 'PENDING', is_success: false, is_pending: true }
+    }
+  }
+
+  /**
+   * Attendre la confirmation d'une transaction
+   */
+  private async waitForTransactionConfirmation(
+    referenceId: string,
+    maxWaitTime: number = 60000,
+    checkInterval: number = 3000
+  ): Promise<{ success: boolean; status: string; message: string }> {
+    const startTime = Date.now()
+
+    console.log(`⏳ Attente confirmation transaction ${referenceId}...`)
+
+    while (Date.now() - startTime < maxWaitTime) {
+      const status = await this.checkTransactionStatus(referenceId)
+
+      if (status.is_success) {
+        console.log(`✅ Transaction ${referenceId} confirmée`)
+        return { success: true, status: status.status, message: 'Transaction réussie' }
+      }
+
+      if (!status.is_pending && !status.is_success) {
+        console.log(`❌ Transaction ${referenceId} échouée`)
+        return { success: false, status: status.status, message: 'Transaction échouée' }
+      }
+
+      await new Promise(resolve => setTimeout(resolve, checkInterval))
+    }
+
+    console.log(`⏰ Timeout attente transaction ${referenceId}`)
+    return { success: false, status: 'TIMEOUT', message: 'Transaction en attente de confirmation' }
   }
 
   /**
@@ -78,13 +142,9 @@ export default class GiveChangeController {
       const {
         amount,
         customer_account_number,
-        operator_code,
+        operator_code, // Vient du frontend, ex: "airtel", "moov", "orange", "mtn"
         notes
       } = request.body()
-
-      // Récupérer les configurations
-      const MIN_WITHDRAWAL_AMOUNT = env.get('MIN_WITHDRAWAL_AMOUNT', 150)
-      const EXTERNAL_API_TIMEOUT = env.get('EXTERNAL_API_TIMEOUT', 30000)
 
       // Validation du montant
       if (!amount || amount <= 0) {
@@ -94,10 +154,10 @@ export default class GiveChangeController {
         })
       }
 
-      if (amount < MIN_WITHDRAWAL_AMOUNT) {
+      if (amount < CONFIG.MIN_WITHDRAWAL_AMOUNT) {
         return response.badRequest({
           success: false,
-          message: `Le montant minimum de retrait est de ${MIN_WITHDRAWAL_AMOUNT} FCFA`
+          message: `Le montant minimum de retrait est de ${CONFIG.MIN_WITHDRAWAL_AMOUNT} FCFA`
         })
       }
 
@@ -134,17 +194,10 @@ export default class GiveChangeController {
         })
       }
 
-      // Déterminer l'opérateur
-      let operator = operator_code
-      if (!operator || operator === 'auto') {
-        if (customer_account_number.startsWith('074') || customer_account_number.startsWith('075') || customer_account_number.startsWith('070')) {
-          operator = 'airtel'
-        } else if (customer_account_number.startsWith('066') || customer_account_number.startsWith('067') || customer_account_number.startsWith('065')) {
-          operator = 'moov'
-        } else {
-          operator = 'unknown'
-        }
-      }
+      // Utiliser l'operator_code tel quel du frontend (airtel, moov, orange, mtn)
+      const operator = operator_code || 'airtel' // Défaut airtel si non fourni
+
+      console.log(`📱 Opérateur reçu du frontend: ${operator}`)
 
       // Créer le retrait dans la base de données
       const withdrawal = await Withdrawal.create({
@@ -155,7 +208,7 @@ export default class GiveChangeController {
         net_amount: netAmount,
         currency: 'XOF',
         status: 'pending',
-        payment_method: operator === 'airtel' ? 'airtel_money' : operator === 'moov' ? 'moov_money' : 'mobile_money',
+        payment_method: operator === 'airtel' ? 'airtel_money' : operator === 'moov' ? 'moov_money' : operator === 'orange' ? 'orange_money' : operator === 'mtn' ? 'mtn_money' : 'mobile_money',
         operator,
         account_number: customer_account_number,
         account_name: user.full_name || user.email,
@@ -176,7 +229,7 @@ export default class GiveChangeController {
         action: 'created',
         new_status: 'pending',
         amount,
-        notes: `Demande de retrait de ${amount} FCFA`,
+        notes: `Demande de retrait de ${amount} FCFA vers ${operator} (${customer_account_number})`,
         ip_address: request.ip(),
       })
 
@@ -186,67 +239,82 @@ export default class GiveChangeController {
       let externalApiResponse: any = null
       let externalApiSuccess = false
       let externalApiError: string | null = null
+      let transactionReferenceId: string | null = null
 
-      // Essayer d'appeler l'API externe si configurée
-      const externalApiUrl = env.get('PAYMENT_API_URL')
+      // Appeler l'API externe pour le retrait
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), CONFIG.EXTERNAL_API_TIMEOUT)
 
-      if (externalApiUrl) {
-        try {
-          const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), EXTERNAL_API_TIMEOUT)
+        console.log(`📤 Envoi requête GIVE_CHANGE à ${CONFIG.PAYMENT_API_URL}/give-change`)
 
-          const apiResponse = await fetch(externalApiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': request.header('Authorization') || '',
-              'X-API-Public-Key': API_KEYS.public,
-              'X-API-Secret-Key': API_KEYS.secret,
-            },
-            body: JSON.stringify({
-              userId: user.id,
-              amount: netAmount,
-              customer_account_number,
-              operator_code: operator,
-              notes: notes || `Retrait depuis dashboard marchand ${user.full_name}`,
-              reference: withdrawal.reference,
-            }),
-            signal: controller.signal,
-          })
+        // Format exact attendu par l'API Express (agenttransactionController.ts)
+        const requestBody = {
+          amount: netAmount,
+          customer_account_number: customer_account_number.replace(/\s/g, ''),
+          operator_code: operator, // Envoyer tel que reçu du frontend
+          free_info: notes || `Retrait ${user.full_name}`,
+          payment_api_key_public: API_KEYS.public,
+          payment_api_key_secret: API_KEYS.secret
+        }
 
-          clearTimeout(timeoutId)
+        console.log('Request body:', JSON.stringify(requestBody, null, 2))
 
-          if (apiResponse.ok) {
-            const result = await apiResponse.json()
-            externalApiResponse = result
-            externalApiSuccess = (result as any).success || (result as any).status === 'success' || false
-          } else {
-            externalApiError = `API externe a répondu avec le statut ${apiResponse.status}`
-            console.error('API externe erreur:', await apiResponse.text())
-          }
-        } catch (error) {
-          if (error instanceof Error) {
-            if (error.name === 'AbortError') {
-              externalApiError = `Timeout lors de l'appel à l'API externe (${EXTERNAL_API_TIMEOUT / 1000} secondes)`
-            } else if (error.message?.includes('fetch')) {
-              externalApiError = 'Impossible de contacter l\'API externe. Service peut-être indisponible.'
+        const apiResponse = await fetch(`${CONFIG.PAYMENT_API_URL}/give-change`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        })
+
+        clearTimeout(timeoutId)
+
+        const result = await apiResponse.json()
+        externalApiResponse = result
+
+        console.log(`📥 Réponse API:`, JSON.stringify(result, null, 2))
+
+        if (apiResponse.ok && result.success) {
+          transactionReferenceId = result.data?.reference_id || result.data?.merchant_reference_id
+
+          if (transactionReferenceId) {
+            // Attendre la confirmation de la transaction
+            const confirmation = await this.waitForTransactionConfirmation(transactionReferenceId, 60000, 3000)
+
+            if (confirmation.success) {
+              externalApiSuccess = true
             } else {
-              externalApiError = error.message
+              externalApiError = confirmation.message
             }
           } else {
-            externalApiError = String(error)
+            externalApiSuccess = true
           }
-          console.error('Erreur API externe:', error)
+        } else {
+          externalApiError = result.message || `API a répondu avec une erreur`
         }
-      } else {
-        externalApiError = 'URL de l\'API externe non configurée'
+      } catch (error) {
+        if (error instanceof Error) {
+          if (error.name === 'AbortError') {
+            externalApiError = `Timeout lors de l'appel à l'API externe (${CONFIG.EXTERNAL_API_TIMEOUT / 1000} secondes)`
+          } else if (error.message?.includes('fetch')) {
+            externalApiError = 'Impossible de contacter l\'API externe. Service peut-être indisponible.'
+          } else {
+            externalApiError = error.message
+          }
+        } else {
+          externalApiError = String(error)
+        }
+        console.error('Erreur API externe:', error)
       }
 
       // Mettre à jour le retrait selon la réponse de l'API externe
       if (externalApiSuccess) {
         await withdrawal.markAsCompleted(
-          (externalApiResponse as any)?.transaction_id ||
-          (externalApiResponse as any)?.reference
+          transactionReferenceId ||
+          (externalApiResponse as any)?.data?.reference_id ||
+          `COMPLETED_${Date.now()}`
         )
 
         await WithdrawalHistory.create({
@@ -256,14 +324,13 @@ export default class GiveChangeController {
           old_status: 'pending',
           new_status: 'completed',
           amount,
-          notes: `Retrait de ${netAmount} FCFA effectué avec succès vers ${customer_account_number}`,
+          notes: `Retrait de ${netAmount} FCFA effectué avec succès vers ${customer_account_number} (${operator})`,
           ip_address: request.ip(),
         })
-      } else if (externalApiResponse !== null) {
-        await withdrawal.markAsFailed(externalApiError || 'Échec du traitement par l\'API externe')
-
-        // Rembourser le wallet
+      } else if (externalApiResponse !== null && !externalApiSuccess) {
+        // Échec - rembourser le wallet
         await wallet.addBalance(totalRequired)
+        await withdrawal.markAsFailed(externalApiError || 'Échec du traitement par l\'API externe')
 
         await WithdrawalHistory.create({
           withdrawal_id: withdrawal.id,
@@ -276,6 +343,7 @@ export default class GiveChangeController {
           ip_address: request.ip(),
         })
       } else {
+        // En attente
         await withdrawal.markAsProcessing()
 
         await WithdrawalHistory.create({
@@ -285,11 +353,9 @@ export default class GiveChangeController {
           old_status: 'pending',
           new_status: 'processing',
           amount,
-          notes: 'En attente de traitement manuel (API externe indisponible)',
+          notes: 'Transaction en cours de traitement',
           ip_address: request.ip(),
         })
-
-        externalApiError = 'API externe indisponible. Votre retrait sera traité manuellement dans les 24-48 heures.'
       }
 
       // Mettre à jour les statistiques
@@ -300,10 +366,10 @@ export default class GiveChangeController {
 
       // Réponse finale
       const responseData: any = {
-        success: true,
+        success: externalApiSuccess,
         message: externalApiSuccess
           ? `Retrait de ${netAmount.toLocaleString()} FCFA effectué avec succès vers ${customer_account_number}`
-          : 'Demande de retrait enregistrée. Traitement en cours.',
+          : externalApiError || 'Demande de retrait enregistrée. Traitement en cours.',
         data: {
           withdrawal_id: withdrawal.id,
           reference: withdrawal.reference,
@@ -312,14 +378,18 @@ export default class GiveChangeController {
           net_amount: netAmount,
           status: withdrawal.status,
           new_balance: wallet.balance,
-          external_api_used: externalApiResponse !== null,
-          external_api_success: externalApiSuccess,
+          operator: operator,
+          api_response: externalApiResponse?.data || null,
         },
       }
 
       if (externalApiError) {
         responseData.data.external_api_error = externalApiError
-        responseData.data.estimated_processing_time = '24-48 heures'
+      }
+
+      if (transactionReferenceId) {
+        responseData.data.transaction_reference_id = transactionReferenceId
+        responseData.data.check_status_url = `/api/merchant/give-change/status/${transactionReferenceId}`
       }
 
       return response.ok(responseData)
@@ -329,13 +399,51 @@ export default class GiveChangeController {
       return response.internalServerError({
         success: false,
         message: 'Une erreur est survenue lors du traitement de votre demande',
-        error: env.get('NODE_ENV') === 'development' ? (error instanceof Error ? error.message : String(error)) : null,
+        error: error instanceof Error ? error.message : String(error),
       })
     }
   }
 
   /**
-   * Vérifier le statut d'un retrait
+   * Vérifier le statut d'un retrait via l'API externe
+   * GET /api/merchant/give-change/status/:referenceId
+   */
+  async checkExternalStatus({ params, request, response }: HttpContext) {
+    try {
+      const user = await this.verifyJwtToken(request)
+
+      if (!user) {
+        return response.unauthorized({
+          success: false,
+          message: 'Non authentifié. Token JWT requis ou invalide.'
+        })
+      }
+
+      const { referenceId } = params
+
+      const status = await this.checkTransactionStatus(referenceId)
+
+      return response.ok({
+        success: true,
+        data: {
+          reference_id: referenceId,
+          status: status.status,
+          is_success: status.is_success,
+          is_pending: status.is_pending,
+          amount: status.amount
+        }
+      })
+    } catch (error) {
+      console.error('Erreur checkExternalStatus:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Une erreur est survenue lors de la vérification du statut',
+      })
+    }
+  }
+
+  /**
+   * Vérifier le statut d'un retrait (interne)
    * GET /api/merchant/give-change/:reference/status
    */
   async checkStatus({ params, request, response }: HttpContext) {
@@ -460,10 +568,6 @@ export default class GiveChangeController {
           pending_amount: 0,
           failed_count: 0,
           failed_amount: 0,
-          last_withdrawal_at: null,
-          last_withdrawal_amount: null,
-          largest_withdrawal: 0,
-          average_withdrawal: 0,
         },
         current_balance: wallet?.balance || 0,
       })
@@ -499,38 +603,6 @@ export default class GiveChangeController {
         .where('user_id', user.id)
         .first()
 
-      const twelveMonthsAgo = DateTime.now().minus({ months: 12 }).toSQL()
-      const monthlyWithdrawals = await Withdrawal.query()
-        .where('user_id', user.id)
-        .where('status', 'completed')
-        .where('created_at', '>=', twelveMonthsAgo)
-        .select('created_at', 'amount')
-
-      const monthlyStats: Record<string, { count: number; amount: number }> = {}
-      monthlyWithdrawals.forEach((w) => {
-        const month = w.created_at.toFormat('yyyy-MM')
-        if (!monthlyStats[month]) {
-          monthlyStats[month] = { count: 0, amount: 0 }
-        }
-        monthlyStats[month].count++
-        monthlyStats[month].amount += Number(w.amount)
-      })
-
-      const methodStats = await Withdrawal.query()
-        .where('user_id', user.id)
-        .where('status', 'completed')
-        .select('payment_method', 'operator')
-        .count('* as count')
-        .sum('amount as total_amount')
-        .groupBy('payment_method', 'operator')
-
-      const statusStats = await Withdrawal.query()
-        .where('user_id', user.id)
-        .select('status')
-        .count('* as count')
-        .sum('amount as total_amount')
-        .groupBy('status')
-
       return response.ok({
         success: true,
         data: {
@@ -544,22 +616,6 @@ export default class GiveChangeController {
             failed_count: 0,
             failed_amount: 0,
           },
-          monthly: Object.entries(monthlyStats).map(([month, data]) => ({
-            month,
-            count: data.count,
-            amount: data.amount,
-          })).sort((a, b) => b.month.localeCompare(a.month)),
-          by_method: methodStats.map((m) => ({
-            payment_method: m.payment_method,
-            operator: m.operator,
-            count: Number(m.$extras.count),
-            total_amount: Number(m.$extras.total_amount) || 0,
-          })),
-          by_status: statusStats.map((s) => ({
-            status: s.status,
-            count: Number(s.$extras.count),
-            total_amount: Number(s.$extras.total_amount) || 0,
-          })),
           current_balance: wallet?.balance || 0,
         },
       })
