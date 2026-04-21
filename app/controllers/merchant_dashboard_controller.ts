@@ -1113,10 +1113,32 @@ export default class MerchantDashboardController {
         return response.notFound({ success: false, message: 'Produit non trouvé' })
       }
 
-      await product.delete()
-      return response.ok({ success: true, message: 'Produit supprimé' })
+      // Vérifier si le produit est déjà archivé
+      if (product.is_archived) {
+        return response.badRequest({
+          success: false,
+          message: 'Ce produit est déjà archivé'
+        })
+      }
+
+      // Archiver le produit au lieu de le supprimer
+      await product.archive()
+
+      return response.ok({
+        success: true,
+        message: 'Produit archivé avec succès',
+        data: {
+          id: product.id,
+          is_archived: product.is_archived,
+          archived_at: product.archived_at
+        }
+      })
     } catch (error: any) {
-      return response.internalServerError({ success: false, message: error.message })
+      console.error('Erreur deleteProduct (archive):', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
     }
   }
 
