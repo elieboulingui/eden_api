@@ -133,7 +133,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column({ columnName: 'shop_longitude' })
   declare shop_longitude: number | null
 
-  // ✅ Correction : avec underscore entre photo et 1
   @column({ columnName: 'facade_photo_1_url' })
   declare facade_photo1_url: string | null
 
@@ -171,7 +170,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column({ columnName: 'stock_video_url' })
   declare stock_video_url: string | null
 
-  // ✅ Correction : avec underscore entre reference et 1
   @column({ columnName: 'reference_1_name' })
   declare reference1_name: string | null
 
@@ -438,22 +436,24 @@ export default class User extends compose(BaseModel, AuthFinder) {
     return wallet?.balance ?? 0
   }
 
+  // ✅ Correction : Utiliser directement la relation merchant_id
   async getAverageRating(): Promise<number> {
     const result = await Review.query()
-      .whereHas('product', (query) => {
-        query.where('user_id', this.id)
-      })
+      .where('merchant_id', this.id)
       .avg('rating as average')
-    return Number.parseFloat(result[0].$extras.average) || 0
+      .first()
+
+    return Number.parseFloat(result?.$extras?.average) || 0
   }
 
+  // ✅ Correction : Utiliser directement la relation merchant_id
   async getTotalReviews(): Promise<number> {
     const result = await Review.query()
-      .whereHas('product', (query) => {
-        query.where('user_id', this.id)
-      })
+      .where('merchant_id', this.id)
       .count('* as total')
-    return Number.parseInt(result[0].$extras.total) || 0
+      .first()
+
+    return Number.parseInt(result?.$extras?.total) || 0
   }
 
   async approve(adminId: string): Promise<void> {
