@@ -348,7 +348,7 @@ export default class OrdersController {
   private async createOrderFromQRPayment(
     orderData: OrderData,
     referenceId: string,
-    paymentStatus: any
+    _paymentStatus: any  // ✅ FIX TS6133: préfixe _ pour paramètre intentionnellement inutilisé
   ): Promise<Order> {
     const user = await User.findBy('id', orderData.userId)
     if (!user) {
