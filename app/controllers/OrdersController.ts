@@ -62,10 +62,6 @@ interface OrderData {
 }
 
 // ==================== UTILITAIRES ====================
-function isValidUuid(str: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)
-}
-
 function generateOrderNumber(): string {
   return `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
 }
@@ -112,7 +108,7 @@ export default class OrdersController {
       if (kycResponse.data.success && kycResponse.data.data) {
         const kycData = kycResponse.data.data
         const operator = fallbackOperatorCode || fallbackOperatorName ||
-                       kycData.detected_operator || kycData.operator || 'non renseigné'
+          kycData.detected_operator || kycData.operator || 'non renseigné'
         const fullName = kycData.full_name || fallbackFullName || 'non renseigné'
         const accountNumber = kycData.customer_account_number || phoneNumber
 
@@ -149,13 +145,13 @@ export default class OrdersController {
               kycRecordId: newKYC.id
             }
           }
-        } catch (dbError: any) {
-          console.error('❌ [KYC] Erreur sauvegarde BDD:', dbError.message)
+        } catch (dbError) {
+          console.error('❌ [KYC] Erreur sauvegarde BDD:', dbError instanceof Error ? dbError.message : String(dbError))
           // Continuer même si la sauvegarde échoue
           return { operator, fullName, accountNumber }
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.log('🟡 [KYC] API injoignable, fallback sur données frontend')
     }
 
@@ -175,7 +171,7 @@ export default class OrdersController {
         console.log('📦 [KYC] Enregistrement fallback créé')
       }
     } catch (dbError) {
-      console.error('❌ [KYC] Erreur sauvegarde fallback:', dbError.message)
+      console.error('❌ [KYC] Erreur sauvegarde fallback:', dbError instanceof Error ? dbError.message : String(dbError))
     }
 
     return { operator, fullName, accountNumber: phoneNumber }
@@ -206,8 +202,8 @@ export default class OrdersController {
       await product.save()
       console.log(`✅ [Stock] ${product.name}: ${product.stock + quantity} → ${product.stock}`)
 
-    } catch (error: any) {
-      console.error('❌ [Stock] Erreur mise à jour stock:', error.message)
+    } catch (error) {
+      console.error('❌ [Stock] Erreur mise à jour stock:', error instanceof Error ? error.message : String(error))
       throw error
     }
   }
@@ -283,8 +279,8 @@ export default class OrdersController {
           await new Promise(resolve => setTimeout(resolve, retryDelay))
         }
 
-      } catch (error: any) {
-        console.error(`❌ Erreur vérification (tentative ${attempt}):`, error.message)
+      } catch (error) {
+        console.error(`❌ Erreur vérification (tentative ${attempt}):`, error instanceof Error ? error.message : String(error))
         if (attempt < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, retryDelay))
         }
@@ -362,11 +358,11 @@ export default class OrdersController {
         error: paymentResult.message || 'Échec de l\'initiation du paiement'
       }
 
-    } catch (error: any) {
-      console.error('❌ Erreur paiement:', error.message)
+    } catch (error) {
+      console.error('❌ Erreur paiement:', error instanceof Error ? error.message : String(error))
       return {
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
       }
     }
   }
@@ -405,7 +401,7 @@ export default class OrdersController {
         subtotal: itemTotal,
       })
 
-      // ✅ Mise à jour du stock et archivage automatique
+      // Mise à jour du stock et archivage automatique
       await this.updateStockAndArchive(product.id, item.quantity)
 
       itemsCount++
@@ -447,7 +443,7 @@ export default class OrdersController {
         subtotal: itemTotal,
       })
 
-      // ✅ Mise à jour du stock et archivage automatique
+      // Mise à jour du stock et archivage automatique
       await this.updateStockAndArchive(product.id, cartItem.quantity)
 
       itemsCount++
@@ -490,7 +486,7 @@ export default class OrdersController {
 
     const order = await Order.create({
       user_id: orderData.userId || null,
-      guest_order_id: guestOrder?.id || null,
+      guestOrderId: guestOrder?.id || null,
       order_number: orderNumber,
       status: 'paid',
       total,
@@ -566,8 +562,8 @@ export default class OrdersController {
         console.log(`✅ Vendeur ${sellerId} crédité: ${amount} FCFA`)
       }
 
-    } catch (error: any) {
-      console.error('❌ Erreur crédit vendeurs:', error.message)
+    } catch (error) {
+      console.error('❌ Erreur crédit vendeurs:', error instanceof Error ? error.message : String(error))
     }
   }
 
@@ -713,12 +709,12 @@ export default class OrdersController {
         details: errorData
       })
 
-    } catch (error: any) {
-      console.error('❌ [QRCode] Erreur:', error.message)
+    } catch (error) {
+      console.error('❌ [QRCode] Erreur:', error instanceof Error ? error.message : String(error))
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la génération du QR Code',
-        error: error.message
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
@@ -786,7 +782,7 @@ export default class OrdersController {
 
       const orderData = order_data as OrderData
 
-      // ✅ Si invité, enregistrer KYC
+      // Si invité, enregistrer KYC
       if (orderData.isGuest && orderData.customerAccountNumber) {
         await this.performKYCAndSave(
           orderData.customerAccountNumber,
@@ -823,12 +819,12 @@ export default class OrdersController {
         }
       })
 
-    } catch (error: any) {
-      console.error('❌ [QRCode] Erreur confirmation:', error.message)
+    } catch (error) {
+      console.error('❌ [QRCode] Erreur confirmation:', error instanceof Error ? error.message : String(error))
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la confirmation du paiement QR',
-        error: error.message
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
@@ -923,8 +919,6 @@ export default class OrdersController {
       }
 
       // ========== RÉCUPÉRATION PANIER (si connecté) ==========
-      let items: Array<{ productId: string; quantity: number; price: number }> = []
-
       if (!isGuest && payload.userId) {
         const cart = await Cart.query()
           .where('user_id', payload.userId)
@@ -939,18 +933,6 @@ export default class OrdersController {
         }
 
         console.log('🛒 Panier:', { id: cart.id, itemsCount: cart.items.length })
-
-        // Récupérer les items du panier
-        for (const item of cart.items) {
-          const product = await Product.findBy('id', item.product_id)
-          if (product) {
-            items.push({
-              productId: item.product_id,
-              quantity: item.quantity,
-              price: product.price
-            })
-          }
-        }
       }
 
       // ========== CRÉATION COMMANDE ==========
@@ -959,7 +941,7 @@ export default class OrdersController {
 
       const order = await Order.create({
         user_id: payload.userId || null,
-        guest_order_id: guestOrder?.id || null,
+        guestOrderId: guestOrder?.id || null,
         order_number: orderNumber,
         status: 'pending',
         total: 0,
@@ -1033,24 +1015,24 @@ export default class OrdersController {
       let paymentError: string | null = null
 
       if (paymentResult.success && paymentResult.paymentInfo) {
-        paymentInfo = paymentResult.paymentInfo;
-        const verified = await this.verifyPaymentStatus(paymentInfo.reference_id, order);
-        paymentStatus = verified ? 'success' : 'pending';
+        paymentInfo = paymentResult.paymentInfo
+        const verified = await this.verifyPaymentStatus(paymentInfo.reference_id, order)
+        paymentStatus = verified ? 'success' : 'pending'
 
         if (verified && guestOrder) {
-          guestOrder.status = 'paid';
-          await guestOrder.save();
+          guestOrder.status = 'paid'
+          await guestOrder.save()
         }
       } else {
-        paymentStatus = 'failed';
-        paymentError = paymentResult.error || 'Erreur inconnue';
+        paymentStatus = 'failed'
+        paymentError = paymentResult.error || 'Erreur inconnue'
 
         await OrderTracking.create({
           order_id: order.id,
           status: 'payment_pending',
           description: `Erreur lors de l'initiation du paiement: ${paymentError}`,
           tracked_at: DateTime.now(),
-        });
+        })
       }
 
       // ========== RECHARGEMENT ==========
@@ -1089,15 +1071,15 @@ export default class OrdersController {
         },
       })
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('🔴 ========== ERREUR CRÉATION COMMANDE ==========')
-      console.error('🔴 Message:', error.message)
-      console.error('🔴 Stack:', error.stack)
+      console.error('🔴 Message:', error instanceof Error ? error.message : String(error))
+      console.error('🔴 Stack:', error instanceof Error ? error.stack : 'N/A')
 
       return response.status(500).json({
         success: false,
         message: '❌ Erreur lors de la création de la commande',
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       })
     }
   }
@@ -1132,14 +1114,14 @@ export default class OrdersController {
         data: statusResponse.data
       })
 
-    } catch (error: any) {
-      console.error('❌ Erreur vérification statut:', error.message)
+    } catch (error) {
+      console.error('❌ Erreur vérification statut:', error instanceof Error ? error.message : String(error))
 
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la vérification du statut',
-        error: error.message,
-        details: error.response?.data || null
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
+        details: (error as any).response?.data || null
       })
     }
   }
@@ -1155,7 +1137,9 @@ export default class OrdersController {
       let order: Order | null = null
 
       if (orderId.startsWith('CMD-')) {
-        order = await Order.findBy('order_number', orderId)
+        order = await Order.query()
+          .where('order_number', orderId)
+          .first()
       } else {
         order = await Order.find(orderId)
       }
@@ -1207,11 +1191,11 @@ export default class OrdersController {
         }
       })
 
-    } catch (error: any) {
+    } catch (error) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la vérification du statut de paiement',
-        error: error.message
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
@@ -1254,11 +1238,11 @@ export default class OrdersController {
         message: 'Commandes récupérées avec succès',
         data: orders
       })
-    } catch (error: any) {
+    } catch (error) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des commandes',
-        error: error.message
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
@@ -1306,11 +1290,11 @@ export default class OrdersController {
         message: 'Commande récupérée avec succès',
         data: order
       })
-    } catch (error: any) {
+    } catch (error) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération de la commande',
-        error: error.message
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
@@ -1329,7 +1313,7 @@ export default class OrdersController {
       let order: Order | null = null
 
       if (orderId.startsWith('CMD-')) {
-        order = await Order.findBy('order_number', orderId)
+        order = await Order.query().where('order_number', orderId).first()
       } else {
         order = await Order.find(orderId)
       }
@@ -1360,11 +1344,11 @@ export default class OrdersController {
         message: `✅ Statut mis à jour : ${status}`,
         data: order
       })
-    } catch (error: any) {
+    } catch (error) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la mise à jour du statut',
-        error: error.message
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
@@ -1430,18 +1414,18 @@ export default class OrdersController {
         message: '✅ Commande annulée avec succès',
         data: order
       })
-    } catch (error: any) {
+    } catch (error) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de l\'annulation',
-        error: error.message
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
 
   /**
    * Générer une facture
-   * GET /api/orders/:orderId/invoice/user/:userId
+   * GET /api/orders/:orderId/invoice/:userId
    */
   async invoice({ params, response }: HttpContext) {
     try {
@@ -1503,18 +1487,18 @@ export default class OrdersController {
           items: order.items,
         },
       })
-    } catch (error: any) {
+    } catch (error) {
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la génération de la facture',
-        error: error.message
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
 
   /**
    * Proxy pour check-status sans référence (compatibilité)
-   * GET /api/orders/give-all-without-id/:referenceId
+   * GET /api/give-all-without-id/:referenceId
    */
   async giveAllWithoutId({ params, response }: HttpContext) {
     const { referenceId } = params
@@ -1535,7 +1519,7 @@ export default class OrdersController {
       )
       return response.status(200).json(apiResponse.data)
 
-    } catch (error: any) {
+    } catch (error) {
       return response.status(200).json({
         success: false,
         reference_id: referenceId,
@@ -1544,7 +1528,7 @@ export default class OrdersController {
         is_pending: false,
         is_failed: true,
         last_update: new Date().toISOString(),
-        error_message: error.message,
+        error_message: error instanceof Error ? error.message : 'Erreur inconnue',
       })
     }
   }
