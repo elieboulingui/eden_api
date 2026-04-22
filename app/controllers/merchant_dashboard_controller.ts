@@ -17,6 +17,324 @@ export default class MerchantDashboardController {
 
   // ============= WALLET =============
 
+  // Ajoutez cette fonction dans votre MerchantDashboardController
+
+/**
+ * Récupère tous les produits archivés d'un marchand
+ * GET /api/merchant/:userId/archived-products
+ */
+async getArchivedProducts({ params, request, response }: HttpContext) {
+  try {
+    const { userId } = params
+
+    if (!userId) {
+      return response.badRequest({ 
+        success: false, 
+        message: "ID utilisateur manquant" 
+      })
+    }
+
+    const user = await User.findBy('id', userId)
+
+    if (!user) {
+      return response.notFound({ 
+        success: false, 
+        message: 'Utilisateur non trouvé' 
+      })
+    }
+
+    if (user.role !== 'marchant' && user.role !== 'merchant') {
+      return response.forbidden({ 
+        success: false, 
+        message: 'Seuls les marchands peuvent accéder à cette ressource' 
+      })
+    }
+
+    // Pagination
+    const page = request.input('page', 1)
+    const limit = request.input('limit', 20)
+    const search = request.input('search', '')
+
+    // Requête de base pour les produits archivés
+    let query = Product.query()
+      .where('user_id', user.id)
+      .where('isArchived', true)  // ✅ Uniquement les produits archivés
+      .preload('categoryRelation')
+      .orderBy('updatedAt', 'desc')  // Trier par date d'archivage (dernière modification)
+
+    // Ajouter la recherche si présente
+    if (search) {
+      query = query.where((builder) => {
+        builder
+          .where('name', 'ILIKE', `%${search}%`)
+          .orWhere('description', 'ILIKE', `%${search}%`)
+      })
+    }
+
+    const products = await query.paginate(page, limit)
+
+    // Transformer les produits pour le frontend
+    const transformedProducts = products.all().map((product: any) => {
+      let categoryName = 'Sans catégorie'
+
+      if (product.categoryRelation) {
+        categoryName = product.categoryRelation.name
+      } else if (product.category) {
+        categoryName = product.category
+      }
+
+      // Calculer le nombre de jours depuis l'archivage
+      const archivedDate = DateTime.fromJSDate(product.updatedAt.toJSDate())
+      const daysSinceArchived = Math.floor(DateTime.now().diff(archivedDate, 'days').days)
+
+      return {
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        old_price: product.old_price,
+        stock: product.stock,
+        image_url: product.image_url,
+        category: categoryName,
+        category_id: product.category_id,
+        origin: product.origin,
+        weight: product.weight,
+        packaging: product.packaging,
+        conservation: product.conservation,
+        is_new: product.isNew,
+        is_on_sale: product.isOnSale,
+        rating: product.rating,
+        sales: product.sales || 0,
+        status: product.status || 'archived',
+        created_at: product.createdAt,
+        updated_at: product.updatedAt,
+        archived_at: product.updatedAt,  // Date d'archivage
+        days_since_archived: daysSinceArchived,
+        // Informations supplémentaires
+        can_be_restored: true,  // Toujours true car le produit existe toujours
+        is_permanently_deleted: false  // Archivage ≠ suppression définitive
+      }
+    })
+
+    // Calculer des statistiques sur les produits archivés
+    const totalArchivedProducts = await Product.query()
+      .where('user_id', user.id)
+      .where('isArchived', true)
+      .count('* as total')
+
+    const stats = {
+      total_archived: parseInt(totalArchivedProducts[0].$extras.total) || 0,
+      archived_this_month: await Product.query()
+        .where('user_id', user.id)
+        .where('isArchived', true)
+        .where('updatedAt', '>=', DateTime.now().startOf('month').toSQL())
+        .count('* as total')
+        .then(result => parseInt(result[0].$extras.total) || 0),
+      oldest_archived: products.all().length > 0 
+        ? products.all().reduce((oldest, p) => 
+            p.updatedAt < oldest.updatedAt ? p : oldest
+          ).updatedAt
+        : null
+    }
+
+    return response.ok({
+      success: true,
+      data: transformedProducts,
+      meta: {
+        total: products.total,
+        per_page: products.perPage,
+        current_page: products.currentPage,
+        last_page: products.lastPage,
+        first_page: 1,
+        first_page_url: `/api/merchant/${userId}/archived-products?page=1`,
+        last_page_url: `/api/merchant/${userId}/archived-products?page=${products.lastPage}`,
+        next_page_url: products.currentPage < products.lastPage 
+          ? `/api/merchant/${userId}/archived-products?page=${products.currentPage + 1}` 
+          : null,
+        previous_page_url: products.currentPage > 1 
+          ? `/api/merchant/${userId}/archived-products?page=${products.currentPage - 1}` 
+          : null
+      },
+      stats: stats,
+      count: transformedProducts.length,
+      message: `${stats.total_archived} produit(s) archivé(s) trouvé(s)`
+    })
+
+  } catch (error: any) {
+    console.error('Erreur dans getArchivedProducts:', error)
+    return response.internalServerError({
+      success: false,
+      message: 'Erreur lors de la récupération des produits archivés',
+      error: error.message
+    })
+  }
+}
+
+/**
+ * Restaure un produit archivé (le remet en actif)
+ * POST /api/merchant/:userId/archived-products/:productId/restore
+ */
+async restoreArchivedProduct({ params, response }: HttpContext) {
+  try {
+    const { userId, productId } = params
+
+    if (!userId || !productId) {
+      return response.badRequest({ 
+        success: false, 
+        message: "Paramètres manquants" 
+      })
+    }
+
+    const user = await User.findBy('id', userId)
+
+    if (!user) {
+      return response.notFound({ 
+        success: false, 
+        message: 'Utilisateur non trouvé' 
+      })
+    }
+
+    if (user.role !== 'marchant' && user.role !== 'merchant') {
+      return response.forbidden({ 
+        success: false, 
+        message: 'Non autorisé' 
+      })
+    }
+
+    const product = await Product.query()
+      .where('id', productId)
+      .where('user_id', user.id)
+      .first()
+
+    if (!product) {
+      return response.notFound({ 
+        success: false, 
+        message: 'Produit non trouvé' 
+      })
+    }
+
+    // Vérifier si le produit est bien archivé
+    if (!product.isArchived) {
+      return response.badRequest({
+        success: false,
+        message: 'Ce produit n\'est pas archivé'
+      })
+    }
+
+    // Restaurer le produit
+    product.isArchived = false
+    product.isNew = false  // Un produit restauré n'est plus considéré comme "nouveau"
+    await product.save()
+
+    // Recharger avec la catégorie
+    await product.load('categoryRelation')
+
+    let categoryName = 'Sans catégorie'
+    if (product.categoryRelation) {
+      categoryName = product.categoryRelation.name
+    }
+
+    return response.ok({
+      success: true,
+      message: 'Produit restauré avec succès',
+      data: {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        stock: product.stock,
+        category: categoryName,
+        is_archived: product.isArchived,
+        restored_at: DateTime.now().toISO()
+      }
+    })
+
+  } catch (error: any) {
+    console.error('Erreur dans restoreArchivedProduct:', error)
+    return response.internalServerError({
+      success: false,
+      message: 'Erreur lors de la restauration du produit',
+      error: error.message
+    })
+  }
+}
+
+/**
+ * Supprime définitivement un produit archivé
+ * DELETE /api/merchant/:userId/archived-products/:productId/permanent
+ */
+async permanentlyDeleteProduct({ params, response }: HttpContext) {
+  try {
+    const { userId, productId } = params
+
+    if (!userId || !productId) {
+      return response.badRequest({ 
+        success: false, 
+        message: "Paramètres manquants" 
+      })
+    }
+
+    const user = await User.findBy('id', userId)
+
+    if (!user) {
+      return response.notFound({ 
+        success: false, 
+        message: 'Utilisateur non trouvé' 
+      })
+    }
+
+    if (user.role !== 'marchant' && user.role !== 'merchant') {
+      return response.forbidden({ 
+        success: false, 
+        message: 'Non autorisé' 
+      })
+    }
+
+    const product = await Product.query()
+      .where('id', productId)
+      .where('user_id', user.id)
+      .first()
+
+    if (!product) {
+      return response.notFound({ 
+        success: false, 
+        message: 'Produit non trouvé' 
+      })
+    }
+
+    // Vérifier si le produit est archivé (sécurité supplémentaire)
+    if (!product.isArchived) {
+      return response.badRequest({
+        success: false,
+        message: 'Seuls les produits archivés peuvent être supprimés définitivement. Archivez d\'abord le produit.'
+      })
+    }
+
+    const productName = product.name
+    const productId_deleted = product.id
+
+    // Supprimer définitivement
+    await product.delete()
+
+    return response.ok({
+      success: true,
+      message: `Le produit "${productName}" a été supprimé définitivement`,
+      data: {
+        id: productId_deleted,
+        name: productName,
+        deleted_at: DateTime.now().toISO()
+      }
+    })
+
+  } catch (error: any) {
+    console.error('Erreur dans permanentlyDeleteProduct:', error)
+    return response.internalServerError({
+      success: false,
+      message: 'Erreur lors de la suppression définitive du produit',
+      error: error.message
+    })
+  }
+}
+
   async getWallet({ params, response }: HttpContext) {
     try {
       const { userId } = params
