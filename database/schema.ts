@@ -201,6 +201,31 @@ export class FavoriteSchema extends BaseModel {
   declare userId: string
 }
 
+export class GuestOrderSchema extends BaseModel {
+  static $columns = ['createdAt', 'customerEmail', 'customerName', 'customerPhone', 'guestId', 'id', 'kycId', 'orderId', 'status', 'updatedAt'] as const
+  $columns = GuestOrderSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare customerEmail: string
+  @column()
+  declare customerName: string
+  @column()
+  declare customerPhone: string
+  @column()
+  declare guestId: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare kycId: string | null
+  @column()
+  declare orderId: string | null
+  @column()
+  declare status: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
 export class KycSchema extends BaseModel {
   static $columns = ['createdAt', 'id', 'nomComplet', 'numeroTelephone', 'operateur', 'updatedAt'] as const
   $columns = KycSchema.$columns
@@ -315,7 +340,7 @@ export class OrderTrackingSchema extends BaseModel {
 }
 
 export class OrderSchema extends BaseModel {
-  static $columns = ['adminNotes', 'billingAddress', 'couponId', 'createdAt', 'customerEmail', 'customerName', 'customerPhone', 'deliveredAt', 'deliveryMethod', 'discountAmount', 'discountCode', 'estimatedDelivery', 'id', 'ipAddress', 'notes', 'orderNumber', 'paymentAmount', 'paymentCheckStatusUrl', 'paymentCompletedAt', 'paymentCurrency', 'paymentErrorMessage', 'paymentInitiatedAt', 'paymentMethod', 'paymentOperatorSimple', 'paymentReferenceId', 'paymentRetryCount', 'paymentStatus', 'paymentTransactionId', 'paymentXSecret', 'paymentXSecretExpiresIn', 'pickedUpAt', 'pickupCode', 'pickupStoreAddress', 'pickupStoreName', 'pickupStorePhone', 'shippingAddress', 'shippingCarrier', 'shippingConfirmedAt', 'shippingCost', 'shippingEstimatedDays', 'shippingTrackingUrl', 'status', 'subtotal', 'total', 'trackingNumber', 'updatedAt', 'userAgent', 'userId'] as const
+  static $columns = ['adminNotes', 'billingAddress', 'couponId', 'createdAt', 'customerEmail', 'customerName', 'customerPhone', 'deliveredAt', 'deliveryMethod', 'discountAmount', 'discountCode', 'estimatedDelivery', 'guestOrderId', 'id', 'ipAddress', 'notes', 'orderNumber', 'paymentAmount', 'paymentCheckStatusUrl', 'paymentCompletedAt', 'paymentCurrency', 'paymentErrorMessage', 'paymentInitiatedAt', 'paymentMethod', 'paymentOperatorSimple', 'paymentReferenceId', 'paymentRetryCount', 'paymentStatus', 'paymentTransactionId', 'paymentXSecret', 'paymentXSecretExpiresIn', 'pickedUpAt', 'pickupCode', 'pickupStoreAddress', 'pickupStoreName', 'pickupStorePhone', 'shippingAddress', 'shippingCarrier', 'shippingConfirmedAt', 'shippingCost', 'shippingEstimatedDays', 'shippingTrackingUrl', 'status', 'subtotal', 'total', 'trackingNumber', 'updatedAt', 'userAgent', 'userId'] as const
   $columns = OrderSchema.$columns
   @column()
   declare adminNotes: string | null
@@ -341,6 +366,8 @@ export class OrderSchema extends BaseModel {
   declare discountCode: string | null
   @column.dateTime()
   declare estimatedDelivery: DateTime | null
+  @column()
+  declare guestOrderId: string | null
   @column({ isPrimary: true })
   declare id: string
   @column()

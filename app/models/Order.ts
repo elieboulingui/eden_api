@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import User from './user.js'
 import OrderItem from './OrderItem.js'
 import OrderTracking from './order_tracking.js'
+import GuestOrder from './GuestOrder.js'
 
 export default class Order extends BaseModel {
   static table = 'orders'
@@ -14,7 +15,11 @@ export default class Order extends BaseModel {
   declare id: string
 
   @column()
-  declare user_id: string
+  declare user_id: string | null
+
+  // ✅ NOUVEAU : Colonne pour les commandes invité
+  @column({ columnName: 'guest_order_id' })
+  declare guestOrderId: string | null
 
   @column()
   declare order_number: string
@@ -167,11 +172,19 @@ export default class Order extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updated_at: DateTime
 
-  // Relations
+  // ==================== RELATIONS ====================
+
+  // Relation vers l'utilisateur (peut être null pour les invités)
   @belongsTo(() => User, {
     foreignKey: 'user_id'
   })
   declare user: BelongsTo<typeof User>
+
+  // ✅ NOUVEAU : Relation vers la commande invité
+  @belongsTo(() => GuestOrder, {
+    foreignKey: 'guest_order_id'
+  })
+  declare guestOrder: BelongsTo<typeof GuestOrder>
 
   @hasMany(() => OrderItem, {
     foreignKey: 'order_id'
@@ -182,6 +195,8 @@ export default class Order extends BaseModel {
     foreignKey: 'order_id'
   })
   declare tracking: HasMany<typeof OrderTracking>
+
+  // ==================== HOOKS ====================
 
   @beforeCreate()
   static async generateUuid(order: Order) {
@@ -195,39 +210,74 @@ export default class Order extends BaseModel {
     }
   }
 
-  // Méthodes utilitaires
+  // ==================== MÉTHODES UTILITAIRES ====================
+
+  /**
+   * Vérifier si la commande a été passée par un invité
+   */
+  isGuestOrder(): boolean {
+    return this.user_id === null && this.guestOrderId !== null
+  }
+
+  /**
+   * Vérifier si la commande est payée
+   */
   isPaid(): boolean {
     return this.payment_status === 'SUCCESS' || this.status === 'paid'
   }
 
+  /**
+   * Vérifier si la commande est en attente
+   */
   isPending(): boolean {
     return this.status === 'pending' || this.status === 'pending_payment'
   }
 
+  /**
+   * Vérifier si la commande est livrée
+   */
   isDelivered(): boolean {
     return this.status === 'delivered'
   }
 
+  /**
+   * Vérifier si la commande est annulée
+   */
   isCancelled(): boolean {
     return this.status === 'cancelled'
   }
 
+  /**
+   * Vérifier si la commande peut être annulée
+   */
   canBeCancelled(): boolean {
     return ['pending', 'pending_payment', 'paid'].includes(this.status)
   }
 
+  /**
+   * Obtenir le total formaté
+   */
   getFormattedTotal(): string {
     return `${this.total.toLocaleString()} FCFA`
   }
 
+  /**
+   * Obtenir le sous-total formaté
+   */
   getFormattedSubtotal(): string {
     return `${this.subtotal.toLocaleString()} FCFA`
   }
 
+  /**
+   * Obtenir les frais de livraison formatés
+   */
   getFormattedShippingCost(): string {
     return this.shipping_cost === 0 ? 'Gratuit' : `${this.shipping_cost.toLocaleString()} FCFA`
   }
 
+  /**
+   * Obtenir le libellé de la méthode de paiement
+   */
   getPaymentMethodLabel(): string {
     const methods: Record<string, string> = {
       airtel: 'Airtel Money',
@@ -235,11 +285,15 @@ export default class Order extends BaseModel {
       gimac: 'GIMAC',
       libertis: 'Libertis',
       card: 'Carte bancaire',
-      qr: 'QR Code'
+      qr: 'QR Code',
+      'QR Code': 'QR Code'
     }
     return methods[this.payment_method] || this.payment_method || 'Non renseigné'
   }
 
+  /**
+   * Obtenir le libellé de la méthode de livraison
+   */
   getDeliveryMethodLabel(): string {
     const methods: Record<string, string> = {
       pickup: 'Retrait en magasin',
@@ -249,6 +303,9 @@ export default class Order extends BaseModel {
     return methods[this.delivery_method] || this.delivery_method || 'Standard'
   }
 
+  /**
+   * Obtenir le libellé du statut
+   */
   getStatusLabel(): string {
     const labels: Record<string, string> = {
       pending: 'En attente',
@@ -261,5 +318,40 @@ export default class Order extends BaseModel {
       payment_failed: 'Paiement échoué'
     }
     return labels[this.status] || this.status
+  }
+
+  /**
+   * Obtenir le type de client (connecté ou invité)
+   */
+  getCustomerType(): string {
+    return this.isGuestOrder() ? 'Invité' : 'Client connecté'
+  }
+
+  /**
+   * Obtenir le nom du client (priorité au customer_name)
+   */
+  getCustomerName(): string {
+    return this.customer_name || 'Client'
+  }
+
+  /**
+   * Obtenir l'email du client
+   */
+  getCustomerEmail(): string {
+    return this.customer_email || 'non-renseigné@email.com'
+  }
+
+  /**
+   * Obtenir le téléphone du client
+   */
+  getCustomerPhone(): string {
+    return this.customer_phone || 'Non renseigné'
+  }
+
+  /**
+   * Vérifier si la commande est éligible pour un remboursement
+   */
+  isRefundable(): boolean {
+    return this.isPaid() && !this.isDelivered() && !this.isCancelled()
   }
 }
