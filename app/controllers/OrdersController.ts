@@ -111,8 +111,8 @@ export default class OrdersController {
 
       if (kycResponse.data.success && kycResponse.data.data) {
         const kycData = kycResponse.data.data
-        const operator = fallbackOperatorCode || fallbackOperatorName || 
-                       kycData.detected_operator || kycData.operator || 'non renseigné'
+        const operator = fallbackOperatorCode || fallbackOperatorName ||
+          kycData.detected_operator || kycData.operator || 'non renseigné'
         const fullName = kycData.full_name || fallbackFullName || 'non renseigné'
         const accountNumber = kycData.customer_account_number || phoneNumber
 
@@ -121,18 +121,18 @@ export default class OrdersController {
         // 2. Sauvegarde en base de données KYC
         try {
           const existingKYC = await KYC.findBy('numeroTelephone', phoneNumber)
-          
+
           if (existingKYC) {
             existingKYC.nomComplet = fullName
             existingKYC.operateur = operator
             await existingKYC.save()
             console.log('📦 [KYC] Enregistrement mis à jour, ID:', existingKYC.id)
-            
-            return { 
-              operator, 
-              fullName, 
-              accountNumber, 
-              kycRecordId: existingKYC.id 
+
+            return {
+              operator,
+              fullName,
+              accountNumber,
+              kycRecordId: existingKYC.id
             }
           } else {
             const newKYC = await KYC.create({
@@ -141,12 +141,12 @@ export default class OrdersController {
               operateur: operator
             })
             console.log('📦 [KYC] Nouvel enregistrement créé, ID:', newKYC.id)
-            
-            return { 
-              operator, 
-              fullName, 
-              accountNumber, 
-              kycRecordId: newKYC.id 
+
+            return {
+              operator,
+              fullName,
+              accountNumber,
+              kycRecordId: newKYC.id
             }
           }
         } catch (dbError: any) {
@@ -162,7 +162,7 @@ export default class OrdersController {
     // Fallback avec les données fournies
     const operator = fallbackOperatorCode || fallbackOperatorName || 'non renseigné'
     const fullName = fallbackFullName || 'non renseigné'
-    
+
     // Sauvegarde quand même en BDD avec les données de fallback
     try {
       const existingKYC = await KYC.findBy('numeroTelephone', phoneNumber)
@@ -187,7 +187,7 @@ export default class OrdersController {
   private async updateStockAndArchive(productId: string, quantity: number): Promise<void> {
     try {
       const product = await Product.findBy('id', productId)
-      
+
       if (!product) {
         console.error(`❌ [Stock] Produit ${productId} non trouvé`)
         return
@@ -195,7 +195,7 @@ export default class OrdersController {
 
       // Décrémenter le stock
       product.stock = Math.max(0, product.stock - quantity)
-      
+
       // Si le stock atteint 0, archiver le produit
       if (product.stock === 0) {
         product.isArchived = true
@@ -205,7 +205,7 @@ export default class OrdersController {
 
       await product.save()
       console.log(`✅ [Stock] ${product.name}: ${product.stock + quantity} → ${product.stock}`)
-      
+
     } catch (error: any) {
       console.error('❌ [Stock] Erreur mise à jour stock:', error.message)
       throw error
@@ -785,7 +785,7 @@ export default class OrdersController {
       console.log('✅ PAIEMENT QR CONFIRMÉ - CRÉATION DE LA COMMANDE...')
 
       const orderData = order_data as OrderData
-      
+
       // ✅ Si invité, enregistrer KYC
       if (orderData.isGuest && orderData.customerAccountNumber) {
         await this.performKYCAndSave(
@@ -862,7 +862,7 @@ export default class OrdersController {
 
       // ========== VALIDATION ==========
       const isGuest = payload.isGuest || !payload.userId
-      
+
       if (!isGuest && !payload.userId) {
         return response.status(400).json({
           success: false,
@@ -924,7 +924,7 @@ export default class OrdersController {
 
       // ========== RÉCUPÉRATION PANIER (si connecté) ==========
       let items: Array<{ productId: string; quantity: number; price: number }> = []
-      
+
       if (!isGuest && payload.userId) {
         const cart = await Cart.query()
           .where('user_id', payload.userId)
@@ -986,12 +986,12 @@ export default class OrdersController {
           .where('user_id', payload.userId)
           .preload('items')
           .first()
-        
+
         if (cart) {
           const result = await this.createOrderItemsFromCart(cart, order)
           subtotal = result.subtotal
           itemsCount = result.itemsCount
-          
+
           // Vider le panier
           await CartItem.query().where('cart_id', cart.id).delete()
           console.log('✅ Panier vidé')
@@ -1033,23 +1033,24 @@ export default class OrdersController {
       let paymentError: string | null = null
 
       if (paymentResult.success && paymentResult.paymentInfo) {
-        paymentInfo = paymentResult.paymentInfo        const verified = await this.verifyPaymentStatus(paymentInfo.reference_id, order)
-        paymentStatus = verified ? 'success' : 'pending'
-        
+        paymentInfo = paymentResult.paymentInfo;
+        const verified = await this.verifyPaymentStatus(paymentInfo.reference_id, order);
+        paymentStatus = verified ? 'success' : 'pending';
+
         if (verified && guestOrder) {
-          guestOrder.status = 'paid'
-          await guestOrder.save()
+          guestOrder.status = 'paid';
+          await guestOrder.save();
         }
       } else {
-        paymentStatus = 'failed'
-        paymentError = paymentResult.error || 'Erreur inconnue'
+        paymentStatus = 'failed';
+        paymentError = paymentResult.error || 'Erreur inconnue';
 
         await OrderTracking.create({
           order_id: order.id,
           status: 'payment_pending',
           description: `Erreur lors de l'initiation du paiement: ${paymentError}`,
           tracked_at: DateTime.now(),
-        })
+        });
       }
 
       // ========== RECHARGEMENT ==========
