@@ -189,50 +189,50 @@ router.group(() => {
   // ============================================================
   // COMMANDES (ORDERS) - TOUTES LES ROUTES
   // ============================================================
-  
+
   // --- ROUTES STANDARD (MOBILE MONEY) ---
-  
+
   // Créer une commande avec paiement Mobile Money
   router.post('/orders', [OrdersController, 'store']).as('orders.store')
-  
+
   // Toutes les commandes (admin)
   router.get('/orders/all', [OrdersController, 'allOrders']).as('orders.all')
-  
+
   // Commandes d'un utilisateur
   router.get('/orders/:userId', [OrdersController, 'index']).as('orders.user.index')
-  
+
   // Commande spécifique d'un utilisateur
   router.get('/orders/:orderId/user/:userId', [OrdersController, 'show']).as('orders.show')
-  
+
   // Annuler une commande
   router.post('/orders/:orderId/cancel', [OrdersController, 'cancel']).as('orders.cancel')
-  
+
   // Facture d'une commande
   router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice']).as('orders.invoice')
-  
+
   // Mise à jour du statut (admin)
   router.put('/orders/:orderId/status', [OrdersController, 'updateStatus']).as('orders.status.update')
 
   // --- ROUTES PAIEMENT QR CODE ---
-  
+
   /**
    * Générer un QR Code de paiement (sans créer la commande)
    * POST /api/orders/generate-qr
    */
   router.post('/orders/generate-qr', [OrdersController, 'generateQRCode']).as('orders.qr.generate')
-  
+
   /**
    * Confirmer un paiement QR et créer la commande
    * POST /api/orders/confirm-qr-payment
    */
   router.post('/orders/confirm-qr-payment', [OrdersController, 'confirmQRPayment']).as('orders.qr.confirm')
-  
+
   /**
    * Vérifier le statut d'un paiement QR
    * GET /api/orders/check-qr-payment/:referenceId
    */
-  router.get('/orders/check-qr-payment/:referenceId', [OrdersController, 'checkQRPaymentStatus']).as('orders.qr.status')
-  
+  router.get('/orders/check-qr-payment/:referenceId', [OrdersController, 'checkPaymentStatus']).as('orders.qr.status')
+
   /**
    * Statut de paiement d'une commande existante
    * GET /api/orders/:orderId/payment-status
@@ -240,13 +240,13 @@ router.group(() => {
   router.get('/orders/:orderId/payment-status', [OrdersController, 'getPaymentStatus']).as('orders.payment-status')
 
   // --- API PONT VERS MYPVIT (PROXY) ---
-  
+
   /**
    * Proxy pour obtenir tous les statuts sans ID
    * GET /api/give-all-without-id
    */
   router.get('/give-all-without-id', [OrdersController, 'giveAllWithoutId']).as('payment.without-id')
-  
+
   /**
    * Proxy pour vérifier le statut d'un paiement via référence
    * GET /api/payment/status/:referenceId
@@ -340,24 +340,24 @@ router.group(() => {
   // ==========================================================
   // === PRODUITS ARCHIVÉS (MERCHANT) =========================
   // ==========================================================
-  
+
   // Format 1 : préfixe /merchant/products/:userId/archived
   router.group(() => {
     // Récupérer tous les produits archivés d'un marchand (avec pagination et recherche)
     // GET /api/merchant/products/:userId/archived?page=1&limit=20&search=mot
     router.get('/archived', [MerchantDashboardController, 'getArchivedProducts'])
       .as('merchant.archived-products.index')
-    
+
     // Restaurer un produit archivé (le rendre à nouveau actif)
     // POST /api/merchant/products/:userId/archived/:productId/restore
     router.post('/archived/:productId/restore', [MerchantDashboardController, 'restoreArchivedProduct'])
       .as('merchant.archived-products.restore')
-    
+
     // Supprimer définitivement un produit archivé
     // DELETE /api/merchant/products/:userId/archived/:productId/permanent
     router.delete('/archived/:productId/permanent', [MerchantDashboardController, 'permanentlyDeleteProduct'])
       .as('merchant.archived-products.permanent-delete')
-    
+
   }).prefix('/merchant/products/:userId')
 
   // Format 2 : plus RESTful, préfixe /merchant/:userId
@@ -365,15 +365,15 @@ router.group(() => {
     // GET /api/merchant/:userId/archived-products
     router.get('/archived-products', [MerchantDashboardController, 'getArchivedProducts'])
       .as('merchant.archived-products.restful.index')
-    
+
     // POST /api/merchant/:userId/archived-products/:productId/restore
     router.post('/archived-products/:productId/restore', [MerchantDashboardController, 'restoreArchivedProduct'])
       .as('merchant.archived-products.restful.restore')
-    
+
     // DELETE /api/merchant/:userId/archived-products/:productId/permanent
     router.delete('/archived-products/:productId/permanent', [MerchantDashboardController, 'permanentlyDeleteProduct'])
       .as('merchant.archived-products.restful.permanent-delete')
-    
+
   }).prefix('/merchant/:userId')
 
   router.get('/merchant/categories/:userId', [MerchantDashboardController, 'getCategories']).as('merchant.categories.index')
