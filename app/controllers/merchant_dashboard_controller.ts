@@ -1070,6 +1070,7 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
     // ✅ Charger les produits avec leur catégorie
     const products = await Product.query()
       .where('user_id', user.id)
+      .where('isArchived', false)  // 🔴 AJOUTER CE FILTRE
       .preload('categoryRelation')
       .orderBy('createdAt', 'desc')  // ✅ Correction: createdAt au lieu de created_at
 
