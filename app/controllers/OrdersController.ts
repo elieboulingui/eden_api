@@ -112,7 +112,7 @@ export default class OrdersController {
       if (kycResponse.data.success && kycResponse.data.data) {
         const kycData = kycResponse.data.data
         const operator = fallbackOperatorCode || fallbackOperatorName ||
-          kycData.detected_operator || kycData.operator || 'non renseigné'
+                       kycData.detected_operator || kycData.operator || 'non renseigné'
         const fullName = kycData.full_name || fallbackFullName || 'non renseigné'
         const accountNumber = kycData.customer_account_number || phoneNumber
 
