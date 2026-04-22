@@ -218,77 +218,18 @@ router.group(() => {
   /**
    * Générer un QR Code de paiement (sans créer la commande)
    * POST /api/orders/generate-qr
-   * 
-   * Body:
-   * {
-   *   amount: number,
-   *   customerAccountNumber: string,
-   *   customerName: string,
-   *   customerEmail?: string,
-   *   items: Array<{id: string, price: number, quantity: number}>,
-   *   deliveryMethod: string,
-   *   deliveryPrice: number,
-   *   shippingAddress: string,
-   *   notes?: string,
-   *   userId: string
-   * }
-   * 
-   * Response:
-   * {
-   *   success: true,
-   *   data: {
-   *     qr_code_url: string,
-   *     reference_id: string,
-   *     amount: number,
-   *     expires_in: number,
-   *     transaction_ref: string,
-   *     order_data: object
-   *   }
-   * }
    */
   router.post('/orders/generate-qr', [OrdersController, 'generateQRCode']).as('orders.qr.generate')
   
   /**
    * Confirmer un paiement QR et créer la commande
    * POST /api/orders/confirm-qr-payment
-   * 
-   * Body:
-   * {
-   *   reference_id: string,
-   *   order_data: object
-   * }
-   * 
-   * Response:
-   * {
-   *   success: true,
-   *   data: {
-   *     orderId: string,
-   *     orderNumber: string,
-   *     total: number,
-   *     status: string,
-   *     payment: object
-   *   }
-   * }
    */
   router.post('/orders/confirm-qr-payment', [OrdersController, 'confirmQRPayment']).as('orders.qr.confirm')
   
   /**
    * Vérifier le statut d'un paiement QR
    * GET /api/orders/check-qr-payment/:referenceId
-   * 
-   * Response:
-   * {
-   *   success: true,
-   *   data: {
-   *     reference_id: string,
-   *     status: string,
-   *     is_success: boolean,
-   *     is_pending: boolean,
-   *     is_failed: boolean,
-   *     amount: number,
-   *     message: string | null
-   *   }
-   * }
    */
   router.get('/orders/check-qr-payment/:referenceId', [OrdersController, 'checkQRPaymentStatus']).as('orders.qr.status')
   
@@ -364,8 +305,6 @@ router.group(() => {
   // === NOUVELLES ROUTES GIVE-CHANGE (RETRAITS) ==============
   // ==========================================================
   router.group(() => {
-    // Effectuer un retrait
-
     // Vérifier le statut d'un retrait par référence
     router.get('give-change/:reference/status', [GiveChangeController, 'checkStatus']).as('merchant.give-change.status')
 
@@ -397,6 +336,45 @@ router.group(() => {
   router.post('/merchant/products/:userId', [MerchantDashboardController, 'createProduct']).as('merchant.products.store')
   router.put('/merchant/products/:userId/:productId', [MerchantDashboardController, 'updateProduct']).as('merchant.products.update')
   router.delete('/merchant/products/:userId/:productId', [MerchantDashboardController, 'deleteProduct']).as('merchant.products.destroy')
+
+  // ==========================================================
+  // === PRODUITS ARCHIVÉS (MERCHANT) =========================
+  // ==========================================================
+  
+  // Format 1 : préfixe /merchant/products/:userId/archived
+  router.group(() => {
+    // Récupérer tous les produits archivés d'un marchand (avec pagination et recherche)
+    // GET /api/merchant/products/:userId/archived?page=1&limit=20&search=mot
+    router.get('/archived', [MerchantDashboardController, 'getArchivedProducts'])
+      .as('merchant.archived-products.index')
+    
+    // Restaurer un produit archivé (le rendre à nouveau actif)
+    // POST /api/merchant/products/:userId/archived/:productId/restore
+    router.post('/archived/:productId/restore', [MerchantDashboardController, 'restoreArchivedProduct'])
+      .as('merchant.archived-products.restore')
+    
+    // Supprimer définitivement un produit archivé
+    // DELETE /api/merchant/products/:userId/archived/:productId/permanent
+    router.delete('/archived/:productId/permanent', [MerchantDashboardController, 'permanentlyDeleteProduct'])
+      .as('merchant.archived-products.permanent-delete')
+    
+  }).prefix('/merchant/products/:userId')
+
+  // Format 2 : plus RESTful, préfixe /merchant/:userId
+  router.group(() => {
+    // GET /api/merchant/:userId/archived-products
+    router.get('/archived-products', [MerchantDashboardController, 'getArchivedProducts'])
+      .as('merchant.archived-products.restful.index')
+    
+    // POST /api/merchant/:userId/archived-products/:productId/restore
+    router.post('/archived-products/:productId/restore', [MerchantDashboardController, 'restoreArchivedProduct'])
+      .as('merchant.archived-products.restful.restore')
+    
+    // DELETE /api/merchant/:userId/archived-products/:productId/permanent
+    router.delete('/archived-products/:productId/permanent', [MerchantDashboardController, 'permanentlyDeleteProduct'])
+      .as('merchant.archived-products.restful.permanent-delete')
+    
+  }).prefix('/merchant/:userId')
 
   router.get('/merchant/categories/:userId', [MerchantDashboardController, 'getCategories']).as('merchant.categories.index')
   router.post('/merchant/categories/:userId', [MerchantDashboardController, 'createCategory']).as('merchant.categories.store')
@@ -437,11 +415,7 @@ router.group(() => {
   router.patch('/reviews/:id/approve', [ReviewsController, 'approve'])
   router.patch('/reviews/:id/reject', [ReviewsController, 'reject'])
 
-
-
-
-  // Routes API
-
+  // Routes API Shop
   router.get('/shop', [ShopController, 'apiIndex']).as('api.shop.index')
   router.get('/shop/coupons', [ShopController, 'apiCoupons']).as('api.shop.coupons')
   router.get('/shop/promotions', [ShopController, 'apiPromotions']).as('api.shop.promotions')
