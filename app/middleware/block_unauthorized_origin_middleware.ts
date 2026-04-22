@@ -13,7 +13,7 @@ export default class BlockUnauthorizedOriginMiddleware {
       'http://localhost:3000',
       'http://localhost:3333',
       'https://eden-azure-one.vercel.app',
-      'https://ecomerce-api-aotc.onrender.com'
+      'https://ecomerce-api-sc1s.onrender.com'
     ]
 
     // Vérifier si l'origine est dans la liste des autorisées
