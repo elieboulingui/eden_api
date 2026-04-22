@@ -1,17 +1,36 @@
 // app/controllers/products_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import Product from '#models/Product'
+import { DateTime } from 'luxon'
 
 export default class ProductsController {
 
-  // 🔥 Récupérer tous les produits + pays du vendeur
+  // 🔥 Récupérer tous les produits non archivés + pays du vendeur
   async index({ response }: HttpContext) {
     try {
-      const products = await Product
+      // Récupérer tous les produits (même archivés pour mise à jour de isNew)
+      const allProducts = await Product
         .query()
         .preload('user', (query) => {
           query.select(['id', 'full_name', 'country'])
         })
+
+      // Date d'il y a une semaine
+      const oneWeekAgo = DateTime.now().minus({ weeks: 1 })
+
+      // Mettre à jour le statut "isNew" si nécessaire
+      for (const product of allProducts) {
+        const createdAt = DateTime.fromJSDate(product.createdAt.toJSDate())
+        
+        // Si le produit a plus d'une semaine et est toujours marqué comme nouveau
+        if (createdAt < oneWeekAgo && product.isNew === true) {
+          product.isNew = false
+          await product.save()
+        }
+      }
+
+      // Filtrer uniquement les produits non archivés
+      const products = allProducts.filter(product => product.isArchived === false)
 
       return response.status(200).json({
         success: true,
@@ -27,7 +46,7 @@ export default class ProductsController {
     }
   }
 
-  // 🔥 Récupérer un produit + pays du vendeur
+  // 🔥 Récupérer un produit non archivé + pays du vendeur
   async show({ params, response }: HttpContext) {
     try {
       const product = await Product
@@ -37,6 +56,23 @@ export default class ProductsController {
           query.select(['id', 'full_name', 'country'])
         })
         .firstOrFail()
+
+      // Vérifier si le produit est archivé
+      if (product.isArchived === true) {
+        return response.status(404).json({
+          success: false,
+          message: 'Produit non trouvé'
+        })
+      }
+
+      // Mettre à jour le statut "isNew" si nécessaire
+      const oneWeekAgo = DateTime.now().minus({ weeks: 1 })
+      const createdAt = DateTime.fromJSDate(product.createdAt.toJSDate())
+      
+      if (createdAt < oneWeekAgo && product.isNew === true) {
+        product.isNew = false
+        await product.save()
+      }
 
       return response.status(200).json({
         success: true,
@@ -66,7 +102,13 @@ export default class ProductsController {
         })
       }
 
-      const product = await Product.create(data)
+      // Par défaut, un nouveau produit n'est pas archivé
+      const productData = {
+        ...data,
+        isArchived: false
+      }
+
+      const product = await Product.create(productData)
 
       // 🔥 Recharge avec le pays
       await product.load('user', (query) => {
@@ -107,6 +149,14 @@ export default class ProductsController {
         })
       }
 
+      // Vérifier si le produit n'est pas archivé
+      if (product.isArchived === true) {
+        return response.status(400).json({
+          success: false,
+          message: 'Impossible de modifier un produit archivé'
+        })
+      }
+
       const data = request.only([
         'name', 'price', 'old_price', 'description', 'stock',
         'image_url', 'category', 'origin', 'weight',
@@ -135,7 +185,7 @@ export default class ProductsController {
     }
   }
 
-  // 🔥 Supprimer
+  // 🔥 Archiver un produit (méthode destroy qui archive au lieu de supprimer)
   async destroy({ params, request, response }: HttpContext) {
     try {
       const product = await Product.findOrFail(params.id)
@@ -151,20 +201,22 @@ export default class ProductsController {
       if (product.user_id !== user_id) {
         return response.status(403).json({
           success: false,
-          message: 'Vous n\'êtes pas autorisé à supprimer ce produit'
+          message: 'Vous n\'êtes pas autorisé à archiver ce produit'
         })
       }
 
-      await product.delete()
+      // Archiver le produit au lieu de le supprimer
+      product.isArchived = true
+      await product.save()
 
       return response.status(200).json({
         success: true,
-        message: 'Produit supprimé avec succès'
+        message: 'Produit archivé avec succès'
       })
     } catch (error: any) {
       return response.status(400).json({
         success: false,
-        message: 'Erreur lors de la suppression du produit',
+        message: 'Erreur lors de l\'archivage du produit',
         error: error.message
       })
     }
