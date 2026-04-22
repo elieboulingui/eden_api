@@ -1412,53 +1412,53 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
       })
     }
   }
+async deleteProduct({ params, response }: HttpContext) {
+  try {
+    const { userId, productId } = params
+    const user = await User.findBy('id', userId)
 
-  async deleteProduct({ params, response }: HttpContext) {
-    try {
-      const { userId, productId } = params
-      const user = await User.findBy('id', userId)
+    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+      return response.forbidden({ success: false, message: 'Non autorisé' })
+    }
 
-      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-        return response.forbidden({ success: false, message: 'Non autorisé' })
-      }
+    const product = await Product.query()
+      .where('id', productId)
+      .where('user_id', user.id)
+      .first()
 
-      const product = await Product.query()
-        .where('id', productId)
-        .where('user_id', user.id)
-        .first()
+    if (!product) {
+      return response.notFound({ success: false, message: 'Produit non trouvé' })
+    }
 
-      if (!product) {
-        return response.notFound({ success: false, message: 'Produit non trouvé' })
-      }
-
-      // Vérifier si le produit est déjà archivé
-      if (product.isArchived) {  // ✅ Correction: isArchived au lieu de is_archived
-        return response.badRequest({
-          success: false,
-          message: 'Ce produit est déjà archivé'
-        })
-      }
-
-      // Archiver le produit au lieu de le supprimer
-      await product.archive()
-
-      return response.ok({
-        success: true,
-        message: 'Produit archivé avec succès',
-        data: {
-          id: product.id,
-          is_archived: product.isArchived,  // ✅ Correction: retourner isArchived
-          archived_at: product.updatedAt     // ✅ Correction: utiliser updatedAt
-        }
-      })
-    } catch (error: any) {
-      console.error('Erreur deleteProduct (archive):', error)
-      return response.internalServerError({
+    // Vérifier si le produit est déjà archivé
+    if (product.isArchived) {
+      return response.badRequest({
         success: false,
-        message: error.message
+        message: 'Ce produit est déjà archivé'
       })
     }
+
+    // ✅ CORRECTION : Mettre à jour directement le champ isArchived
+    product.isArchived = true
+    await product.save()
+
+    return response.ok({
+      success: true,
+      message: 'Produit archivé avec succès',
+      data: {
+        id: product.id,
+        is_archived: product.isArchived,
+        archived_at: product.updatedAt
+      }
+    })
+  } catch (error: any) {
+    console.error('Erreur deleteProduct (archive):', error)
+    return response.internalServerError({
+      success: false,
+      message: error.message || 'Erreur lors de l\'archivage du produit'
+    })
   }
+}
 
   async getCategories({ params, response }: HttpContext) {
     try {
