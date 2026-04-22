@@ -1174,6 +1174,7 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
       // ✅ CHARGER LA RELATION categoryRelation
       const products = await Product.query()
         .where('user_id', user.id)
+        .where('isArchived', false) // ✅ Filtre ajouté
         .preload('categoryRelation')
         .orderBy('createdAt', 'desc')  // ✅ Correction: createdAt
         .paginate(page, limit)
