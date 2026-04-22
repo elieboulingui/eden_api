@@ -8,6 +8,8 @@ import CartItem from '#models/CartItem'
 import User from '#models/user'
 import Product from '#models/Product'
 import Wallet from '#models/wallet'
+import KYC from '#models/kyc'
+import GuestOrder from '#models/GuestOrder'
 import axios from 'axios'
 import { DateTime } from 'luxon'
 
@@ -35,10 +37,13 @@ interface KYCInfo {
   operator: string
   fullName: string
   accountNumber: string
+  kycRecordId?: string
 }
 
 interface OrderData {
-  userId: string
+  userId: string | null
+  isGuest?: boolean
+  guestId?: string
   items: Array<{
     productId?: string
     id?: string
@@ -48,6 +53,7 @@ interface OrderData {
   customerAccountNumber: string
   customerName: string
   customerEmail?: string
+  customerPhone?: string
   deliveryMethod: string
   deliveryPrice: number
   shippingAddress: string
@@ -83,17 +89,18 @@ export default class OrdersController {
   // ==================== MÉTHODES PRIVÉES ====================
 
   /**
-   * Appel API KYC pour récupérer les informations du numéro de téléphone
+   * Appel API KYC et sauvegarde en base de données
    */
-  private async performKYC(
+  private async performKYCAndSave(
     phoneNumber: string,
     fallbackOperatorCode?: string,
     fallbackOperatorName?: string,
     fallbackFullName?: string
   ): Promise<KYCInfo> {
-    console.log('🔵 Appel API KYC...')
-    
+    console.log('🔵 [KYC] Appel API KYC pour:', phoneNumber)
+
     try {
+      // 1. Appel à l'API KYC externe
       const kycResponse = await axios.get(
         `${PAYMENT_API_URL}/api/mypvit/kyc/marchant`,
         {
@@ -108,18 +115,100 @@ export default class OrdersController {
                        kycData.detected_operator || kycData.operator || 'non renseigné'
         const fullName = kycData.full_name || fallbackFullName || 'non renseigné'
         const accountNumber = kycData.customer_account_number || phoneNumber
-        
-        console.log('✅ KYC OK - opérateur:', operator, '| nom:', fullName)
-        return { operator, fullName, accountNumber }
+
+        console.log('✅ [KYC] Données récupérées - Opérateur:', operator, '| Nom:', fullName)
+
+        // 2. Sauvegarde en base de données KYC
+        try {
+          const existingKYC = await KYC.findBy('numeroTelephone', phoneNumber)
+          
+          if (existingKYC) {
+            existingKYC.nomComplet = fullName
+            existingKYC.operateur = operator
+            await existingKYC.save()
+            console.log('📦 [KYC] Enregistrement mis à jour, ID:', existingKYC.id)
+            
+            return { 
+              operator, 
+              fullName, 
+              accountNumber, 
+              kycRecordId: existingKYC.id 
+            }
+          } else {
+            const newKYC = await KYC.create({
+              nomComplet: fullName,
+              numeroTelephone: phoneNumber,
+              operateur: operator
+            })
+            console.log('📦 [KYC] Nouvel enregistrement créé, ID:', newKYC.id)
+            
+            return { 
+              operator, 
+              fullName, 
+              accountNumber, 
+              kycRecordId: newKYC.id 
+            }
+          }
+        } catch (dbError: any) {
+          console.error('❌ [KYC] Erreur sauvegarde BDD:', dbError.message)
+          // Continuer même si la sauvegarde échoue
+          return { operator, fullName, accountNumber }
+        }
       }
     } catch (error: any) {
-      console.log('🟡 KYC injoignable, fallback sur données frontend')
+      console.log('🟡 [KYC] API injoignable, fallback sur données frontend')
     }
 
-    return {
-      operator: fallbackOperatorCode || fallbackOperatorName || 'non renseigné',
-      fullName: fallbackFullName || 'non renseigné',
-      accountNumber: phoneNumber
+    // Fallback avec les données fournies
+    const operator = fallbackOperatorCode || fallbackOperatorName || 'non renseigné'
+    const fullName = fallbackFullName || 'non renseigné'
+    
+    // Sauvegarde quand même en BDD avec les données de fallback
+    try {
+      const existingKYC = await KYC.findBy('numeroTelephone', phoneNumber)
+      if (!existingKYC) {
+        await KYC.create({
+          nomComplet: fullName,
+          numeroTelephone: phoneNumber,
+          operateur: operator
+        })
+        console.log('📦 [KYC] Enregistrement fallback créé')
+      }
+    } catch (dbError) {
+      console.error('❌ [KYC] Erreur sauvegarde fallback:', dbError.message)
+    }
+
+    return { operator, fullName, accountNumber: phoneNumber }
+  }
+
+  /**
+   * Mettre à jour le stock et archiver les produits épuisés
+   */
+  private async updateStockAndArchive(productId: string, quantity: number): Promise<void> {
+    try {
+      const product = await Product.findBy('id', productId)
+      
+      if (!product) {
+        console.error(`❌ [Stock] Produit ${productId} non trouvé`)
+        return
+      }
+
+      // Décrémenter le stock
+      product.stock = Math.max(0, product.stock - quantity)
+      
+      // Si le stock atteint 0, archiver le produit
+      if (product.stock === 0) {
+        product.isArchived = true
+        product.status = 'inactive'
+        console.log(`📦 [Stock] Produit "${product.name}" archivé (stock épuisé)`)
+      }
+
+      await product.save()
+      console.log(`✅ [Stock] ${product.name}: ${product.stock + quantity} → ${product.stock}`)
+      
+    } catch (error: any) {
+      console.error('❌ [Stock] Erreur mise à jour stock:', error.message)
+      throw error
     }
   }
 
@@ -133,7 +222,7 @@ export default class OrdersController {
     retryDelay: number = 3000
   ): Promise<boolean> {
     console.log('🔍 Vérification du statut de paiement...')
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       console.log(`📡 Tentative ${attempt}/${maxRetries} - Réf: ${referenceId}`)
 
@@ -243,7 +332,7 @@ export default class OrdersController {
       const paymentResponse = await axios.post(
         `${PAYMENT_API_URL}/api/payment`,
         paymentBody,
-        { 
+        {
           headers: { 'Content-Type': 'application/json' },
           timeout: 0
         }
@@ -268,22 +357,65 @@ export default class OrdersController {
         return { success: true, paymentInfo }
       }
 
-      return { 
-        success: false, 
-        error: paymentResult.message || 'Échec de l\'initiation du paiement' 
+      return {
+        success: false,
+        error: paymentResult.message || 'Échec de l\'initiation du paiement'
       }
 
     } catch (error: any) {
       console.error('❌ Erreur paiement:', error.message)
-      return { 
-        success: false, 
-        error: error.message 
+      return {
+        success: false,
+        error: error.message
       }
     }
   }
 
   /**
-   * Créer les items de la commande à partir du panier
+   * Créer les items de la commande et mettre à jour le stock
+   */
+  private async createOrderItems(
+    order: Order,
+    items: Array<{ productId?: string; id?: string; price: number; quantity: number }>
+  ): Promise<{ subtotal: number; itemsCount: number }> {
+    let subtotal = 0
+    let itemsCount = 0
+
+    for (const item of items) {
+      const productId = item.productId || item.id
+      if (!productId) continue
+
+      const product = await Product.findBy('id', productId)
+      if (!product) {
+        throw new Error(`Produit avec UUID ${productId} non trouvé`)
+      }
+
+      const itemTotal = item.price * item.quantity
+      subtotal += itemTotal
+
+      await OrderItem.create({
+        order_id: order.id,
+        product_id: product.id,
+        product_name: product.name,
+        product_description: product.description,
+        price: item.price,
+        quantity: item.quantity,
+        category: typeof product.category === 'string' ? product.category : null,
+        image: product.image_url,
+        subtotal: itemTotal,
+      })
+
+      // ✅ Mise à jour du stock et archivage automatique
+      await this.updateStockAndArchive(product.id, item.quantity)
+
+      itemsCount++
+    }
+
+    return { subtotal, itemsCount }
+  }
+
+  /**
+   * Créer les items de la commande depuis le panier
    */
   private async createOrderItemsFromCart(
     cart: Cart,
@@ -315,12 +447,11 @@ export default class OrdersController {
         subtotal: itemTotal,
       })
 
-      // Mise à jour du stock
-      product.stock = product.stock - cartItem.quantity
-      await product.save()
+      // ✅ Mise à jour du stock et archivage automatique
+      await this.updateStockAndArchive(product.id, cartItem.quantity)
 
       itemsCount++
-      console.log(`✅ Item: ${product.name} x ${cartItem.quantity} = ${itemTotal} | Stock restant: ${product.stock}`)
+      console.log(`✅ Item: ${product.name} x ${cartItem.quantity} = ${itemTotal}`)
     }
 
     return { subtotal, itemsCount }
@@ -334,9 +465,19 @@ export default class OrdersController {
     referenceId: string,
     _paymentStatus: any
   ): Promise<Order> {
-    const user = await User.findBy('id', orderData.userId)
-    if (!user) {
-      throw new Error('Utilisateur non trouvé')
+    const isGuest = orderData.isGuest || !orderData.userId
+
+    // Créer une commande invité si nécessaire
+    let guestOrder = null
+    if (isGuest && orderData.customerEmail) {
+      guestOrder = await GuestOrder.create({
+        guestId: orderData.guestId || `guest_${Date.now()}`,
+        customerName: orderData.customerName,
+        customerEmail: orderData.customerEmail,
+        customerPhone: orderData.customerPhone || orderData.customerAccountNumber,
+        status: 'paid',
+      })
+      console.log('👤 [Guest] Commande invité créée, ID:', guestOrder.id)
     }
 
     let subtotal = 0
@@ -348,17 +489,18 @@ export default class OrdersController {
     const orderNumber = generateOrderNumber()
 
     const order = await Order.create({
-      user_id: orderData.userId,
+      user_id: orderData.userId || null,
+      guest_order_id: guestOrder?.id || null,
       order_number: orderNumber,
       status: 'paid',
       total,
       subtotal,
       shipping_cost: orderData.deliveryPrice || 0,
       delivery_method: orderData.deliveryMethod || 'standard',
-      customer_name: orderData.customerName || user.full_name || 'Client',
-      customer_phone: orderData.customerAccountNumber,
+      customer_name: orderData.customerName,
+      customer_phone: orderData.customerPhone || orderData.customerAccountNumber,
       payment_method: 'QR Code',
-      customer_email: orderData.customerEmail || user.email,
+      customer_email: orderData.customerEmail || 'invite@email.com',
       shipping_address: orderData.shippingAddress || 'Non renseigné',
       billing_address: orderData.shippingAddress || 'Non renseigné',
       notes: orderData.notes || null,
@@ -367,28 +509,7 @@ export default class OrdersController {
     console.log(`✅ Commande créée: ${order.order_number}`)
 
     // Sauvegarder les items et mettre à jour le stock
-    for (const item of orderData.items) {
-      const productId = item.productId || item.id
-      const product = await Product.findBy('id', productId)
-
-      if (product) {
-        await OrderItem.create({
-          order_id: order.id,
-          product_id: product.id,
-          product_name: product.name,
-          product_description: product.description,
-          price: item.price,
-          quantity: item.quantity,
-          category: product.category,
-          image: product.image_url,
-          subtotal: item.price * item.quantity,
-        })
-
-        product.stock = product.stock - item.quantity
-        await product.save()
-        console.log(`📦 Stock: ${product.name} → ${product.stock}`)
-      }
-    }
+    await this.createOrderItems(order, orderData.items)
 
     // Tracking
     await OrderTracking.create({
@@ -398,11 +519,13 @@ export default class OrdersController {
       tracked_at: DateTime.now(),
     })
 
-    // Vider le panier
-    const cart = await Cart.query().where('user_id', orderData.userId).first()
-    if (cart) {
-      await CartItem.query().where('cart_id', cart.id).delete()
-      console.log('✅ Panier vidé')
+    // Vider le panier si utilisateur connecté
+    if (!isGuest && orderData.userId) {
+      const cart = await Cart.query().where('user_id', orderData.userId).first()
+      if (cart) {
+        await CartItem.query().where('cart_id', cart.id).delete()
+        console.log('✅ Panier vidé')
+      }
     }
 
     // Créditer vendeurs et admin
@@ -431,7 +554,7 @@ export default class OrdersController {
       // Superadmin (0.5%)
       const superAdminFee = totalAmount * 0.005
       const superAdmin = await User.query().where('role', 'superadmin').first()
-      
+
       if (superAdmin) {
         await this.creditWallet(superAdmin.id, superAdminFee)
         console.log(`✅ Superadmin crédité: ${superAdminFee} FCFA`)
@@ -453,7 +576,7 @@ export default class OrdersController {
    */
   private async creditWallet(userId: string, amount: number): Promise<void> {
     let wallet = await Wallet.query().where('user_id', userId).first()
-    
+
     if (!wallet) {
       wallet = await Wallet.create({
         user_id: userId,
@@ -470,7 +593,7 @@ export default class OrdersController {
   // ==================== MÉTHODES PUBLIQUES - QR CODE ====================
 
   /**
-   * Générer un QR Code de paiement (sans créer la commande)
+   * Générer un QR Code de paiement
    * POST /api/orders/generate-qr
    */
   async generateQRCode({ request, response }: HttpContext) {
@@ -482,12 +605,15 @@ export default class OrdersController {
         'customerAccountNumber',
         'customerName',
         'customerEmail',
+        'customerPhone',
         'items',
         'deliveryMethod',
         'deliveryPrice',
         'shippingAddress',
         'notes',
-        'userId'
+        'userId',
+        'isGuest',
+        'guestId'
       ])
 
       // Validation
@@ -501,14 +627,15 @@ export default class OrdersController {
       console.log('📊 Données QR:', {
         amount: payload.amount,
         customerAccountNumber: payload.customerAccountNumber,
-        itemsCount: payload.items?.length || 0
+        itemsCount: payload.items?.length || 0,
+        isGuest: payload.isGuest || false
       })
 
       const transactionRef = `QR-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`
 
-      // Appel à l'API Express qui génère le QR Code (retourne une image PNG)
+      // Appel à l'API Express qui génère le QR Code
       console.log('📡 Appel API GET pour génération QR Code...')
-      
+
       const qrResponse = await axios.get(
         `${PAYMENT_API_URL}/api/mypvit/qr-code/direct/generate`,
         {
@@ -552,11 +679,14 @@ export default class OrdersController {
             merchant_name: merchantName,
             terminal_id: terminalId,
             order_data: {
-              userId: payload.userId,
+              userId: payload.userId || null,
+              isGuest: payload.isGuest || false,
+              guestId: payload.guestId || null,
               items: payload.items,
               customerAccountNumber: payload.customerAccountNumber,
               customerName: payload.customerName,
               customerEmail: payload.customerEmail,
+              customerPhone: payload.customerPhone,
               deliveryMethod: payload.deliveryMethod,
               deliveryPrice: payload.deliveryPrice,
               shippingAddress: payload.shippingAddress,
@@ -585,31 +715,6 @@ export default class OrdersController {
 
     } catch (error: any) {
       console.error('❌ [QRCode] Erreur:', error.message)
-      
-      if (error.response) {
-        console.error('📡 Réponse erreur API:', {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          headers: error.response.headers
-        })
-        
-        if (error.response.data) {
-          try {
-            const errorString = Buffer.from(error.response.data).toString('utf8')
-            const errorJson = JSON.parse(errorString)
-            console.error('📡 Détails erreur:', errorJson)
-            
-            return response.status(error.response.status).json({
-              success: false,
-              message: errorJson.message || 'Erreur lors de la génération du QR Code',
-              error: errorJson
-            })
-          } catch (e) {
-            // Ce n'est pas du JSON
-          }
-        }
-      }
-      
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la génération du QR Code',
@@ -678,8 +783,19 @@ export default class OrdersController {
 
       // Paiement réussi → Créer la commande
       console.log('✅ PAIEMENT QR CONFIRMÉ - CRÉATION DE LA COMMANDE...')
-      
+
       const orderData = order_data as OrderData
+      
+      // ✅ Si invité, enregistrer KYC
+      if (orderData.isGuest && orderData.customerAccountNumber) {
+        await this.performKYCAndSave(
+          orderData.customerAccountNumber,
+          undefined,
+          undefined,
+          orderData.customerName
+        )
+      }
+
       const order = await this.createOrderFromQRPayment(
         orderData,
         reference_id,
@@ -697,6 +813,7 @@ export default class OrdersController {
           customerName: order.customer_name,
           paymentMethod: order.payment_method,
           itemsCount: order.items?.length || 0,
+          isGuest: orderData.isGuest || false,
           payment: {
             success: true,
             reference_id,
@@ -716,53 +833,6 @@ export default class OrdersController {
     }
   }
 
-  /**
-   * Vérifier le statut d'un paiement QR
-   * GET /api/orders/check-qr-payment/:referenceId
-   */
-  async checkQRPaymentStatus({ params, response }: HttpContext) {
-    try {
-      const { referenceId } = params
-
-      if (!referenceId) {
-        return response.status(400).json({
-          success: false,
-          message: 'referenceId est requis'
-        })
-      }
-
-      console.log(`🔍 Vérification statut QR: ${referenceId}`)
-
-      const statusResponse = await axios.get(
-        `${PAYMENT_API_URL}/api/check-status/${referenceId}`,
-        { timeout: 10000 }
-      )
-
-      const statusData = statusResponse.data
-
-      return response.status(200).json({
-        success: true,
-        data: {
-          reference_id: referenceId,
-          status: statusData.status,
-          is_success: statusData.is_success === true,
-          is_pending: statusData.is_pending === true,
-          is_failed: statusData.is_failed === true,
-          amount: statusData.amount,
-          message: statusData.message || null
-        }
-      })
-
-    } catch (error: any) {
-      console.error('❌ Erreur vérification statut QR:', error.message)
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur lors de la vérification du statut',
-        error: error.message
-      })
-    }
-  }
-
   // ==================== MÉTHODES PUBLIQUES - COMMANDE STANDARD ====================
 
   /**
@@ -775,6 +845,8 @@ export default class OrdersController {
     try {
       const payload = request.only([
         'userId',
+        'isGuest',
+        'guestId',
         'customerAccountNumber',
         'shippingAddress',
         'billingAddress',
@@ -783,75 +855,111 @@ export default class OrdersController {
         'deliveryPrice',
         'customerName',
         'customerEmail',
+        'customerPhone',
         'mobileOperatorCode',
         'mobileOperatorName',
       ])
 
       // ========== VALIDATION ==========
-      if (!payload.userId) {
-        return response.status(400).json({ 
-          success: false, 
-          message: 'userId est requis' 
+      const isGuest = payload.isGuest || !payload.userId
+      
+      if (!isGuest && !payload.userId) {
+        return response.status(400).json({
+          success: false,
+          message: 'userId est requis pour les utilisateurs connectés'
         })
       }
 
       if (!payload.customerAccountNumber) {
-        return response.status(400).json({ 
-          success: false, 
-          message: 'customerAccountNumber est requis (numéro de téléphone)' 
+        return response.status(400).json({
+          success: false,
+          message: 'customerAccountNumber est requis (numéro de téléphone)'
+        })
+      }
+
+      if (isGuest && !payload.customerEmail) {
+        return response.status(400).json({
+          success: false,
+          message: 'customerEmail est requis pour les commandes invité'
         })
       }
 
       console.log('📦 Données reçues:', {
-        userId: payload.userId,
+        userId: payload.userId || 'INVITÉ',
+        isGuest,
         customerAccountNumber: payload.customerAccountNumber,
         deliveryMethod: payload.deliveryMethod || 'standard',
         deliveryPrice: payload.deliveryPrice || 2500,
         mobileOperatorCode: payload.mobileOperatorCode || '(non fourni)',
       })
 
-      // ========== KYC ==========
-      const kycInfo = await this.performKYC(
+      // ========== KYC ET SAUVEGARDE ==========
+      const kycInfo = await this.performKYCAndSave(
         payload.customerAccountNumber,
         payload.mobileOperatorCode,
         payload.mobileOperatorName,
         payload.customerName
       )
 
-      // ========== VÉRIFICATION UTILISATEUR ==========
-      const isGuest = !isValidUuid(payload.userId)
-      
+      // ========== CRÉATION COMMANDE INVITÉ (si nécessaire) ==========
+      let guestOrder = null
       if (isGuest) {
-        return response.status(400).json({
-          success: false,
-          message: 'Les commandes en mode invité ne sont pas supportées. Veuillez vous connecter.',
+        guestOrder = await GuestOrder.create({
+          guestId: payload.guestId || `guest_${Date.now()}`,
+          customerName: kycInfo.fullName,
+          customerEmail: payload.customerEmail!,
+          customerPhone: payload.customerPhone || kycInfo.accountNumber,
+          kycId: kycInfo.kycRecordId || null,
+          status: 'pending',
         })
+        console.log('👤 [Guest] Commande invité créée, ID:', guestOrder.id)
       }
 
-      const user = await User.findBy('id', payload.userId)
-      console.log('👤 Utilisateur:', user ? user.email : 'Introuvable')
-
-      // ========== RÉCUPÉRATION PANIER ==========
-      const cart = await Cart.query()
-        .where('user_id', payload.userId)
-        .preload('items')
-        .first()
-
-      if (!cart || cart.items.length === 0) {
-        return response.status(400).json({ 
-          success: false, 
-          message: 'Votre panier est vide' 
-        })
+      // ========== VÉRIFICATION UTILISATEUR (si connecté) ==========
+      let user = null
+      if (!isGuest && payload.userId) {
+        user = await User.findBy('id', payload.userId)
+        console.log('👤 Utilisateur:', user ? user.email : 'Introuvable')
       }
 
-      console.log('🛒 Panier:', { id: cart.id, itemsCount: cart.items.length })
+      // ========== RÉCUPÉRATION PANIER (si connecté) ==========
+      let items: Array<{ productId: string; quantity: number; price: number }> = []
+      
+      if (!isGuest && payload.userId) {
+        const cart = await Cart.query()
+          .where('user_id', payload.userId)
+          .preload('items')
+          .first()
+
+        if (!cart || cart.items.length === 0) {
+          return response.status(400).json({
+            success: false,
+            message: 'Votre panier est vide'
+          })
+        }
+
+        console.log('🛒 Panier:', { id: cart.id, itemsCount: cart.items.length })
+
+        // Récupérer les items du panier
+        for (const item of cart.items) {
+          const product = await Product.findBy('id', item.product_id)
+          if (product) {
+            items.push({
+              productId: item.product_id,
+              quantity: item.quantity,
+              price: product.price
+            })
+          }
+        }
+      }
 
       // ========== CRÉATION COMMANDE ==========
       const deliveryPrice = payload.deliveryPrice || 2500
       const orderNumber = generateOrderNumber()
 
       const order = await Order.create({
-        user_id: payload.userId,
+        user_id: payload.userId || null,
+        guest_order_id: guestOrder?.id || null,
         order_number: orderNumber,
         status: 'pending',
         total: 0,
@@ -861,7 +969,7 @@ export default class OrdersController {
         customer_name: kycInfo.fullName,
         customer_phone: kycInfo.accountNumber,
         payment_method: kycInfo.operator,
-        customer_email: user?.email || payload.customerEmail || 'non-renseigné@email.com',
+        customer_email: user?.email || payload.customerEmail || 'invite@email.com',
         shipping_address: payload.shippingAddress || 'non renseigné',
         billing_address: payload.billingAddress || payload.shippingAddress || 'non renseigné',
         notes: payload.notes || null,
@@ -870,7 +978,25 @@ export default class OrdersController {
       console.log(`✅ Commande créée: ${order.order_number}`)
 
       // ========== CRÉATION ITEMS ==========
-      const { subtotal, itemsCount } = await this.createOrderItemsFromCart(cart, order)
+      let subtotal = 0
+      let itemsCount = 0
+
+      if (!isGuest && payload.userId) {
+        const cart = await Cart.query()
+          .where('user_id', payload.userId)
+          .preload('items')
+          .first()
+        
+        if (cart) {
+          const result = await this.createOrderItemsFromCart(cart, order)
+          subtotal = result.subtotal
+          itemsCount = result.itemsCount
+          
+          // Vider le panier
+          await CartItem.query().where('cart_id', cart.id).delete()
+          console.log('✅ Panier vidé')
+        }
+      }
 
       // Mise à jour du total
       const total = subtotal + deliveryPrice
@@ -888,9 +1014,11 @@ export default class OrdersController {
         tracked_at: DateTime.now(),
       })
 
-      // ========== VIDAGE PANIER ==========
-      await CartItem.query().where('cart_id', cart.id).delete()
-      console.log('✅ Panier vidé')
+      // Mettre à jour le statut de la commande invité
+      if (guestOrder) {
+        guestOrder.orderId = order.id
+        await guestOrder.save()
+      }
 
       // ========== PAIEMENT ==========
       const paymentResult = await this.processMobileMoneyPayment(
@@ -905,14 +1033,17 @@ export default class OrdersController {
       let paymentError: string | null = null
 
       if (paymentResult.success && paymentResult.paymentInfo) {
-        paymentInfo = paymentResult.paymentInfo
-        
-        const verified = await this.verifyPaymentStatus(paymentInfo.reference_id, order)
+        paymentInfo = paymentResult.paymentInfo        const verified = await this.verifyPaymentStatus(paymentInfo.reference_id, order)
         paymentStatus = verified ? 'success' : 'pending'
+        
+        if (verified && guestOrder) {
+          guestOrder.status = 'paid'
+          await guestOrder.save()
+        }
       } else {
         paymentStatus = 'failed'
         paymentError = paymentResult.error || 'Erreur inconnue'
-        
+
         await OrderTracking.create({
           order_id: order.id,
           status: 'payment_pending',
@@ -939,6 +1070,8 @@ export default class OrdersController {
           customerPhone: order.customer_phone,
           customerEmail: order.customer_email,
           paymentMethod: order.payment_method,
+          isGuest,
+          guestOrderId: guestOrder?.id || null,
           itemsCount,
           payment: paymentInfo ? {
             success: paymentStatus === 'success',
@@ -959,7 +1092,7 @@ export default class OrdersController {
       console.error('🔴 ========== ERREUR CRÉATION COMMANDE ==========')
       console.error('🔴 Message:', error.message)
       console.error('🔴 Stack:', error.stack)
-      
+
       return response.status(500).json({
         success: false,
         message: '❌ Erreur lors de la création de la commande',
@@ -979,9 +1112,9 @@ export default class OrdersController {
       const { referenceId } = params
 
       if (!referenceId) {
-        return response.status(400).json({ 
-          success: false, 
-          message: 'referenceId est requis' 
+        return response.status(400).json({
+          success: false,
+          message: 'referenceId est requis'
         })
       }
 
@@ -1000,7 +1133,7 @@ export default class OrdersController {
 
     } catch (error: any) {
       console.error('❌ Erreur vérification statut:', error.message)
-      
+
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la vérification du statut',
@@ -1017,35 +1150,35 @@ export default class OrdersController {
   async getPaymentStatus({ params, response }: HttpContext) {
     try {
       const { orderId } = params
-      
+
       let order: Order | null = null
-      
+
       if (orderId.startsWith('CMD-')) {
         order = await Order.findBy('order_number', orderId)
       } else {
         order = await Order.find(orderId)
       }
-      
+
       if (!order) {
         return response.status(404).json({
           success: false,
           message: 'Commande non trouvée'
         })
       }
-      
+
       const lastPaymentTracking = await OrderTracking.query()
         .where('order_id', order.id)
         .whereIn('status', ['paid', 'pending_payment', 'payment_failed'])
         .orderBy('tracked_at', 'desc')
         .first()
-      
+
       let paymentStatus = 'unknown'
       let isPaid = false
       let isPending = false
       let isFailed = false
-      
-      if (order.status === 'paid' || order.status === 'processing' || 
-          order.status === 'shipped' || order.status === 'delivered') {
+
+      if (order.status === 'paid' || order.status === 'processing' ||
+        order.status === 'shipped' || order.status === 'delivered') {
         paymentStatus = 'paid'
         isPaid = true
       } else if (order.status === 'pending_payment') {
@@ -1055,7 +1188,7 @@ export default class OrdersController {
         paymentStatus = 'failed'
         isFailed = true
       }
-      
+
       return response.status(200).json({
         success: true,
         data: {
@@ -1072,7 +1205,7 @@ export default class OrdersController {
           last_update: order.updated_at
         }
       })
-      
+
     } catch (error: any) {
       return response.status(500).json({
         success: false,
@@ -1102,11 +1235,11 @@ export default class OrdersController {
   async index({ params, response }: HttpContext) {
     try {
       const { userId } = params
-      
+
       if (!userId) {
-        return response.status(400).json({ 
-          success: false, 
-          message: 'userId est requis' 
+        return response.status(400).json({
+          success: false,
+          message: 'userId est requis'
         })
       }
 
@@ -1115,16 +1248,16 @@ export default class OrdersController {
         .preload('items')
         .orderBy('created_at', 'desc')
 
-      return response.status(200).json({ 
-        success: true, 
-        message: 'Commandes récupérées avec succès', 
-        data: orders 
+      return response.status(200).json({
+        success: true,
+        message: 'Commandes récupérées avec succès',
+        data: orders
       })
     } catch (error: any) {
-      return response.status(500).json({ 
-        success: false, 
-        message: 'Erreur lors de la récupération des commandes', 
-        error: error.message 
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la récupération des commandes',
+        error: error.message
       })
     }
   }
@@ -1136,11 +1269,11 @@ export default class OrdersController {
   async show({ params, response }: HttpContext) {
     try {
       const { orderId, userId } = params
-      
+
       if (!userId || !orderId) {
-        return response.status(400).json({ 
-          success: false, 
-          message: 'userId et orderId sont requis' 
+        return response.status(400).json({
+          success: false,
+          message: 'userId et orderId sont requis'
         })
       }
 
@@ -1161,22 +1294,22 @@ export default class OrdersController {
       }
 
       if (!order) {
-        return response.status(404).json({ 
-          success: false, 
-          message: 'Commande non trouvée' 
+        return response.status(404).json({
+          success: false,
+          message: 'Commande non trouvée'
         })
       }
 
-      return response.status(200).json({ 
-        success: true, 
-        message: 'Commande récupérée avec succès', 
-        data: order 
+      return response.status(200).json({
+        success: true,
+        message: 'Commande récupérée avec succès',
+        data: order
       })
     } catch (error: any) {
-      return response.status(500).json({ 
-        success: false, 
-        message: 'Erreur lors de la récupération de la commande', 
-        error: error.message 
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la récupération de la commande',
+        error: error.message
       })
     }
   }
@@ -1201,9 +1334,9 @@ export default class OrdersController {
       }
 
       if (!order) {
-        return response.status(404).json({ 
-          success: false, 
-          message: 'Commande non trouvée' 
+        return response.status(404).json({
+          success: false,
+          message: 'Commande non trouvée'
         })
       }
 
@@ -1221,16 +1354,16 @@ export default class OrdersController {
       if (status === 'delivered') order.delivered_at = DateTime.now()
       await order.save()
 
-      return response.status(200).json({ 
-        success: true, 
-        message: `✅ Statut mis à jour : ${status}`, 
-        data: order 
+      return response.status(200).json({
+        success: true,
+        message: `✅ Statut mis à jour : ${status}`,
+        data: order
       })
     } catch (error: any) {
-      return response.status(500).json({ 
-        success: false, 
-        message: 'Erreur lors de la mise à jour du statut', 
-        error: error.message 
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la mise à jour du statut',
+        error: error.message
       })
     }
   }
@@ -1245,9 +1378,9 @@ export default class OrdersController {
       const { userId } = request.only(['userId'])
 
       if (!userId) {
-        return response.status(400).json({ 
-          success: false, 
-          message: 'userId est requis' 
+        return response.status(400).json({
+          success: false,
+          message: 'userId est requis'
         })
       }
 
@@ -1266,16 +1399,16 @@ export default class OrdersController {
       }
 
       if (!order) {
-        return response.status(404).json({ 
-          success: false, 
-          message: 'Commande non trouvée' 
+        return response.status(404).json({
+          success: false,
+          message: 'Commande non trouvée'
         })
       }
 
       const cancellableStatuses = ['pending', 'paid', 'pending_payment']
       if (!cancellableStatuses.includes(order.status)) {
-        return response.status(400).json({ 
-          success: false, 
+        return response.status(400).json({
+          success: false,
           message: 'Cette commande ne peut plus être annulée',
           current_status: order.status
         })
@@ -1291,16 +1424,16 @@ export default class OrdersController {
         tracked_at: DateTime.now(),
       })
 
-      return response.status(200).json({ 
-        success: true, 
-        message: '✅ Commande annulée avec succès', 
-        data: order 
+      return response.status(200).json({
+        success: true,
+        message: '✅ Commande annulée avec succès',
+        data: order
       })
     } catch (error: any) {
-      return response.status(500).json({ 
-        success: false, 
-        message: 'Erreur lors de l\'annulation', 
-        error: error.message 
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de l\'annulation',
+        error: error.message
       })
     }
   }
@@ -1312,11 +1445,11 @@ export default class OrdersController {
   async invoice({ params, response }: HttpContext) {
     try {
       const { orderId, userId } = params
-      
+
       if (!userId || !orderId) {
-        return response.status(400).json({ 
-          success: false, 
-          message: 'userId et orderId sont requis' 
+        return response.status(400).json({
+          success: false,
+          message: 'userId et orderId sont requis'
         })
       }
 
@@ -1337,9 +1470,9 @@ export default class OrdersController {
       }
 
       if (!order) {
-        return response.status(404).json({ 
-          success: false, 
-          message: 'Commande non trouvée' 
+        return response.status(404).json({
+          success: false,
+          message: 'Commande non trouvée'
         })
       }
 
@@ -1370,64 +1503,10 @@ export default class OrdersController {
         },
       })
     } catch (error: any) {
-      return response.status(500).json({ 
-        success: false, 
-        message: 'Erreur lors de la génération de la facture', 
-        error: error.message 
-      })
-    }
-  }
-
-  /**
-   * Récupérer le suivi d'une commande
-   * GET /api/orders/:orderId/tracking/user/:userId
-   */
-  async getTracking({ params, response }: HttpContext) {
-    try {
-      const { orderId, userId } = params
-      
-      if (!userId || !orderId) {
-        return response.status(400).json({ 
-          success: false, 
-          message: 'userId et orderId sont requis' 
-        })
-      }
-
-      let order: Order | null = null
-
-      if (orderId.startsWith('CMD-')) {
-        order = await Order.query()
-          .where('order_number', orderId)
-          .where('user_id', userId)
-          .first()
-      } else {
-        order = await Order.query()
-          .where('id', orderId)
-          .where('user_id', userId)
-          .first()
-      }
-
-      if (!order) {
-        return response.status(404).json({ 
-          success: false, 
-          message: 'Commande non trouvée' 
-        })
-      }
-
-      const tracking = await OrderTracking.query()
-        .where('order_id', order.id)
-        .orderBy('tracked_at', 'asc')
-
-      return response.status(200).json({ 
-        success: true, 
-        message: 'Suivi récupéré avec succès', 
-        data: tracking 
-      })
-    } catch (error: any) {
-      return response.status(500).json({ 
-        success: false, 
-        message: 'Erreur lors de la récupération du suivi', 
-        error: error.message 
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la génération de la facture',
+        error: error.message
       })
     }
   }
