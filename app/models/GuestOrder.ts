@@ -4,7 +4,7 @@ import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import { randomUUID } from 'node:crypto'
 import Order from './Order.js'
-import KYC from './KYC.js'
+import KYC from './kyc.js'
 
 export default class GuestOrder extends BaseModel {
   static table = 'guest_orders'
