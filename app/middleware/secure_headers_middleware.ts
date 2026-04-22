@@ -25,7 +25,7 @@ export default class SecureHeadersMiddleware {
         'http://localhost:3000',
         'http://localhost:3333',
         'https://eden-azure-one.vercel.app',
-        'https://ecomerce-api-aotc.onrender.com'
+        'https://ecomerce-api-sc1s.onrender.com'
       ]
 
       // Vérifier l'Origin
