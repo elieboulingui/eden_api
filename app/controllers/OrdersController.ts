@@ -10,15 +10,17 @@ import Product from '#models/Product'
 import Wallet from '#models/wallet'
 import KYC from '#models/kyc'
 import GuestOrder from '#models/GuestOrder'
-import axios from 'axios'
 import { DateTime } from 'luxon'
+import MypvitSecretService from '../services/mypvit_secret_service.js'
+import MypvitTransactionService from '../services/mypvit_transaction_service.js'
+import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
+import MypvitLinkService from '../services/mypvit_link_service.js'
+import MypvitKYCService from '../services/mypvit_kyc_service.js'
 
 // ==================== CONSTANTES ====================
-const PAYMENT_API_URL = 'https://apist.onrender.com'
-const API_KEYS = {
-  public: 'pk_1773325888803_dt8diavuh3h',
-  secret: 'sk_1773325888803_qt015a3cr5'
-}
+const ACCOUNT_OPERATION_CODE = 'ACC_69EA59CBC7495'
+const TERMINAL_ID = 'TERMINAL_001'
+const CALLBACK_URL_CODE = 'CALLBACK_001'
 
 // ==================== INTERFACES ====================
 interface PaymentInfo {
@@ -61,6 +63,8 @@ interface OrderData {
   amount: number
 }
 
+type PaymentMethod = 'mobile_money' | 'qr_code' | 'link'
+
 // ==================== UTILITAIRES ====================
 function generateOrderNumber(): string {
   return `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
@@ -84,82 +88,63 @@ export default class OrdersController {
 
   // ==================== MÉTHODES PRIVÉES ====================
 
-  /**
-   * Appel API KYC et sauvegarde en base de données
-   */
+  private async renewSecretIfNeeded(): Promise<void> {
+    try {
+      await MypvitSecretService.renewSecret()
+      console.log('🔐 Clé secrète renouvelée')
+    } catch (error) {
+      console.error('❌ Erreur renouvellement clé:', error)
+      throw error
+    }
+  }
+
   private async performKYCAndSave(
     phoneNumber: string,
     fallbackOperatorCode?: string,
     fallbackOperatorName?: string,
     fallbackFullName?: string
   ): Promise<KYCInfo> {
-    console.log('🔵 [KYC] Appel API KYC pour:', phoneNumber)
+    console.log('🔵 [KYC] MyPVit pour:', phoneNumber)
 
     try {
-      // 1. Appel à l'API KYC externe
-      const kycResponse = await axios.get(
-        `${PAYMENT_API_URL}/api/mypvit/kyc/marchant`,
-        {
-          params: { customerAccountNumber: phoneNumber },
-          timeout: 10000
+      await this.renewSecretIfNeeded()
+      const kycData = await MypvitKYCService.getKYCInfo(phoneNumber)
+
+      const operator = fallbackOperatorCode || fallbackOperatorName || 'non renseigné'
+      const fullName = kycData.full_name || fallbackFullName || 'non renseigné'
+      const accountNumber = kycData.customer_account_number || phoneNumber
+
+      console.log('✅ [KYC] Opérateur:', operator, '| Nom:', fullName)
+
+      try {
+        const existingKYC = await KYC.findBy('numeroTelephone', phoneNumber)
+
+        if (existingKYC) {
+          existingKYC.nomComplet = fullName
+          existingKYC.operateur = operator
+          await existingKYC.save()
+          console.log('📦 [KYC] Mis à jour, ID:', existingKYC.id)
+          return { operator, fullName, accountNumber, kycRecordId: existingKYC.id }
+        } else {
+          const newKYC = await KYC.create({
+            nomComplet: fullName,
+            numeroTelephone: phoneNumber,
+            operateur: operator
+          })
+          console.log('📦 [KYC] Créé, ID:', newKYC.id)
+          return { operator, fullName, accountNumber, kycRecordId: newKYC.id }
         }
-      )
-
-      if (kycResponse.data.success && kycResponse.data.data) {
-        const kycData = kycResponse.data.data
-        const operator = fallbackOperatorCode || fallbackOperatorName ||
-          kycData.detected_operator || kycData.operator || 'non renseigné'
-        const fullName = kycData.full_name || fallbackFullName || 'non renseigné'
-        const accountNumber = kycData.customer_account_number || phoneNumber
-
-        console.log('✅ [KYC] Données récupérées - Opérateur:', operator, '| Nom:', fullName)
-
-        // 2. Sauvegarde en base de données KYC
-        try {
-          const existingKYC = await KYC.findBy('numeroTelephone', phoneNumber)
-
-          if (existingKYC) {
-            existingKYC.nomComplet = fullName
-            existingKYC.operateur = operator
-            await existingKYC.save()
-            console.log('📦 [KYC] Enregistrement mis à jour, ID:', existingKYC.id)
-
-            return {
-              operator,
-              fullName,
-              accountNumber,
-              kycRecordId: existingKYC.id
-            }
-          } else {
-            const newKYC = await KYC.create({
-              nomComplet: fullName,
-              numeroTelephone: phoneNumber,
-              operateur: operator
-            })
-            console.log('📦 [KYC] Nouvel enregistrement créé, ID:', newKYC.id)
-
-            return {
-              operator,
-              fullName,
-              accountNumber,
-              kycRecordId: newKYC.id
-            }
-          }
-        } catch (dbError) {
-          console.error('❌ [KYC] Erreur sauvegarde BDD:', dbError instanceof Error ? dbError.message : String(dbError))
-          // Continuer même si la sauvegarde échoue
-          return { operator, fullName, accountNumber }
-        }
+      } catch (dbError) {
+        console.error('❌ [KYC] Erreur BDD:', dbError)
+        return { operator, fullName, accountNumber }
       }
     } catch (error) {
-      console.log('🟡 [KYC] API injoignable, fallback sur données frontend')
+      console.log('🟡 [KYC] API injoignable, fallback')
     }
 
-    // Fallback avec les données fournies
     const operator = fallbackOperatorCode || fallbackOperatorName || 'non renseigné'
     const fullName = fallbackFullName || 'non renseigné'
 
-    // Sauvegarde quand même en BDD avec les données de fallback
     try {
       const existingKYC = await KYC.findBy('numeroTelephone', phoneNumber)
       if (!existingKYC) {
@@ -168,185 +153,120 @@ export default class OrdersController {
           numeroTelephone: phoneNumber,
           operateur: operator
         })
-        console.log('📦 [KYC] Enregistrement fallback créé')
+        console.log('📦 [KYC] Fallback créé')
       }
     } catch (dbError) {
-      console.error('❌ [KYC] Erreur sauvegarde fallback:', dbError instanceof Error ? dbError.message : String(dbError))
+      console.error('❌ [KYC] Erreur fallback:', dbError)
     }
 
     return { operator, fullName, accountNumber: phoneNumber }
   }
 
-  /**
-   * Mettre à jour le stock et archiver les produits épuisés
-   */
-  private async updateStockAndArchive(productId: string, quantity: number): Promise<void> {
-    try {
-      const product = await Product.findBy('id', productId)
-
-      if (!product) {
-        console.error(`❌ [Stock] Produit ${productId} non trouvé`)
-        return
-      }
-
-      // Décrémenter le stock
-      product.stock = Math.max(0, product.stock - quantity)
-
-      // Si le stock atteint 0, archiver le produit
-      if (product.stock === 0) {
-        product.isArchived = true
-        product.status = 'inactive'
-        console.log(`📦 [Stock] Produit "${product.name}" archivé (stock épuisé)`)
-      }
-
-      await product.save()
-      console.log(`✅ [Stock] ${product.name}: ${product.stock + quantity} → ${product.stock}`)
-
-    } catch (error) {
-      console.error('❌ [Stock] Erreur mise à jour stock:', error instanceof Error ? error.message : String(error))
-      throw error
-    }
-  }
-
-  /**
-   * Vérifier le statut d'un paiement avec retry
-   */
   private async verifyPaymentStatus(
     referenceId: string,
     order: Order,
     maxRetries: number = 12,
-    retryDelay: number = 3000
+    retryDelay: number = 5000
   ): Promise<boolean> {
-    console.log('🔍 Vérification du statut de paiement...')
+    console.log('🔍 Vérification statut paiement MyPVit...')
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       console.log(`📡 Tentative ${attempt}/${maxRetries} - Réf: ${referenceId}`)
 
       try {
-        const statusResponse = await axios.get(
-          `${PAYMENT_API_URL}/api/check-status/${referenceId}`,
-          { timeout: 15000 }
-        )
+        await this.renewSecretIfNeeded()
+        const statusData = await MypvitTransactionService.checkTransactionStatus(referenceId)
+        console.log(`✅ Statut tentative ${attempt}:`, statusData.status)
 
-        const statusData = statusResponse.data
-        console.log(`✅ Réponse statut tentative ${attempt}:`, {
-          success: statusData.success,
-          is_success: statusData.is_success,
-          is_pending: statusData.is_pending,
-          status: statusData.status
-        })
-
-        // Paiement réussi
-        if (statusData.success && statusData.is_success === true) {
+        if (statusData.status === 'SUCCESS') {
           console.log('✅✅✅ Transaction réussie !')
-          console.log(`💰 Montant: ${statusData.amount} FCFA`)
-
           order.status = 'paid'
           await order.save()
 
           await OrderTracking.create({
             order_id: order.id,
             status: 'paid',
-            description: `Paiement effectué avec succès - Réf: ${referenceId} - Montant: ${statusData.amount} FCFA`,
+            description: `Paiement effectué - Réf: ${referenceId}`,
             tracked_at: DateTime.now(),
           })
-
           return true
         }
 
-        // Paiement échoué
-        if (statusData.success && statusData.is_failed === true) {
+        if (statusData.status === 'FAILED') {
           console.log('❌ Transaction échouée')
           await OrderTracking.create({
             order_id: order.id,
             status: 'payment_failed',
-            description: `Paiement échoué - Réf: ${referenceId} - Statut: ${statusData.status}`,
+            description: `Paiement échoué - Réf: ${referenceId}`,
             tracked_at: DateTime.now(),
           })
           return false
         }
 
-        // Paiement en attente - continuer
-        if (statusData.success && statusData.is_pending === true) {
-          console.log(`⏳ Transaction en attente`)
-          if (attempt < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, retryDelay))
-          }
+        if (statusData.status === 'PENDING' && attempt < maxRetries) {
+          console.log(`⏳ En attente, retry dans ${retryDelay}ms`)
+          await new Promise(resolve => setTimeout(resolve, retryDelay))
           continue
         }
 
         if (attempt < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, retryDelay))
         }
-
       } catch (error) {
-        console.error(`❌ Erreur vérification (tentative ${attempt}):`, error instanceof Error ? error.message : String(error))
+        console.error(`❌ Erreur tentative ${attempt}:`, error)
         if (attempt < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, retryDelay))
         }
       }
     }
 
-    // Timeout - toujours en attente
-    console.log('⚠️ Transaction toujours en attente après vérifications')
+    console.log('⚠️ Transaction toujours en attente')
     await OrderTracking.create({
       order_id: order.id,
       status: 'payment_pending',
-      description: `Paiement en attente de confirmation - Réf: ${referenceId}`,
+      description: `Paiement en attente - Réf: ${referenceId}`,
       tracked_at: DateTime.now(),
     })
 
     return false
   }
 
-  /**
-   * Traiter le paiement Mobile Money
-   */
-  private async processMobileMoneyPayment(
+  // ==================== MÉTHODES DE PAIEMENT ====================
+
+  private async payWithMobileMoney(
     amount: number,
     accountNumber: string,
-    mobileOperatorCode?: string,
-    mobileOperatorName?: string
+    operatorCode?: string,
+    agent?: string
   ): Promise<{ success: boolean; paymentInfo?: PaymentInfo; error?: string }> {
-    console.log('🔵 Appel API paiement Mobile Money...')
-
-    const paymentBody: Record<string, any> = {
-      amount,
-      customer_account_number: accountNumber,
-      payment_api_key_public: API_KEYS.public,
-      payment_api_key_secret: API_KEYS.secret,
-    }
-
-    if (mobileOperatorCode) {
-      paymentBody.operator_code = mobileOperatorCode
-      console.log(`✅ Opérateur fourni: ${mobileOperatorCode} (${mobileOperatorName || 'nom non fourni'})`)
-    } else {
-      console.log('🟡 Aucun opérateur fourni, détection automatique')
-    }
+    console.log('🔵 Paiement MyPVit TRANSACTION REST...')
 
     try {
-      const paymentResponse = await axios.post(
-        `${PAYMENT_API_URL}/api/payment`,
-        paymentBody,
-        {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 0
-        }
-      )
+      await this.renewSecretIfNeeded()
 
-      const paymentResult = paymentResponse.data
-      console.log('✅ Réponse paiement reçue')
+      const paymentResult = await MypvitTransactionService.processPayment({
+        agent: agent || 'AGENT_DEFAULT',
+        amount: amount,
+        reference: `REF${Date.now()}`.substring(0, 15),
+        callback_url_code: CALLBACK_URL_CODE,
+        customer_account_number: accountNumber,
+        merchant_operation_account_code: ACCOUNT_OPERATION_CODE,
+        owner_charge: 'CUSTOMER',
+        operator_code: operatorCode || 'AUTO_DETECT',
+      })
 
-      if (paymentResult.success && paymentResult.data?.reference_id) {
+      console.log('✅ Réponse MyPVit:', paymentResult)
+
+      if (paymentResult.status !== 'FAILED' && paymentResult.reference_id) {
         const paymentInfo: PaymentInfo = {
-          reference_id: paymentResult.data.reference_id,
-          x_secret: paymentResult.data.x_secret || 'not_provided',
-          status: paymentResult.data.status,
-          amount: paymentResult.data.amount,
-          operator_simple: mobileOperatorName || paymentResult.data.operator_simple,
-          transaction_type: paymentResult.data.transaction_type,
-          check_status_url: paymentResult.data.check_status_url,
-          code_url: paymentResult.data.code_url || '',
+          reference_id: paymentResult.reference_id,
+          x_secret: '',
+          status: paymentResult.status,
+          amount: amount,
+          operator_simple: paymentResult.operator,
+          transaction_type: 'PAYMENT',
+          check_status_url: '',
+          code_url: paymentResult.merchant_operation_account_code,
         }
 
         console.log('🔑 reference_id:', paymentInfo.reference_id)
@@ -359,7 +279,7 @@ export default class OrdersController {
       }
 
     } catch (error) {
-      console.error('❌ Erreur paiement:', error instanceof Error ? error.message : String(error))
+      console.error('❌ Erreur paiement MyPVit:', error)
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -367,9 +287,116 @@ export default class OrdersController {
     }
   }
 
-  /**
-   * Créer les items de la commande et mettre à jour le stock
-   */
+  private async payWithQRCode(
+    amount: number
+  ): Promise<{ success: boolean; qrData?: any; error?: string }> {
+    console.log('🔵 Génération QR Code MyPVit...')
+
+    try {
+      await this.renewSecretIfNeeded()
+
+      const qrResult = await MypvitQRCodeService.generateStaticQRCode({
+        accountOperationCode: ACCOUNT_OPERATION_CODE,
+        terminalId: TERMINAL_ID,
+        callbackUrlCode: CALLBACK_URL_CODE,
+      })
+
+      console.log('✅ QR Code généré')
+
+      return {
+        success: true,
+        qrData: {
+          qr_data: qrResult.data,
+          reference_id: qrResult.reference_id || `QR-${Date.now()}`,
+          amount: amount,
+          expires_in: 600,
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erreur QR Code:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
+      }
+    }
+  }
+
+  // Dans OrdersController, méthode payWithLink
+  private async payWithLink(
+    amount: number,
+    accountNumber: string,
+    serviceType: string = 'WEB'
+  ): Promise<{ success: boolean; linkData?: any; error?: string }> {
+    console.log(`🔵 Génération lien de paiement ${serviceType}...`)
+
+    try {
+      await this.renewSecretIfNeeded()
+
+      // URLs de redirection (à configurer selon votre frontend)
+      const successUrl = 'https://votresite.com/payment/success'
+      const failedUrl = 'https://votresite.com/payment/failed'
+
+      let linkResult
+
+      if (serviceType === 'WEB') {
+        linkResult = await MypvitLinkService.generateWebLink({
+          amount: amount,
+          reference: `REF${Date.now()}`.substring(0, 15),
+          callback_url_code: CALLBACK_URL_CODE,
+          merchant_operation_account_code: ACCOUNT_OPERATION_CODE,
+          owner_charge: 'CUSTOMER',
+          customer_account_number: accountNumber,
+          success_redirection_url_code: successUrl,
+          failed_redirection_url_code: failedUrl,
+        })
+      } else if (serviceType === 'RESTLINK') {
+        linkResult = await MypvitLinkService.generateRestLink({
+          amount: amount,
+          reference: `REF${Date.now()}`.substring(0, 15),
+          callback_url_code: CALLBACK_URL_CODE,
+          merchant_operation_account_code: ACCOUNT_OPERATION_CODE,
+          owner_charge: 'CUSTOMER',
+          customer_account_number: accountNumber,
+          success_redirection_url_code: successUrl,
+          failed_redirection_url_code: failedUrl,
+        })
+      } else if (serviceType === 'VISA_MASTERCARD') {
+        linkResult = await MypvitLinkService.generateVisaMastercardLink({
+          amount: amount,
+          reference: `REF${Date.now()}`.substring(0, 15),
+          callback_url_code: CALLBACK_URL_CODE,
+          merchant_operation_account_code: ACCOUNT_OPERATION_CODE,
+          owner_charge: 'CUSTOMER',
+          customer_account_number: accountNumber,
+          success_redirection_url_code: successUrl,
+          failed_redirection_url_code: failedUrl,
+        })
+      } else {
+        return { success: false, error: 'Type de service invalide' }
+      }
+
+      console.log('✅ Lien généré:', linkResult.url)
+
+      return {
+        success: true,
+        linkData: {
+          url: linkResult.url,
+          reference_id: linkResult.merchant_reference_id,
+          amount: amount,
+          service_type: serviceType,
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erreur lien:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
+      }
+    }
+  }
+
+  // ==================== GESTION COMMANDE ====================
+
   private async createOrderItems(
     order: Order,
     items: Array<{ productId?: string; id?: string; price: number; quantity: number }>
@@ -401,18 +428,13 @@ export default class OrdersController {
         subtotal: itemTotal,
       })
 
-      // Mise à jour du stock et archivage automatique
       await this.updateStockAndArchive(product.id, item.quantity)
-
       itemsCount++
     }
 
     return { subtotal, itemsCount }
   }
 
-  /**
-   * Créer les items de la commande depuis le panier
-   */
   private async createOrderItemsFromCart(
     cart: Cart,
     order: Order
@@ -443,9 +465,7 @@ export default class OrdersController {
         subtotal: itemTotal,
       })
 
-      // Mise à jour du stock et archivage automatique
       await this.updateStockAndArchive(product.id, cartItem.quantity)
-
       itemsCount++
       console.log(`✅ Item: ${product.name} x ${cartItem.quantity} = ${itemTotal}`)
     }
@@ -453,87 +473,29 @@ export default class OrdersController {
     return { subtotal, itemsCount }
   }
 
-  /**
-   * Créer une commande depuis un paiement QR Code
-   */
-  private async createOrderFromQRPayment(
-    orderData: OrderData,
-    referenceId: string,
-    _paymentStatus: any
-  ): Promise<Order> {
-    const isGuest = orderData.isGuest || !orderData.userId
-
-    // Créer une commande invité si nécessaire
-    let guestOrder = null
-    if (isGuest && orderData.customerEmail) {
-      guestOrder = await GuestOrder.create({
-        guestId: orderData.guestId || `guest_${Date.now()}`,
-        customerName: orderData.customerName,
-        customerEmail: orderData.customerEmail,
-        customerPhone: orderData.customerPhone || orderData.customerAccountNumber,
-        status: 'paid',
-      })
-      console.log('👤 [Guest] Commande invité créée, ID:', guestOrder.id)
-    }
-
-    let subtotal = 0
-    for (const item of orderData.items) {
-      subtotal += item.price * item.quantity
-    }
-
-    const total = subtotal + (orderData.deliveryPrice || 0)
-    const orderNumber = generateOrderNumber()
-
-    const order = await Order.create({
-      user_id: orderData.userId || null,
-      guestOrderId: guestOrder?.id || null,
-      order_number: orderNumber,
-      status: 'paid',
-      total,
-      subtotal,
-      shipping_cost: orderData.deliveryPrice || 0,
-      delivery_method: orderData.deliveryMethod || 'standard',
-      customer_name: orderData.customerName,
-      customer_phone: orderData.customerPhone || orderData.customerAccountNumber,
-      payment_method: 'QR Code',
-      customer_email: orderData.customerEmail || 'invite@email.com',
-      shipping_address: orderData.shippingAddress || 'Non renseigné',
-      billing_address: orderData.shippingAddress || 'Non renseigné',
-      notes: orderData.notes || null,
-    })
-
-    console.log(`✅ Commande créée: ${order.order_number}`)
-
-    // Sauvegarder les items et mettre à jour le stock
-    await this.createOrderItems(order, orderData.items)
-
-    // Tracking
-    await OrderTracking.create({
-      order_id: order.id,
-      status: 'paid',
-      description: `Paiement QR Code confirmé - Réf: ${referenceId} - Montant: ${total} FCFA`,
-      tracked_at: DateTime.now(),
-    })
-
-    // Vider le panier si utilisateur connecté
-    if (!isGuest && orderData.userId) {
-      const cart = await Cart.query().where('user_id', orderData.userId).first()
-      if (cart) {
-        await CartItem.query().where('cart_id', cart.id).delete()
-        console.log('✅ Panier vidé')
+  private async updateStockAndArchive(productId: string, quantity: number): Promise<void> {
+    try {
+      const product = await Product.findBy('id', productId)
+      if (!product) {
+        console.error(`❌ [Stock] Produit ${productId} non trouvé`)
+        return
       }
+
+      product.stock = Math.max(0, product.stock - quantity)
+      if (product.stock === 0) {
+        product.isArchived = true
+        product.status = 'inactive'
+        console.log(`📦 [Stock] Produit "${product.name}" archivé (stock épuisé)`)
+      }
+
+      await product.save()
+      console.log(`✅ [Stock] ${product.name}: mis à jour`)
+    } catch (error) {
+      console.error('❌ [Stock] Erreur mise à jour stock:', error)
+      throw error
     }
-
-    // Créditer vendeurs et admin
-    await this.creditSellersAndAdminByOrder(order.id, total)
-
-    await order.load('items')
-    return order
   }
 
-  /**
-   * Créditer les vendeurs et l'admin après une commande
-   */
   private async creditSellersAndAdminByOrder(orderId: string, totalAmount: number): Promise<void> {
     try {
       const items = await OrderItem.query().where('order_id', orderId)
@@ -547,32 +509,24 @@ export default class OrdersController {
         }
       }
 
-      // Superadmin (0.5%)
       const superAdminFee = totalAmount * 0.005
       const superAdmin = await User.query().where('role', 'superadmin').first()
-
       if (superAdmin) {
         await this.creditWallet(superAdmin.id, superAdminFee)
         console.log(`✅ Superadmin crédité: ${superAdminFee} FCFA`)
       }
 
-      // Vendeurs
       for (const [sellerId, amount] of sellerSales.entries()) {
         await this.creditWallet(sellerId, amount)
         console.log(`✅ Vendeur ${sellerId} crédité: ${amount} FCFA`)
       }
-
     } catch (error) {
-      console.error('❌ Erreur crédit vendeurs:', error instanceof Error ? error.message : String(error))
+      console.error('❌ Erreur crédit vendeurs:', error)
     }
   }
 
-  /**
-   * Créditer le wallet d'un utilisateur
-   */
   private async creditWallet(userId: string, amount: number): Promise<void> {
     let wallet = await Wallet.query().where('user_id', userId).first()
-
     if (!wallet) {
       wallet = await Wallet.create({
         user_id: userId,
@@ -581,284 +535,36 @@ export default class OrdersController {
         status: 'active'
       })
     }
-
     wallet.balance = (wallet.balance || 0) + amount
     await wallet.save()
   }
 
-  // ==================== MÉTHODES PUBLIQUES - QR CODE ====================
+  // ==================== ENDPOINT PRINCIPAL ====================
 
   /**
-   * Générer un QR Code de paiement
-   * POST /api/orders/generate-qr
-   */
-  async generateQRCode({ request, response }: HttpContext) {
-    console.log('🔵 [QRCode] ========== GÉNÉRATION QR CODE ==========')
-
-    try {
-      const payload = request.only([
-        'amount',
-        'customerAccountNumber',
-        'customerName',
-        'customerEmail',
-        'customerPhone',
-        'items',
-        'deliveryMethod',
-        'deliveryPrice',
-        'shippingAddress',
-        'notes',
-        'userId',
-        'isGuest',
-        'guestId'
-      ])
-
-      // Validation
-      if (!payload.amount || payload.amount <= 0) {
-        return response.status(400).json({
-          success: false,
-          message: 'Le montant est requis et doit être supérieur à 0'
-        })
-      }
-
-      console.log('📊 Données QR:', {
-        amount: payload.amount,
-        customerAccountNumber: payload.customerAccountNumber,
-        itemsCount: payload.items?.length || 0,
-        isGuest: payload.isGuest || false
-      })
-
-      const transactionRef = `QR-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`
-
-      // Appel à l'API Express qui génère le QR Code
-      console.log('📡 Appel API GET pour génération QR Code...')
-
-      const qrResponse = await axios.get(
-        `${PAYMENT_API_URL}/api/mypvit/qr-code/direct/generate`,
-        {
-          params: {
-            amount: payload.amount,
-            payment_api_key_public: API_KEYS.public,
-            payment_api_key_secret: API_KEYS.secret
-          },
-          responseType: 'arraybuffer',
-          timeout: 30000
-        }
-      )
-
-      const contentType = qrResponse.headers['content-type']
-      console.log('📡 Type de réponse:', contentType)
-
-      // Si c'est une image PNG
-      if (contentType && contentType.includes('image/png')) {
-        const base64Image = Buffer.from(qrResponse.data).toString('base64')
-        const qrCodeDataUrl = `data:image/png;base64,${base64Image}`
-
-        const reference = qrResponse.headers['x-reference'] || transactionRef
-        const merchantId = qrResponse.headers['x-merchant-id'] || null
-        const merchantName = qrResponse.headers['x-merchant-name'] || null
-        const terminalId = qrResponse.headers['x-terminal-id'] || null
-        const responseAmount = qrResponse.headers['x-amount'] || payload.amount
-
-        console.log('✅ QR Code généré avec succès')
-        console.log('📋 Headers:', { reference, merchantId, terminalId, amount: responseAmount })
-
-        return response.status(200).json({
-          success: true,
-          message: 'QR Code généré avec succès',
-          data: {
-            qr_code_url: qrCodeDataUrl,
-            reference_id: reference,
-            amount: Number(responseAmount),
-            expires_in: 600,
-            transaction_ref: transactionRef,
-            merchant_id: merchantId,
-            merchant_name: merchantName,
-            terminal_id: terminalId,
-            order_data: {
-              userId: payload.userId || null,
-              isGuest: payload.isGuest || false,
-              guestId: payload.guestId || null,
-              items: payload.items,
-              customerAccountNumber: payload.customerAccountNumber,
-              customerName: payload.customerName,
-              customerEmail: payload.customerEmail,
-              customerPhone: payload.customerPhone,
-              deliveryMethod: payload.deliveryMethod,
-              deliveryPrice: payload.deliveryPrice,
-              shippingAddress: payload.shippingAddress,
-              notes: payload.notes,
-              amount: payload.amount
-            }
-          }
-        })
-      }
-
-      // Si ce n'est pas une image, c'est probablement une erreur JSON
-      let errorData = null
-      try {
-        const jsonString = Buffer.from(qrResponse.data).toString('utf8')
-        errorData = JSON.parse(jsonString)
-        console.error('❌ Erreur API (JSON):', errorData)
-      } catch (e) {
-        console.error('❌ Réponse non-JSON reçue')
-      }
-
-      return response.status(400).json({
-        success: false,
-        message: errorData?.message || 'Échec de la génération du QR Code',
-        details: errorData
-      })
-
-    } catch (error) {
-      console.error('❌ [QRCode] Erreur:', error instanceof Error ? error.message : String(error))
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur lors de la génération du QR Code',
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
-      })
-    }
-  }
-
-  /**
-   * Confirmer un paiement QR et créer la commande
-   * POST /api/orders/confirm-qr-payment
-   */
-  async confirmQRPayment({ request, response }: HttpContext) {
-    console.log('🔵 [QRCode] ========== CONFIRMATION PAIEMENT QR ==========')
-
-    try {
-      const { reference_id, order_data } = request.only(['reference_id', 'order_data'])
-
-      if (!reference_id) {
-        return response.status(400).json({
-          success: false,
-          message: 'reference_id est requis'
-        })
-      }
-
-      if (!order_data) {
-        return response.status(400).json({
-          success: false,
-          message: 'order_data est requis'
-        })
-      }
-
-      console.log('🔑 Vérification référence:', reference_id)
-
-      const statusResponse = await axios.get(
-        `${PAYMENT_API_URL}/api/check-status/${reference_id}`,
-        { timeout: 10000 }
-      )
-
-      const statusData = statusResponse.data
-      console.log('📊 Statut paiement:', {
-        success: statusData.success,
-        is_success: statusData.is_success,
-        status: statusData.status
-      })
-
-      // Paiement en attente
-      if (statusData.is_pending === true) {
-        return response.status(202).json({
-          success: true,
-          is_pending: true,
-          message: 'Paiement en attente. Veuillez scanner le QR Code.',
-          data: { reference_id, status: statusData.status }
-        })
-      }
-
-      // Paiement échoué
-      if (statusData.is_success !== true) {
-        return response.status(400).json({
-          success: false,
-          is_failed: true,
-          message: 'Le paiement a échoué ou a expiré.',
-          data: { reference_id, status: statusData.status }
-        })
-      }
-
-      // Paiement réussi → Créer la commande
-      console.log('✅ PAIEMENT QR CONFIRMÉ - CRÉATION DE LA COMMANDE...')
-
-      const orderData = order_data as OrderData
-
-      // Si invité, enregistrer KYC
-      if (orderData.isGuest && orderData.customerAccountNumber) {
-        await this.performKYCAndSave(
-          orderData.customerAccountNumber,
-          undefined,
-          undefined,
-          orderData.customerName
-        )
-      }
-
-      const order = await this.createOrderFromQRPayment(
-        orderData,
-        reference_id,
-        statusData
-      )
-
-      return response.status(201).json({
-        success: true,
-        message: '✅ Paiement confirmé et commande créée avec succès !',
-        data: {
-          orderId: order.id,
-          orderNumber: order.order_number,
-          total: order.total,
-          status: order.status,
-          customerName: order.customer_name,
-          paymentMethod: order.payment_method,
-          itemsCount: order.items?.length || 0,
-          isGuest: orderData.isGuest || false,
-          payment: {
-            success: true,
-            reference_id,
-            status: statusData.status,
-            amount: statusData.amount
-          }
-        }
-      })
-
-    } catch (error) {
-      console.error('❌ [QRCode] Erreur confirmation:', error instanceof Error ? error.message : String(error))
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur lors de la confirmation du paiement QR',
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
-      })
-    }
-  }
-
-  // ==================== MÉTHODES PUBLIQUES - COMMANDE STANDARD ====================
-
-  /**
-   * Créer une commande avec paiement Mobile Money
+   * Créer une commande avec le mode de paiement choisi
    * POST /api/orders
+   * 
+   * Logique:
+   * - Si le panier est plein → utilise le panier
+   * - Si le panier est vide → utilise les items fournis dans le JSON
    */
   async store({ request, response }: HttpContext) {
     console.log('🔵 ========== DEBUT CREATION COMMANDE ==========')
 
     try {
       const payload = request.only([
-        'userId',
-        'isGuest',
-        'guestId',
-        'customerAccountNumber',
-        'shippingAddress',
-        'billingAddress',
-        'notes',
-        'deliveryMethod',
-        'deliveryPrice',
-        'customerName',
-        'customerEmail',
-        'customerPhone',
-        'mobileOperatorCode',
-        'mobileOperatorName',
+        'userId', 'isGuest', 'guestId', 'customerAccountNumber',
+        'shippingAddress', 'billingAddress', 'notes', 'deliveryMethod',
+        'deliveryPrice', 'customerName', 'customerEmail', 'customerPhone',
+        'mobileOperatorCode', 'mobileOperatorName', 'agent',
+        'payment_method', 'link_service_type', 'items',
       ])
 
-      // ========== VALIDATION ==========
       const isGuest = payload.isGuest || !payload.userId
+      const paymentMethod: PaymentMethod = payload.payment_method || 'mobile_money'
 
+      // Validations
       if (!isGuest && !payload.userId) {
         return response.status(400).json({
           success: false,
@@ -869,27 +575,14 @@ export default class OrdersController {
       if (!payload.customerAccountNumber) {
         return response.status(400).json({
           success: false,
-          message: 'customerAccountNumber est requis (numéro de téléphone)'
+          message: 'customerAccountNumber est requis'
         })
       }
 
-      if (isGuest && !payload.customerEmail) {
-        return response.status(400).json({
-          success: false,
-          message: 'customerEmail est requis pour les commandes invité'
-        })
-      }
+      // 1. RENOUVELER LA CLÉ
+      await this.renewSecretIfNeeded()
 
-      console.log('📦 Données reçues:', {
-        userId: payload.userId || 'INVITÉ',
-        isGuest,
-        customerAccountNumber: payload.customerAccountNumber,
-        deliveryMethod: payload.deliveryMethod || 'standard',
-        deliveryPrice: payload.deliveryPrice || 2500,
-        mobileOperatorCode: payload.mobileOperatorCode || '(non fourni)',
-      })
-
-      // ========== KYC ET SAUVEGARDE ==========
+      // 2. KYC
       const kycInfo = await this.performKYCAndSave(
         payload.customerAccountNumber,
         payload.mobileOperatorCode,
@@ -897,7 +590,7 @@ export default class OrdersController {
         payload.customerName
       )
 
-      // ========== CRÉATION COMMANDE INVITÉ (si nécessaire) ==========
+      // 3. GUEST ORDER
       let guestOrder = null
       if (isGuest) {
         guestOrder = await GuestOrder.create({
@@ -911,31 +604,14 @@ export default class OrdersController {
         console.log('👤 [Guest] Commande invité créée, ID:', guestOrder.id)
       }
 
-      // ========== VÉRIFICATION UTILISATEUR (si connecté) ==========
+      // 4. USER
       let user = null
       if (!isGuest && payload.userId) {
         user = await User.findBy('id', payload.userId)
         console.log('👤 Utilisateur:', user ? user.email : 'Introuvable')
       }
 
-      // ========== RÉCUPÉRATION PANIER (si connecté) ==========
-      if (!isGuest && payload.userId) {
-        const cart = await Cart.query()
-          .where('user_id', payload.userId)
-          .preload('items')
-          .first()
-
-        if (!cart || cart.items.length === 0) {
-          return response.status(400).json({
-            success: false,
-            message: 'Votre panier est vide'
-          })
-        }
-
-        console.log('🛒 Panier:', { id: cart.id, itemsCount: cart.items.length })
-      }
-
-      // ========== CRÉATION COMMANDE ==========
+      // 5. CRÉER COMMANDE
       const deliveryPrice = payload.deliveryPrice || 2500
       const orderNumber = generateOrderNumber()
 
@@ -950,7 +626,7 @@ export default class OrdersController {
         delivery_method: payload.deliveryMethod || 'standard',
         customer_name: kycInfo.fullName,
         customer_phone: kycInfo.accountNumber,
-        payment_method: kycInfo.operator,
+        payment_method: paymentMethod,
         customer_email: user?.email || payload.customerEmail || 'invite@email.com',
         shipping_address: payload.shippingAddress || 'non renseigné',
         billing_address: payload.billingAddress || payload.shippingAddress || 'non renseigné',
@@ -959,36 +635,66 @@ export default class OrdersController {
 
       console.log(`✅ Commande créée: ${order.order_number}`)
 
-      // ========== CRÉATION ITEMS ==========
+      // 6. GÉRER LES ITEMS
+      // LOGIQUE: Panier plein → utilise le panier | Panier vide → utilise les items JSON
       let subtotal = 0
       let itemsCount = 0
+      let itemsSource = ''
 
       if (!isGuest && payload.userId) {
+        // Vérifier le panier d'abord
         const cart = await Cart.query()
           .where('user_id', payload.userId)
           .preload('items')
           .first()
 
-        if (cart) {
+        if (cart && cart.items.length > 0) {
+          // PANIER PLEIN → Utiliser le panier
+          console.log('🛒 Panier plein → Utilisation du panier')
           const result = await this.createOrderItemsFromCart(cart, order)
           subtotal = result.subtotal
           itemsCount = result.itemsCount
+          itemsSource = 'cart'
 
-          // Vider le panier
+          // Vider le panier après
           await CartItem.query().where('cart_id', cart.id).delete()
           console.log('✅ Panier vidé')
+        } else if (payload.items && Array.isArray(payload.items) && payload.items.length > 0) {
+          // PANIER VIDE → Utiliser les items du JSON
+          console.log('📦 Panier vide → Utilisation des items fournis')
+          const result = await this.createOrderItems(order, payload.items)
+          subtotal = result.subtotal
+          itemsCount = result.itemsCount
+          itemsSource = 'provided'
+        } else {
+          // PANIER VIDE ET PAS D'ITEMS → Erreur
+          return response.status(400).json({
+            success: false,
+            message: 'Votre panier est vide et aucun item n\'a été fourni. Ajoutez des articles au panier ou fournissez des items dans la requête.'
+          })
         }
+      } else if (payload.items && Array.isArray(payload.items) && payload.items.length > 0) {
+        // INVITÉ ou pas de userId → Utiliser les items fournis
+        console.log('📦 Items fournis dans la requête')
+        const result = await this.createOrderItems(order, payload.items)
+        subtotal = result.subtotal
+        itemsCount = result.itemsCount
+        itemsSource = 'provided'
+      } else {
+        return response.status(400).json({
+          success: false,
+          message: 'Aucun article fourni. Ajoutez des items ou remplissez votre panier.'
+        })
       }
 
-      // Mise à jour du total
       const total = subtotal + deliveryPrice
       order.subtotal = subtotal
       order.total = total
       await order.save()
 
-      console.log(`💰 Total: subtotal=${subtotal} + livraison=${deliveryPrice} = ${total}`)
+      console.log(`💰 Total: ${total} FCFA (subtotal=${subtotal} + livraison=${deliveryPrice}) | Source: ${itemsSource}`)
 
-      // ========== SUIVI INITIAL ==========
+      // 7. SUIVI INITIAL
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
@@ -996,46 +702,79 @@ export default class OrdersController {
         tracked_at: DateTime.now(),
       })
 
-      // Mettre à jour le statut de la commande invité
       if (guestOrder) {
         guestOrder.orderId = order.id
         await guestOrder.save()
       }
 
-      // ========== PAIEMENT ==========
-      const paymentResult = await this.processMobileMoneyPayment(
-        total,
-        kycInfo.accountNumber,
-        payload.mobileOperatorCode,
-        payload.mobileOperatorName
-      )
-
+      // 8. PAIEMENT SELON LA MÉTHODE CHOISIE
+      let paymentResult: any = { success: false, error: 'Aucune méthode de paiement' }
       let paymentStatus: 'success' | 'pending' | 'failed' = 'pending'
       let paymentInfo: PaymentInfo | null = null
-      let paymentError: string | null = null
+      let qrCodeData: any = null
+      let linkData: any = null
 
-      if (paymentResult.success && paymentResult.paymentInfo) {
-        paymentInfo = paymentResult.paymentInfo
-        const verified = await this.verifyPaymentStatus(paymentInfo.reference_id, order)
-        paymentStatus = verified ? 'success' : 'pending'
+      switch (paymentMethod) {
+        case 'mobile_money':
+          paymentResult = await this.payWithMobileMoney(
+            total,
+            kycInfo.accountNumber,
+            payload.mobileOperatorCode,
+            payload.agent
+          )
+          if (paymentResult.success && paymentResult.paymentInfo) {
+            paymentInfo = paymentResult.paymentInfo
+            const verified = await this.verifyPaymentStatus(paymentInfo.reference_id, order)
+            paymentStatus = verified ? 'success' : 'pending'
+            if (verified && guestOrder) {
+              guestOrder.status = 'paid'
+              await guestOrder.save()
+            }
+          } else {
+            paymentStatus = 'failed'
+            await OrderTracking.create({
+              order_id: order.id,
+              status: 'payment_failed',
+              description: `Erreur paiement: ${paymentResult.error}`,
+              tracked_at: DateTime.now(),
+            })
+          }
+          break
 
-        if (verified && guestOrder) {
-          guestOrder.status = 'paid'
-          await guestOrder.save()
-        }
-      } else {
-        paymentStatus = 'failed'
-        paymentError = paymentResult.error || 'Erreur inconnue'
+        case 'qr_code':
+          paymentResult = await this.payWithQRCode(total)
+          if (paymentResult.success) {
+            qrCodeData = paymentResult.qrData
+            paymentStatus = 'pending'
+            await OrderTracking.create({
+              order_id: order.id,
+              status: 'pending_payment',
+              description: `QR Code généré - En attente de scan - Réf: ${qrCodeData.reference_id}`,
+              tracked_at: DateTime.now(),
+            })
+          } else {
+            paymentStatus = 'failed'
+          }
+          break
 
-        await OrderTracking.create({
-          order_id: order.id,
-          status: 'payment_pending',
-          description: `Erreur lors de l'initiation du paiement: ${paymentError}`,
-          tracked_at: DateTime.now(),
-        })
+        case 'link':
+          const linkServiceType = payload.link_service_type || 'WEB'
+          paymentResult = await this.payWithLink(total, kycInfo.accountNumber, linkServiceType)
+          if (paymentResult.success) {
+            linkData = paymentResult.linkData
+            paymentStatus = 'pending'
+            await OrderTracking.create({
+              order_id: order.id,
+              status: 'pending_payment',
+              description: `Lien de paiement généré - En attente - Réf: ${linkData.reference_id}`,
+              tracked_at: DateTime.now(),
+            })
+          } else {
+            paymentStatus = 'failed'
+          }
+          break
       }
 
-      // ========== RECHARGEMENT ==========
       await order.load('items')
       console.log('🟢 ========== COMMANDE CRÉÉE AVEC SUCCÈS ==========')
 
@@ -1052,21 +791,26 @@ export default class OrdersController {
           customerName: order.customer_name,
           customerPhone: order.customer_phone,
           customerEmail: order.customer_email,
-          paymentMethod: order.payment_method,
+          paymentMethod: paymentMethod,
           isGuest,
           guestOrderId: guestOrder?.id || null,
           itemsCount,
-          payment: paymentInfo ? {
-            success: paymentStatus === 'success',
-            pending: paymentStatus === 'pending',
-            reference_id: paymentInfo.reference_id,
-            status: paymentInfo.status,
-            operator: paymentInfo.operator_simple,
-            amount: paymentInfo.amount,
-            check_status_url: `${PAYMENT_API_URL}/api/check-status/${paymentInfo.reference_id}`
-          } : {
-            success: false,
-            error: paymentError
+          itemsSource,
+          payment: {
+            method: paymentMethod,
+            status: paymentStatus,
+            ...(paymentInfo && {
+              reference_id: paymentInfo.reference_id,
+              operator: paymentInfo.operator_simple,
+              amount: paymentInfo.amount,
+            }),
+            ...(qrCodeData && {
+              qr_code: qrCodeData,
+            }),
+            ...(linkData && {
+              payment_link: linkData,
+            }),
+            error: paymentResult.error || null,
           },
         },
       })
@@ -1084,16 +828,57 @@ export default class OrdersController {
     }
   }
 
-  // ==================== MÉTHODES PUBLIQUES - CONSULTATION ====================
+  // ==================== CALLBACK ====================
 
-  /**
-   * Vérifier le statut d'un paiement
-   * GET /api/orders/check-payment/:referenceId
-   */
+  async paymentCallback({ request, response }: HttpContext) {
+    console.log('📞 [Callback MyPVit] ========== CALLBACK REÇU ==========')
+
+    try {
+      const callbackData = request.body()
+      console.log('📦 Données callback:', callbackData)
+
+      const callbackResponse = MypvitTransactionService.handleCallback(callbackData)
+
+      if (callbackData.status === 'SUCCESS' && callbackData.merchantReferenceId) {
+        const orders = await Order.query()
+          .where('status', 'pending_payment')
+          .whereHas('tracking', (query) => {
+            query.where('description', 'like', `%${callbackData.merchantReferenceId}%`)
+          })
+          .first()
+
+        if (orders) {
+          orders.status = 'paid'
+          await orders.save()
+
+          await OrderTracking.create({
+            order_id: orders.id,
+            status: 'paid',
+            description: `Paiement confirmé par callback - Réf: ${callbackData.transactionId}`,
+            tracked_at: DateTime.now(),
+          })
+
+          await this.creditSellersAndAdminByOrder(orders.id, orders.total)
+          console.log('✅ Commande mise à jour via callback:', orders.order_number)
+        }
+      }
+
+      return response.status(200).json(callbackResponse)
+
+    } catch (error) {
+      console.error('❌ [Callback] Erreur:', error)
+      return response.status(500).json({
+        responseCode: 500,
+        transactionId: request.body().transactionId || 'unknown',
+      })
+    }
+  }
+
+  // ==================== CONSULTATION ====================
+
   async checkPaymentStatus({ params, response }: HttpContext) {
     try {
       const { referenceId } = params
-
       if (!referenceId) {
         return response.status(400).json({
           success: false,
@@ -1101,167 +886,91 @@ export default class OrdersController {
         })
       }
 
-      console.log(`🔍 Vérification statut: ${referenceId}`)
-
-      const statusResponse = await axios.get(
-        `${PAYMENT_API_URL}/api/check-status/${referenceId}`,
-        { timeout: 15000 }
-      )
-
-      return response.status(200).json({
-        success: true,
-        message: 'Statut vérifié avec succès',
-        data: statusResponse.data
-      })
-
+      await this.renewSecretIfNeeded()
+      const statusData = await MypvitTransactionService.checkTransactionStatus(referenceId)
+      return response.status(200).json({ success: true, data: statusData })
     } catch (error) {
-      console.error('❌ Erreur vérification statut:', error instanceof Error ? error.message : String(error))
-
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la vérification du statut',
+        message: 'Erreur vérification',
         error: error instanceof Error ? error.message : 'Erreur inconnue',
-        details: (error as any).response?.data || null
       })
     }
   }
 
-  /**
-   * Récupérer le statut de paiement d'une commande
-   * GET /api/orders/:orderId/payment-status
-   */
   async getPaymentStatus({ params, response }: HttpContext) {
     try {
       const { orderId } = params
 
       let order: Order | null = null
-
       if (orderId.startsWith('CMD-')) {
-        order = await Order.query()
-          .where('order_number', orderId)
-          .first()
+        order = await Order.query().where('order_number', orderId).first()
       } else {
         order = await Order.find(orderId)
       }
 
       if (!order) {
-        return response.status(404).json({
-          success: false,
-          message: 'Commande non trouvée'
-        })
+        return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
-
-      const lastPaymentTracking = await OrderTracking.query()
-        .where('order_id', order.id)
-        .whereIn('status', ['paid', 'pending_payment', 'payment_failed'])
-        .orderBy('tracked_at', 'desc')
-        .first()
 
       let paymentStatus = 'unknown'
       let isPaid = false
-      let isPending = false
-      let isFailed = false
 
-      if (order.status === 'paid' || order.status === 'processing' ||
-        order.status === 'shipped' || order.status === 'delivered') {
+      if (['paid', 'processing', 'shipped', 'delivered'].includes(order.status)) {
         paymentStatus = 'paid'
         isPaid = true
       } else if (order.status === 'pending_payment') {
         paymentStatus = 'pending'
-        isPending = true
       } else if (order.status === 'payment_failed') {
         paymentStatus = 'failed'
-        isFailed = true
       }
 
       return response.status(200).json({
         success: true,
         data: {
           orderId: order.order_number,
-          order_id: order.id,
           payment_status: paymentStatus,
           is_paid: isPaid,
-          is_pending: isPending,
-          is_failed: isFailed,
-          payment_method: order.payment_method,
-          payment_reference: lastPaymentTracking?.description?.match(/Réf: (\S+)/)?.[1] || null,
           amount: order.total,
           status: order.status,
-          last_update: order.updated_at
         }
       })
-
     } catch (error) {
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la vérification du statut de paiement',
+        message: 'Erreur',
         error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
 
-  /**
-   * Récupérer toutes les commandes (admin)
-   * GET /api/orders/all
-   */
   async allOrders({ response }: HttpContext) {
     const orders = await Order.query()
       .preload('items')
       .preload('tracking')
       .orderBy('created_at', 'desc')
-
     return response.ok({ success: true, data: orders })
   }
 
-  /**
-   * Récupérer toutes les commandes d'un utilisateur
-   * GET /api/orders/user/:userId
-   */
   async index({ params, response }: HttpContext) {
     try {
       const { userId } = params
-
-      if (!userId) {
-        return response.status(400).json({
-          success: false,
-          message: 'userId est requis'
-        })
-      }
-
       const orders = await Order.query()
         .where('user_id', userId)
         .preload('items')
         .orderBy('created_at', 'desc')
-
-      return response.status(200).json({
-        success: true,
-        message: 'Commandes récupérées avec succès',
-        data: orders
-      })
+      return response.status(200).json({ success: true, data: orders })
     } catch (error) {
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la récupération des commandes',
         error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
 
-  /**
-   * Récupérer une commande spécifique
-   * GET /api/orders/:orderId/user/:userId
-   */
   async show({ params, response }: HttpContext) {
     try {
       const { orderId, userId } = params
-
-      if (!userId || !orderId) {
-        return response.status(400).json({
-          success: false,
-          message: 'userId et orderId sont requis'
-        })
-      }
-
       let order: Order | null = null
 
       if (orderId.startsWith('CMD-')) {
@@ -1279,30 +988,18 @@ export default class OrdersController {
       }
 
       if (!order) {
-        return response.status(404).json({
-          success: false,
-          message: 'Commande non trouvée'
-        })
+        return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
 
-      return response.status(200).json({
-        success: true,
-        message: 'Commande récupérée avec succès',
-        data: order
-      })
+      return response.status(200).json({ success: true, data: order })
     } catch (error) {
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la récupération de la commande',
         error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
 
-  /**
-   * Mettre à jour le statut d'une commande (admin)
-   * PUT /api/orders/:orderId/status
-   */
   async updateStatus({ params, request, response }: HttpContext) {
     try {
       const { orderId } = params
@@ -1311,7 +1008,6 @@ export default class OrdersController {
       ])
 
       let order: Order | null = null
-
       if (orderId.startsWith('CMD-')) {
         order = await Order.query().where('order_number', orderId).first()
       } else {
@@ -1319,10 +1015,7 @@ export default class OrdersController {
       }
 
       if (!order) {
-        return response.status(404).json({
-          success: false,
-          message: 'Commande non trouvée'
-        })
+        return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
 
       await OrderTracking.create({
@@ -1347,30 +1040,17 @@ export default class OrdersController {
     } catch (error) {
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la mise à jour du statut',
         error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
 
-  /**
-   * Annuler une commande
-   * POST /api/orders/:orderId/cancel
-   */
   async cancel({ params, request, response }: HttpContext) {
     try {
       const { orderId } = params
       const { userId } = request.only(['userId'])
 
-      if (!userId) {
-        return response.status(400).json({
-          success: false,
-          message: 'userId est requis'
-        })
-      }
-
       let order: Order | null = null
-
       if (orderId.startsWith('CMD-')) {
         order = await Order.query()
           .where('order_number', orderId)
@@ -1384,10 +1064,7 @@ export default class OrdersController {
       }
 
       if (!order) {
-        return response.status(404).json({
-          success: false,
-          message: 'Commande non trouvée'
-        })
+        return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
 
       const cancellableStatuses = ['pending', 'paid', 'pending_payment']
@@ -1395,7 +1072,6 @@ export default class OrdersController {
         return response.status(400).json({
           success: false,
           message: 'Cette commande ne peut plus être annulée',
-          current_status: order.status
         })
       }
 
@@ -1417,27 +1093,14 @@ export default class OrdersController {
     } catch (error) {
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de l\'annulation',
         error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
 
-  /**
-   * Générer une facture
-   * GET /api/orders/:orderId/invoice/:userId
-   */
   async invoice({ params, response }: HttpContext) {
     try {
       const { orderId, userId } = params
-
-      if (!userId || !orderId) {
-        return response.status(400).json({
-          success: false,
-          message: 'userId et orderId sont requis'
-        })
-      }
-
       let order: Order | null = null
 
       if (orderId.startsWith('CMD-')) {
@@ -1455,15 +1118,11 @@ export default class OrdersController {
       }
 
       if (!order) {
-        return response.status(404).json({
-          success: false,
-          message: 'Commande non trouvée'
-        })
+        return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
 
       return response.status(200).json({
         success: true,
-        message: 'Facture générée avec succès',
         data: {
           order: {
             number: order.order_number,
@@ -1477,7 +1136,6 @@ export default class OrdersController {
             customerEmail: order.customer_email,
             customerPhone: order.customer_phone,
             shippingAddress: order.shipping_address,
-            billingAddress: order.billing_address,
             paymentMethod: order.payment_method,
             trackingNumber: order.tracking_number,
             estimatedDelivery: order.estimated_delivery,
@@ -1490,19 +1148,13 @@ export default class OrdersController {
     } catch (error) {
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la génération de la facture',
         error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
 
-  /**
-   * Proxy pour check-status sans référence (compatibilité)
-   * GET /api/give-all-without-id/:referenceId
-   */
   async giveAllWithoutId({ params, response }: HttpContext) {
     const { referenceId } = params
-
     if (!referenceId) {
       return response.status(400).json({
         success: false,
@@ -1510,25 +1162,15 @@ export default class OrdersController {
       })
     }
 
-    console.log(`📡 [giveAllWithoutId] Proxy check-status pour: ${referenceId}`)
-
     try {
-      const apiResponse = await axios.get(
-        `${PAYMENT_API_URL}/api/check-status/${referenceId}`,
-        { timeout: 10000 }
-      )
-      return response.status(200).json(apiResponse.data)
-
+      await this.renewSecretIfNeeded()
+      const statusData = await MypvitTransactionService.checkTransactionStatus(referenceId)
+      return response.status(200).json(statusData)
     } catch (error) {
       return response.status(200).json({
         success: false,
         reference_id: referenceId,
         status: 'SERVICE_UNAVAILABLE',
-        is_success: false,
-        is_pending: false,
-        is_failed: true,
-        last_update: new Date().toISOString(),
-        error_message: error instanceof Error ? error.message : 'Erreur inconnue',
       })
     }
   }

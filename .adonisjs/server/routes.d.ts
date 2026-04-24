@@ -85,9 +85,14 @@ export type ScannedRoutes = {
     'orders.cancel': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
     'orders.status.update': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
-    'payment.without-id': { paramsTuple?: []; params?: {} }
-    'payment.status': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
+    'orders.qr.generate': { paramsTuple?: []; params?: {} }
+    'orders.qr.confirm': { paramsTuple?: []; params?: {} }
+    'orders.check-payment': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
     'orders.payment-status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'orders.link.generate': { paramsTuple?: []; params?: {} }
+    'orders.callback': { paramsTuple?: []; params?: {} }
+    'payment.without-id': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
+    'payment.status': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
     'tracking.search': { paramsTuple?: []; params?: {} }
     'tracking.events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'tracking.event.add': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
@@ -112,6 +117,10 @@ export type ScannedRoutes = {
     'push.index': { paramsTuple?: []; params?: {} }
     'push.store': { paramsTuple?: []; params?: {} }
     'push.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'merchant.give-change.status': { paramsTuple: [ParamValue]; params: {'reference': ParamValue} }
+    'merchant.give-change.history': { paramsTuple?: []; params?: {} }
+    'merchant.give-change.stats': { paramsTuple?: []; params?: {} }
+    'merchant.give-change.cancel': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'merchant.withdraw': { paramsTuple?: []; params?: {} }
     'merchant.withdrawals': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.wallet': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
@@ -125,6 +134,12 @@ export type ScannedRoutes = {
     'merchant.products.store': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.products.update': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
     'merchant.products.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
+    'merchant.archived-products.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchant.archived-products.restore': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
+    'merchant.archived-products.permanent-delete': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
+    'merchant.archived-products.restful.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchant.archived-products.restful.restore': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
+    'merchant.archived-products.restful.permanent-delete': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
     'merchant.categories.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.categories.store': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.categories.update': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
@@ -153,6 +168,31 @@ export type ScannedRoutes = {
     'api.shop.index': { paramsTuple?: []; params?: {} }
     'api.shop.coupons': { paramsTuple?: []; params?: {} }
     'api.shop.promotions': { paramsTuple?: []; params?: {} }
+    'mypvit.renew-secret': { paramsTuple?: []; params?: {} }
+    'mypvit.secret': { paramsTuple?: []; params?: {} }
+    'mypvit.countries': { paramsTuple?: []; params?: {} }
+    'mypvit.operators': { paramsTuple?: []; params?: {} }
+    'mypvit.countries-operators': { paramsTuple?: []; params?: {} }
+    'mypvit.check-operator': { paramsTuple?: []; params?: {} }
+    'mypvit.clear-cache': { paramsTuple?: []; params?: {} }
+    'mypvit.kyc': { paramsTuple?: []; params?: {} }
+    'mypvit.kyc.active': { paramsTuple?: []; params?: {} }
+    'mypvit.kyc.verify': { paramsTuple?: []; params?: {} }
+    'mypvit.qrcode.generate': { paramsTuple?: []; params?: {} }
+    'mypvit.qrcode.static': { paramsTuple?: []; params?: {} }
+    'mypvit.qrcode.dynamic': { paramsTuple?: []; params?: {} }
+    'mypvit.qrcode.image': { paramsTuple?: []; params?: {} }
+    'mypvit.transaction.payment': { paramsTuple?: []; params?: {} }
+    'mypvit.transaction.give-change': { paramsTuple?: []; params?: {} }
+    'mypvit.transaction.status': { paramsTuple?: []; params?: {} }
+    'mypvit.link.web': { paramsTuple?: []; params?: {} }
+    'mypvit.link.visa': { paramsTuple?: []; params?: {} }
+    'mypvit.link.rest': { paramsTuple?: []; params?: {} }
+    'mypvit.balance': { paramsTuple?: []; params?: {} }
+    'orders.pay.mobile-money': { paramsTuple?: []; params?: {} }
+    'orders.pay.qr-code': { paramsTuple?: []; params?: {} }
+    'orders.pay.link': { paramsTuple?: []; params?: {} }
+    'callback': { paramsTuple?: []; params?: {} }
   }
   GET: {
     'home': { paramsTuple?: []; params?: {} }
@@ -193,9 +233,10 @@ export type ScannedRoutes = {
     'orders.user.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
     'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
-    'payment.without-id': { paramsTuple?: []; params?: {} }
-    'payment.status': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
+    'orders.check-payment': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
     'orders.payment-status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'payment.without-id': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
+    'payment.status': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
     'tracking.events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'coupons.index': { paramsTuple?: []; params?: {} }
     'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -205,6 +246,9 @@ export type ScannedRoutes = {
     'promo.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.index': { paramsTuple?: []; params?: {} }
     'push.index': { paramsTuple?: []; params?: {} }
+    'merchant.give-change.status': { paramsTuple: [ParamValue]; params: {'reference': ParamValue} }
+    'merchant.give-change.history': { paramsTuple?: []; params?: {} }
+    'merchant.give-change.stats': { paramsTuple?: []; params?: {} }
     'merchant.withdrawals': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.wallet': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.dashboard': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
@@ -214,6 +258,8 @@ export type ScannedRoutes = {
     'merchant.orders.detail': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'orderId': ParamValue} }
     'merchant.orders.recent': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.products.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchant.archived-products.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchant.archived-products.restful.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.categories.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.coupons.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchants.index': { paramsTuple?: []; params?: {} }
@@ -230,6 +276,15 @@ export type ScannedRoutes = {
     'api.shop.index': { paramsTuple?: []; params?: {} }
     'api.shop.coupons': { paramsTuple?: []; params?: {} }
     'api.shop.promotions': { paramsTuple?: []; params?: {} }
+    'mypvit.secret': { paramsTuple?: []; params?: {} }
+    'mypvit.countries': { paramsTuple?: []; params?: {} }
+    'mypvit.operators': { paramsTuple?: []; params?: {} }
+    'mypvit.countries-operators': { paramsTuple?: []; params?: {} }
+    'mypvit.check-operator': { paramsTuple?: []; params?: {} }
+    'mypvit.kyc': { paramsTuple?: []; params?: {} }
+    'mypvit.kyc.active': { paramsTuple?: []; params?: {} }
+    'mypvit.transaction.status': { paramsTuple?: []; params?: {} }
+    'mypvit.balance': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
     'home': { paramsTuple?: []; params?: {} }
@@ -270,9 +325,10 @@ export type ScannedRoutes = {
     'orders.user.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
     'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
-    'payment.without-id': { paramsTuple?: []; params?: {} }
-    'payment.status': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
+    'orders.check-payment': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
     'orders.payment-status': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'payment.without-id': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
+    'payment.status': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
     'tracking.events': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'coupons.index': { paramsTuple?: []; params?: {} }
     'coupons.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -282,6 +338,9 @@ export type ScannedRoutes = {
     'promo.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.index': { paramsTuple?: []; params?: {} }
     'push.index': { paramsTuple?: []; params?: {} }
+    'merchant.give-change.status': { paramsTuple: [ParamValue]; params: {'reference': ParamValue} }
+    'merchant.give-change.history': { paramsTuple?: []; params?: {} }
+    'merchant.give-change.stats': { paramsTuple?: []; params?: {} }
     'merchant.withdrawals': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.wallet': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.dashboard': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
@@ -291,6 +350,8 @@ export type ScannedRoutes = {
     'merchant.orders.detail': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'orderId': ParamValue} }
     'merchant.orders.recent': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.products.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchant.archived-products.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchant.archived-products.restful.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.categories.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.coupons.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchants.index': { paramsTuple?: []; params?: {} }
@@ -307,6 +368,15 @@ export type ScannedRoutes = {
     'api.shop.index': { paramsTuple?: []; params?: {} }
     'api.shop.coupons': { paramsTuple?: []; params?: {} }
     'api.shop.promotions': { paramsTuple?: []; params?: {} }
+    'mypvit.secret': { paramsTuple?: []; params?: {} }
+    'mypvit.countries': { paramsTuple?: []; params?: {} }
+    'mypvit.operators': { paramsTuple?: []; params?: {} }
+    'mypvit.countries-operators': { paramsTuple?: []; params?: {} }
+    'mypvit.check-operator': { paramsTuple?: []; params?: {} }
+    'mypvit.kyc': { paramsTuple?: []; params?: {} }
+    'mypvit.kyc.active': { paramsTuple?: []; params?: {} }
+    'mypvit.transaction.status': { paramsTuple?: []; params?: {} }
+    'mypvit.balance': { paramsTuple?: []; params?: {} }
   }
   POST: {
     'new_account.web.store': { paramsTuple?: []; params?: {} }
@@ -334,6 +404,10 @@ export type ScannedRoutes = {
     'favorites.remove': { paramsTuple?: []; params?: {} }
     'orders.store': { paramsTuple?: []; params?: {} }
     'orders.cancel': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'orders.qr.generate': { paramsTuple?: []; params?: {} }
+    'orders.qr.confirm': { paramsTuple?: []; params?: {} }
+    'orders.link.generate': { paramsTuple?: []; params?: {} }
+    'orders.callback': { paramsTuple?: []; params?: {} }
     'tracking.search': { paramsTuple?: []; params?: {} }
     'tracking.event.add': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'coupons.apply': { paramsTuple?: []; params?: {} }
@@ -342,12 +416,31 @@ export type ScannedRoutes = {
     'pubs.store': { paramsTuple?: []; params?: {} }
     'newsletter.subscribe': { paramsTuple?: []; params?: {} }
     'push.store': { paramsTuple?: []; params?: {} }
+    'merchant.give-change.cancel': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'merchant.withdraw': { paramsTuple?: []; params?: {} }
     'merchant.products.store': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchant.archived-products.restore': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
+    'merchant.archived-products.restful.restore': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
     'merchant.categories.store': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.coupons.store': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'reviews.mark_helpful': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'reviews.store': { paramsTuple?: []; params?: {} }
+    'mypvit.renew-secret': { paramsTuple?: []; params?: {} }
+    'mypvit.clear-cache': { paramsTuple?: []; params?: {} }
+    'mypvit.kyc.verify': { paramsTuple?: []; params?: {} }
+    'mypvit.qrcode.generate': { paramsTuple?: []; params?: {} }
+    'mypvit.qrcode.static': { paramsTuple?: []; params?: {} }
+    'mypvit.qrcode.dynamic': { paramsTuple?: []; params?: {} }
+    'mypvit.qrcode.image': { paramsTuple?: []; params?: {} }
+    'mypvit.transaction.payment': { paramsTuple?: []; params?: {} }
+    'mypvit.transaction.give-change': { paramsTuple?: []; params?: {} }
+    'mypvit.link.web': { paramsTuple?: []; params?: {} }
+    'mypvit.link.visa': { paramsTuple?: []; params?: {} }
+    'mypvit.link.rest': { paramsTuple?: []; params?: {} }
+    'orders.pay.mobile-money': { paramsTuple?: []; params?: {} }
+    'orders.pay.qr-code': { paramsTuple?: []; params?: {} }
+    'orders.pay.link': { paramsTuple?: []; params?: {} }
+    'callback': { paramsTuple?: []; params?: {} }
   }
   PUT: {
     'api.profile.update': { paramsTuple?: []; params?: {} }
@@ -386,6 +479,8 @@ export type ScannedRoutes = {
     'pubs.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'push.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'merchant.products.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
+    'merchant.archived-products.permanent-delete': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
+    'merchant.archived-products.restful.permanent-delete': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'productId': ParamValue} }
     'merchant.categories.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
     'merchant.coupons.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'reviews.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }

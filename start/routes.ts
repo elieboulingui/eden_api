@@ -3,6 +3,11 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+const CallbackController = () => import('#controllers/CallbackController')
+const PayMobileMoneyController = () => import('#controllers/PayMobileMoneyController')
+const PayQRCodeController = () => import('#controllers/PayQRCodeController')
+const PayLinkController = () => import('#controllers/PayLinkController')
+const MypvitController = () => import('#controllers/MypvitController')
 const KYCsController = () => import('#controllers/kycs_controller')
 const ShopController = () => import('#controllers/shop_controller')
 const OtpController = () => import('#controllers/OtpController')
@@ -29,7 +34,6 @@ const BlogController = () => import('#controllers/blog_controller')
 const OrderTrackingController = () => import('#controllers/order_trackings_controller')
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
 const CouponsController = () => import('#controllers/coupons_controller')
-// NOUVEAU CONTROLLER
 const GiveChangeController = () => import('#controllers/give_change_controller')
 
 // ============================================================
@@ -215,42 +219,34 @@ router.group(() => {
 
   // --- ROUTES PAIEMENT QR CODE ---
 
-  /**
-   * Générer un QR Code de paiement (sans créer la commande)
-   * POST /api/orders/generate-qr
-   */
+  // Générer un QR Code de paiement
   router.post('/orders/generate-qr', [OrdersController, 'generateQRCode']).as('orders.qr.generate')
 
-  /**
-   * Confirmer un paiement QR et créer la commande
-   * POST /api/orders/confirm-qr-payment
-   */
+  // Confirmer un paiement QR et créer la commande
   router.post('/orders/confirm-qr-payment', [OrdersController, 'confirmQRPayment']).as('orders.qr.confirm')
 
-  /**
-   * Vérifier le statut d'un paiement QR
-   * GET /api/orders/check-qr-payment/:referenceId
-   */
-  router.get('/orders/check-qr-payment/:referenceId', [OrdersController, 'checkPaymentStatus']).as('orders.qr.status')
+  // Vérifier le statut d'un paiement
+  router.get('/orders/check-payment/:referenceId', [OrdersController, 'checkPaymentStatus']).as('orders.check-payment')
 
-  /**
-   * Statut de paiement d'une commande existante
-   * GET /api/orders/:orderId/payment-status
-   */
+  // Statut de paiement d'une commande existante
   router.get('/orders/:orderId/payment-status', [OrdersController, 'getPaymentStatus']).as('orders.payment-status')
+
+  // --- ROUTES LIEN DE PAIEMENT ---
+
+  // Générer un lien de paiement
+  router.post('/orders/generate-link', [OrdersController, 'generatePaymentLink']).as('orders.link.generate')
+
+  // --- CALLBACK MYPVIT ---
+
+  // Réception du callback de paiement
+  router.post('/orders/payment-callback', [OrdersController, 'paymentCallback']).as('orders.callback')
 
   // --- API PONT VERS MYPVIT (PROXY) ---
 
-  /**
-   * Proxy pour obtenir tous les statuts sans ID
-   * GET /api/give-all-without-id
-   */
-  router.get('/give-all-without-id', [OrdersController, 'giveAllWithoutId']).as('payment.without-id')
+  // Proxy pour obtenir tous les statuts sans ID
+  router.get('/give-all-without-id/:referenceId', [OrdersController, 'giveAllWithoutId']).as('payment.without-id')
 
-  /**
-   * Proxy pour vérifier le statut d'un paiement via référence
-   * GET /api/payment/status/:referenceId
-   */
+  // Proxy pour vérifier le statut d'un paiement via référence
   router.get('/payment/status/:referenceId', [OrdersController, 'checkPaymentStatus']).as('payment.status')
 
   // ----------------------------------------------------------
@@ -305,16 +301,9 @@ router.group(() => {
   // === NOUVELLES ROUTES GIVE-CHANGE (RETRAITS) ==============
   // ==========================================================
   router.group(() => {
-    // Vérifier le statut d'un retrait par référence
     router.get('give-change/:reference/status', [GiveChangeController, 'checkStatus']).as('merchant.give-change.status')
-
-    // Historique des retraits (paginé)
     router.get('give-change/history', [GiveChangeController, 'history']).as('merchant.give-change.history')
-
-    // Statistiques détaillées des retraits
     router.get('give-change/stats', [GiveChangeController, 'stats']).as('merchant.give-change.stats')
-
-    // Annuler un retrait en attente
     router.post('give-change/:id/cancel', [GiveChangeController, 'cancel']).as('merchant.give-change.cancel')
   }).prefix('/merchant')
 
@@ -341,39 +330,22 @@ router.group(() => {
   // === PRODUITS ARCHIVÉS (MERCHANT) =========================
   // ==========================================================
 
-  // Format 1 : préfixe /merchant/products/:userId/archived
   router.group(() => {
-    // Récupérer tous les produits archivés d'un marchand (avec pagination et recherche)
-    // GET /api/merchant/products/:userId/archived?page=1&limit=20&search=mot
     router.get('/archived', [MerchantDashboardController, 'getArchivedProducts'])
       .as('merchant.archived-products.index')
-
-    // Restaurer un produit archivé (le rendre à nouveau actif)
-    // POST /api/merchant/products/:userId/archived/:productId/restore
     router.post('/archived/:productId/restore', [MerchantDashboardController, 'restoreArchivedProduct'])
       .as('merchant.archived-products.restore')
-
-    // Supprimer définitivement un produit archivé
-    // DELETE /api/merchant/products/:userId/archived/:productId/permanent
     router.delete('/archived/:productId/permanent', [MerchantDashboardController, 'permanentlyDeleteProduct'])
       .as('merchant.archived-products.permanent-delete')
-
   }).prefix('/merchant/products/:userId')
 
-  // Format 2 : plus RESTful, préfixe /merchant/:userId
   router.group(() => {
-    // GET /api/merchant/:userId/archived-products
     router.get('/archived-products', [MerchantDashboardController, 'getArchivedProducts'])
       .as('merchant.archived-products.restful.index')
-
-    // POST /api/merchant/:userId/archived-products/:productId/restore
     router.post('/archived-products/:productId/restore', [MerchantDashboardController, 'restoreArchivedProduct'])
       .as('merchant.archived-products.restful.restore')
-
-    // DELETE /api/merchant/:userId/archived-products/:productId/permanent
     router.delete('/archived-products/:productId/permanent', [MerchantDashboardController, 'permanentlyDeleteProduct'])
       .as('merchant.archived-products.restful.permanent-delete')
-
   }).prefix('/merchant/:userId')
 
   router.get('/merchant/categories/:userId', [MerchantDashboardController, 'getCategories']).as('merchant.categories.index')
@@ -405,11 +377,9 @@ router.group(() => {
   router.get('/reviews/merchant/:merchantId', [ReviewsController, 'getMerchantReviews'])
   router.get('/reviews/user/:userId', [ReviewsController, 'myReviews'])
   router.post('/reviews/:id/helpful', [ReviewsController, 'markHelpful'])
-
   router.post('/reviews', [ReviewsController, 'store'])
   router.put('/reviews/:id', [ReviewsController, 'update'])
   router.delete('/reviews/:id', [ReviewsController, 'destroy'])
-
   router.get('/reviews', [ReviewsController, 'index'])
   router.get('/reviews/:id', [ReviewsController, 'show'])
   router.patch('/reviews/:id/approve', [ReviewsController, 'approve'])
@@ -419,5 +389,67 @@ router.group(() => {
   router.get('/shop', [ShopController, 'apiIndex']).as('api.shop.index')
   router.get('/shop/coupons', [ShopController, 'apiCoupons']).as('api.shop.coupons')
   router.get('/shop/promotions', [ShopController, 'apiPromotions']).as('api.shop.promotions')
+
+  // ============================================================
+  // === ROUTES MYPVIT ==========================================
+  // ============================================================
+
+  // --- GESTION DU SECRET ---
+  router.post('/mypvit/renew-secret', [MypvitController, 'renewSecret']).as('mypvit.renew-secret')
+  router.get('/mypvit/secret', [MypvitController, 'getCurrentSecret']).as('mypvit.secret')
+
+  // --- PAYS ---
+  router.get('/mypvit/countries', [MypvitController, 'getCountries']).as('mypvit.countries')
+
+  // --- OPÉRATEURS ---
+  router.get('/mypvit/operators', [MypvitController, 'getOperators']).as('mypvit.operators')
+
+  // --- PAYS AVEC OPÉRATEURS ---
+  router.get('/mypvit/countries-with-operators', [MypvitController, 'getCountriesWithOperators']).as('mypvit.countries-operators')
+
+  // --- VÉRIFIER OPÉRATEUR ---
+  router.get('/mypvit/check-operator', [MypvitController, 'checkOperator']).as('mypvit.check-operator')
+
+  // --- CACHE ---
+  router.post('/mypvit/clear-cache', [MypvitController, 'clearCache']).as('mypvit.clear-cache')
+
+  // --- KYC MYPVIT ---
+  router.get('/mypvit/kyc', [MypvitController, 'getKYC']).as('mypvit.kyc')
+  router.get('/mypvit/kyc/active', [MypvitController, 'checkActive']).as('mypvit.kyc.active')
+  router.post('/mypvit/kyc/verify', [MypvitController, 'verifyIdentity']).as('mypvit.kyc.verify')
+
+  // --- QR CODE MYPVIT ---
+  router.post('/mypvit/qrcode/generate', [MypvitController, 'generateQRCode']).as('mypvit.qrcode.generate')
+  router.post('/mypvit/qrcode/static', [MypvitController, 'generateStaticQRCode']).as('mypvit.qrcode.static')
+  router.post('/mypvit/qrcode/dynamic', [MypvitController, 'generateDynamicQRCode']).as('mypvit.qrcode.dynamic')
+  router.post('/mypvit/qrcode/image', [MypvitController, 'generateQRCodeImage']).as('mypvit.qrcode.image')
+
+  // --- TRANSACTIONS MYPVIT ---
+  router.post('/mypvit/transaction/payment', [MypvitController, 'processPayment']).as('mypvit.transaction.payment')
+  router.post('/mypvit/transaction/give-change', [MypvitController, 'processGiveChange']).as('mypvit.transaction.give-change')
+  router.get('/mypvit/transaction/status', [MypvitController, 'checkTransactionStatus']).as('mypvit.transaction.status')
+
+  // --- LIEN DE PAIEMENT MYPVIT ---
+  router.post('/mypvit/link/web', [MypvitController, 'generateWebLink']).as('mypvit.link.web')
+  router.post('/mypvit/link/visa', [MypvitController, 'generateVisaLink']).as('mypvit.link.visa')
+  router.post('/mypvit/link/rest', [MypvitController, 'generateRestLink']).as('mypvit.link.rest')
+
+  // --- SOLDE MYPVIT ---
+  router.get('/mypvit/balance', [MypvitController, 'getBalance']).as('mypvit.balance')
+
+  // --- CALLBACK MYPVIT ---
+
+
+  router.post('/orders/pay/mobile-money', [PayMobileMoneyController, 'pay'])
+    .as('orders.pay.mobile-money')
+
+  // 2. Payer par QR Code
+  router.post('/orders/pay/qr-code', [PayQRCodeController, 'pay'])
+    .as('orders.pay.qr-code')
+
+  // 3. Payer par Lien (WEB, VISA_MASTERCARD, RESTLINK)
+  router.post('/orders/pay/link', [PayLinkController, 'pay'])
+    .as('orders.pay.link')
+  router.post('/mypvit/callback', [CallbackController, 'handle'])
 
 }).prefix('/api')
