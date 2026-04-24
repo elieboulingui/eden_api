@@ -493,13 +493,7 @@ export class ProductSchema extends BaseModel {
   @column()
   declare imageUrl: string | null
   @column()
-  declare imageUrl: string | null
-  @column()
   declare isArchived: boolean
-  @column()
-  declare isNew: boolean | null
-  @column()
-  declare isOnSale: boolean | null
   @column()
   declare isNew: boolean | null
   @column()
@@ -804,10 +798,6 @@ export class UserSchema extends BaseModel {
   @column()
   declare facadePhoto2Url: string | null
   @column()
-  declare facadePhoto1Url: string | null
-  @column()
-  declare facadePhoto2Url: string | null
-  @column()
   declare facebookUrl: string | null
   @column()
   declare fullName: string | null
@@ -821,10 +811,6 @@ export class UserSchema extends BaseModel {
   declare idNumber: string | null
   @column()
   declare instagramUrl: string | null
-  @column()
-  declare interiorPhoto1Url: string | null
-  @column()
-  declare interiorPhoto2Url: string | null
   @column()
   declare interiorPhoto1Url: string | null
   @column()
@@ -857,14 +843,6 @@ export class UserSchema extends BaseModel {
   declare rccmDocumentUrl: string | null
   @column()
   declare rccmNumber: string | null
-  @column()
-  declare reference1Name: string | null
-  @column()
-  declare reference1Phone: string | null
-  @column()
-  declare reference2Name: string | null
-  @column()
-  declare reference2Phone: string | null
   @column()
   declare reference1Name: string | null
   @column()
