@@ -303,40 +303,7 @@ export default class CallbackController {
   }
 
   // ==================== (NOUVEAU) VÉRIFIER L'INTÉGRITÉ DE LA COMMANDE ====================
-  private async verifyOrderIntegrity(orderId: string): Promise<boolean> {
-    try {
-      const order = await Order.find(orderId)
-      if (!order) {
-        console.error('❌ [Intégrité] Commande non trouvée:', orderId)
-        return false
-      }
 
-      const items = await OrderItem.query().where('order_id', orderId)
-
-      if (items.length === 0) {
-        console.error('❌ [Intégrité] Aucun item dans la commande:', orderId)
-        return false
-      }
-
-      // Vérifier que le total correspond
-      let calculatedTotal = 0
-      for (const item of items) {
-        calculatedTotal += Number(item.subtotal || 0)
-      }
-      calculatedTotal += order.shipping_cost || 0
-
-      if (Math.abs(calculatedTotal - order.total) > 1) {
-        console.warn(`⚠️ [Intégrité] Écart total: calculé=${calculatedTotal}, stocké=${order.total}`)
-      }
-
-      console.log(`✅ [Intégrité] Commande ${order.order_number} vérifiée: ${items.length} items, ${order.total} FCFA`)
-      return true
-
-    } catch (error: any) {
-      console.error('❌ [Intégrité] Erreur:', error.message)
-      return false
-    }
-  }
 
   // ==================== (NOUVEAU) MÉTHODE DE RETRY MANUEL ====================
   public async retryFailedCallback({ params, response }: HttpContext) {
