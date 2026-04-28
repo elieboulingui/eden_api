@@ -295,7 +295,47 @@ export default class Order extends BaseModel {
     }
     return methods[this.payment_method] || this.payment_method || 'Non renseigné'
   }
+  // ==================== COLONNES ====================
+  // ... vos colonnes existantes ...
 
+  // ✅ AJOUTEZ CES PROPRIÉTÉS MANQUANTES :
+
+  // Pour dashboard_view_controller - lignes 601-614
+  @column()
+  declare tax_amount: number
+
+  @column()
+  declare refund_status: 'none' | 'pending' | 'approved' | 'completed' | 'rejected' | null
+
+  @column()
+  declare refund_amount: number | null
+
+  @column()
+  declare refund_reason: string | null
+
+  @column.dateTime()
+  declare refund_requested_at: DateTime | null
+
+  @column.dateTime()
+  declare refund_approved_at: DateTime | null
+
+  @column.dateTime()
+  declare refund_completed_at: DateTime | null
+
+  @column()
+  declare refund_rejection_reason: string | null
+
+  // Pour dashboard_view_controller - ligne 628
+  @column.dateTime()
+  declare actual_delivery: DateTime | null
+
+  // Pour dashboard_view_controller - ligne 715
+  @column()
+  declare paypal_order_id: string | null
+
+  // Pour dashboard_view_controller - ligne 631
+  @column()
+  declare status_history: any // ou JSON
   /**
    * Obtenir le libellé de la méthode de livraison
    */
