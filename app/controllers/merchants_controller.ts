@@ -2,8 +2,41 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import db from '@adonisjs/lucid/services/db'
+import { DateTime } from 'luxon'
 
 export default class MerchantsController {
+
+  // ✅ GET /api/admin/merchants/:id/details - Admin voir détails marchand
+  async adminShow({ params, response }: HttpContext) {
+    try {
+      const merchant = await User.query()
+        .where('id', params.id)
+        .whereIn('role', ['marchant', 'merchant'])
+        .preload('products', (query) => {
+          query.where('is_archived', false).limit(10)
+        })
+        .preload('wallet')
+        .first()
+
+      if (!merchant) {
+        return response.status(404).json({
+          success: false,
+          message: 'Marchand non trouvé'
+        })
+      }
+
+      return response.status(200).json({
+        success: true,
+        data: merchant
+      })
+    } catch (error) {
+      console.error('Erreur adminShow:', error)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur serveur'
+      })
+    }
+  }
 
   // ✅ GET /api/merchants - Liste paginée des marchands VÉRIFIÉS
   async index({ request, response }: HttpContext) {
@@ -102,7 +135,151 @@ export default class MerchantsController {
     }
   }
 
-  // ✅ GET /api/merchants/:id - Détail d'un marchand VÉRIFIÉ avec ses produits
+  // ✅ GET /api/merchants/all - TOUS les marchands VÉRIFIÉS
+  async all({ response }: HttpContext) {
+    try {
+      const merchants = await db
+        .from('users')
+        .whereIn('role', ['merchant', 'marchant', 'marchand'])
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
+        .select([
+          'id',
+          'full_name',
+          'shop_name',
+          'commercial_name',
+          'shop_image',
+          'logo_url',
+          'cover_photo_url',
+          'avatar',
+          'email',
+          'country',
+          'neighborhood',
+          'vendor_type',
+          'shop_description',
+          'whatsapp_phone',
+          'created_at'
+        ])
+        .orderBy('commercial_name', 'asc')
+        .orderBy('shop_name', 'asc')
+        .orderBy('full_name', 'asc')
+
+      const formattedMerchants = []
+
+      for (const merchant of merchants) {
+        const products = await db
+          .from('products')
+          .where('user_id', merchant.id)
+          .select('*')
+          .orderBy('created_at', 'desc')
+
+        const stats = await this.getShopStats(merchant.id)
+
+        formattedMerchants.push({
+          id: merchant.id,
+          name: merchant.commercial_name || merchant.shop_name || merchant.full_name || 'Marchand',
+          image: merchant.logo_url || merchant.shop_image || merchant.avatar || null,
+          cover: merchant.cover_photo_url || null,
+          email: merchant.email,
+          country: merchant.country,
+          neighborhood: merchant.neighborhood,
+          vendor_type: merchant.vendor_type,
+          shop_description: merchant.shop_description,
+          whatsapp: merchant.whatsapp_phone,
+          created_at: merchant.created_at,
+          stats: stats,
+          products: products.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            description: p.description,
+            image_url: p.image_url,
+            stock: p.stock,
+            rating: p.rating,
+            isNew: p.isNew,
+            isOnSale: p.isOnSale,
+            category_id: p.category_id,
+            created_at: p.created_at,
+            updated_at: p.updated_at,
+          })),
+          products_count: products.length
+        })
+      }
+
+      return response.status(200).json({
+        success: true,
+        data: formattedMerchants,
+        total: formattedMerchants.length
+      })
+    } catch (error: any) {
+      console.error('Erreur all merchants:', error)
+      return response.status(500).json({
+        success: false,
+        message: `Erreur: ${error.message}`,
+        data: []
+      })
+    }
+  }
+
+  // ✅ PATCH /api/admin/merchants/:id/verify - Vérifier un marchand
+  // app/controllers/merchants_controller.ts
+
+  async verifyMerchant({ params, request, response }: HttpContext) {
+    const merchant = await User.find(params.id)
+    if (!merchant) {
+      return response.notFound({ message: 'Marchand non trouvé' })
+    }
+
+    // Force l'approbation
+    merchant.is_verified = true
+    merchant.verification_status = 'approved'
+    merchant.verified_at = DateTime.now()
+    merchant.verified_by = request.ctx?.auth?.user?.id || null
+    merchant.rejection_reason = null
+
+    await merchant.save()
+
+    // ✅ Recharge le marchand depuis la base de données pour avoir les vraies valeurs
+    const updatedMerchant = await User.find(params.id)
+
+    console.log('✅ Marchand vérifié:', {
+      id: updatedMerchant?.id,
+      is_verified: updatedMerchant?.is_verified,
+      verification_status: updatedMerchant?.verification_status
+    })
+
+    return response.ok({
+      success: true,
+      message: 'Marchand vérifié avec succès',
+      data: {
+        id: updatedMerchant?.id,
+        is_verified: updatedMerchant?.is_verified,
+        verification_status: updatedMerchant?.verification_status
+      }
+    })
+  }
+
+  // ✅ POST /api/admin/merchants/:id/reject - Rejeter un marchand
+  async rejectMerchant({ params, request, response }: HttpContext) {
+    const merchant = await User.find(params.id)
+    if (!merchant) {
+      return response.notFound({ message: 'Marchand non trouvé' })
+    }
+
+    const { reason } = request.body()
+    merchant.is_verified = false
+    merchant.verification_status = 'rejected'
+    merchant.rejection_reason = reason || null
+    merchant.is_active = false
+    await merchant.save()
+
+    return response.ok({
+      success: true,
+      message: 'Marchand rejeté avec succès'
+    })
+  }
+
+  // ✅ GET /api/merchants/:id - Détail d'un marchand VÉRIFIÉ pour API publique
   async show({ params, response }: HttpContext) {
     try {
       const merchant = await User.query()
@@ -127,7 +304,6 @@ export default class MerchantsController {
 
       const stats = await this.getShopStats(merchant.id)
 
-      // Construction de l'objet shop avec les infos conditionnelles
       const shopData: any = {
         name: merchant.commercial_name || merchant.shop_name || merchant.full_name,
         image: merchant.logo_url || merchant.shop_image || merchant.avatar,
@@ -135,7 +311,6 @@ export default class MerchantsController {
         stats: stats,
       }
 
-      // Ajout des infos boutique physique
       if (merchant.vendor_type === 'boutique_physique') {
         shopData.address = merchant.shop_address
         shopData.latitude = merchant.shop_latitude
@@ -148,7 +323,6 @@ export default class MerchantsController {
         }
       }
 
-      // Ajout des infos vendeur en ligne
       if (merchant.vendor_type === 'vendeur_ligne' || merchant.vendor_type === 'particulier') {
         shopData.stock_address = merchant.stock_address
         shopData.social_media = {
@@ -159,7 +333,6 @@ export default class MerchantsController {
         shopData.stock_video = merchant.stock_video_url
       }
 
-      // Ajout du contact WhatsApp
       shopData.whatsapp = merchant.whatsapp_phone
       shopData.is_whatsapp_verified = merchant.is_whatsapp_verified
 
@@ -213,343 +386,7 @@ export default class MerchantsController {
     }
   }
 
-  // ✅ GET /api/merchants/active - Liste des marchands actifs ET VÉRIFIÉS
-  async active({ request, response }: HttpContext) {
-    try {
-      const page = request.input('page', 1)
-      const limit = request.input('limit', 10)
-
-      const merchants = await User.query()
-        .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .where('is_verified', true)
-        .where('verification_status', 'approved')
-        .whereHas('wallet', (walletQuery) => {
-          walletQuery.where('status', 'active')
-        })
-        .preload('wallet')
-        .paginate(page, limit)
-
-      return response.status(200).json({
-        success: true,
-        data: merchants.map(m => ({
-          id: m.id,
-          full_name: m.full_name,
-          country: m.country,
-          neighborhood: m.neighborhood,
-          vendor_type: m.vendor_type,
-          shop: {
-            name: m.commercial_name || m.shop_name || m.full_name,
-            image: m.logo_url || m.shop_image || m.avatar,
-          },
-          wallet: m.wallet ? { status: m.wallet.status } : null,
-        })),
-        meta: {
-          total: merchants.total,
-          current_page: merchants.currentPage,
-          last_page: merchants.lastPage,
-        },
-      })
-    } catch (error: any) {
-      console.error('Erreur active merchants:', error)
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur serveur',
-        data: []
-      })
-    }
-  }
-
-  // ✅ GET /api/merchants/search?q=xxx - Recherche de marchands VÉRIFIÉS
-  async search({ request, response }: HttpContext) {
-    try {
-      const searchTerm = request.input('q', '')
-      const page = request.input('page', 1)
-      const limit = request.input('limit', 10)
-
-      if (!searchTerm || searchTerm.length < 2) {
-        return response.status(400).json({
-          success: false,
-          message: 'Terme de recherche trop court',
-          data: [],
-        })
-      }
-
-      const merchants = await User.query()
-        .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .where('is_verified', true)
-        .where('verification_status', 'approved')
-        .where((builder) => {
-          builder
-            .where('full_name', 'LIKE', `%${searchTerm}%`)
-            .orWhere('shop_name', 'LIKE', `%${searchTerm}%`)
-            .orWhere('commercial_name', 'LIKE', `%${searchTerm}%`)
-            .orWhere('email', 'LIKE', `%${searchTerm}%`)
-            .orWhere('shop_description', 'LIKE', `%${searchTerm}%`)
-        })
-        .preload('wallet')
-        .paginate(page, limit)
-
-      return response.status(200).json({
-        success: true,
-        data: merchants.map(m => ({
-          id: m.id,
-          full_name: m.full_name,
-          country: m.country,
-          neighborhood: m.neighborhood,
-          vendor_type: m.vendor_type,
-          shop_description: m.shop_description,
-          shop: {
-            name: m.commercial_name || m.shop_name || m.full_name,
-            image: m.logo_url || m.shop_image || m.avatar,
-          },
-        })),
-        meta: {
-          total: merchants.total,
-          current_page: merchants.currentPage,
-          last_page: merchants.lastPage,
-        },
-      })
-    } catch (error: any) {
-      console.error('Erreur search merchants:', error)
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur serveur',
-        data: []
-      })
-    }
-  }
-
-  // ✅ GET /api/merchants/all - TOUS les marchands VÉRIFIÉS avec leurs produits
-  async all({ response }: HttpContext) {
-    try {
-      console.log('=== DÉBUT all merchants (vérifiés uniquement) ===')
-
-      const merchants = await db
-        .from('users')
-        .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .where('is_verified', true)
-        .where('verification_status', 'approved')
-        .select([
-          'id', 
-          'full_name', 
-          'shop_name', 
-          'commercial_name',
-          'shop_image', 
-          'logo_url',
-          'cover_photo_url',
-          'avatar', 
-          'email', 
-          'country',
-          'neighborhood',
-          'vendor_type',
-          'shop_description',
-          'whatsapp_phone',
-          'created_at'
-        ])
-        .orderBy('commercial_name', 'asc')
-        .orderBy('shop_name', 'asc')
-        .orderBy('full_name', 'asc')
-
-      console.log(`✓ ${merchants.length} marchands vérifiés trouvés`)
-
-      if (merchants.length === 0) {
-        return response.status(200).json({
-          success: true,
-          data: [],
-          total: 0
-        })
-      }
-
-      const formattedMerchants = []
-
-      for (const merchant of merchants) {
-        const products = await db
-          .from('products')
-          .where('user_id', merchant.id)
-          .select('*')
-          .orderBy('created_at', 'desc')
-
-        const stats = await this.getShopStats(merchant.id)
-
-        formattedMerchants.push({
-          id: merchant.id,
-          name: merchant.commercial_name || merchant.shop_name || merchant.full_name || 'Marchand',
-          image: merchant.logo_url || merchant.shop_image || merchant.avatar || null,
-          cover: merchant.cover_photo_url || null,
-          email: merchant.email,
-          country: merchant.country,
-          neighborhood: merchant.neighborhood,
-          vendor_type: merchant.vendor_type,
-          shop_description: merchant.shop_description,
-          whatsapp: merchant.whatsapp_phone,
-          created_at: merchant.created_at,
-          stats: stats,
-          products: products.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            price: p.price,
-            description: p.description,
-            image_url: p.image_url,
-            stock: p.stock,
-            rating: p.rating,
-            isNew: p.isNew,
-            isOnSale: p.isOnSale,
-            category_id: p.category_id,
-            created_at: p.created_at,
-            updated_at: p.updated_at,
-          })),
-          products_count: products.length
-        })
-      }
-
-      console.log(`=== FIN all merchants - ${formattedMerchants.length} marchands formatés ===`)
-
-      return response.status(200).json({
-        success: true,
-        data: formattedMerchants,
-        total: formattedMerchants.length
-      })
-
-    } catch (error: any) {
-      console.error('=== ERREUR all merchants ===')
-      console.error('Message:', error.message)
-
-      return response.status(500).json({
-        success: false,
-        message: `Erreur: ${error.message}`,
-        data: []
-      })
-    }
-  }
-
-  // ✅ GET /api/merchants/:id/stats - Statistiques d'un marchand VÉRIFIÉ
-  async stats({ params, response }: HttpContext) {
-    try {
-      const merchant = await db
-        .from('users')
-        .where('id', params.id)
-        .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .where('is_verified', true)
-        .where('verification_status', 'approved')
-        .first()
-
-      if (!merchant) {
-        return response.status(404).json({
-          success: false,
-          message: 'Marchand non trouvé ou non vérifié',
-        })
-      }
-
-      const stats = await this.getShopStats(merchant.id)
-
-      return response.status(200).json({
-        success: true,
-        data: {
-          merchant_id: merchant.id,
-          merchant_name: merchant.commercial_name || merchant.shop_name || merchant.full_name,
-          country: merchant.country,
-          neighborhood: merchant.neighborhood,
-          vendor_type: merchant.vendor_type,
-          ...stats
-        },
-      })
-    } catch (error: any) {
-      console.error('Erreur stats merchant:', error)
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur serveur',
-        data: null
-      })
-    }
-  }
-
-  // ✅ GET /api/merchants/:id/products - Produits paginés d'un marchand VÉRIFIÉ
-  async merchantProducts({ params, request, response }: HttpContext) {
-    try {
-      const merchantId = params.id
-      const page = request.input('page', 1)
-      const limit = request.input('limit', 20)
-
-      const merchant = await db
-        .from('users')
-        .where('id', merchantId)
-        .whereIn('role', ['merchant', 'marchant', 'marchand'])
-        .where('is_verified', true)
-        .where('verification_status', 'approved')
-        .first()
-
-      if (!merchant) {
-        return response.status(404).json({
-          success: false,
-          message: 'Marchand non trouvé ou non vérifié',
-        })
-      }
-
-      const offset = (page - 1) * limit
-
-      const products = await db
-        .from('products')
-        .where('user_id', merchantId)
-        .orderBy('created_at', 'desc')
-        .limit(limit)
-        .offset(offset)
-
-      const totalCount = await db
-        .from('products')
-        .where('user_id', merchantId)
-        .count('* as total')
-
-      const formattedProducts = products.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        price: p.price,
-        description: p.description,
-        image_url: p.image_url,
-        stock: p.stock,
-        rating: p.rating,
-        isNew: p.isNew,
-        isOnSale: p.isOnSale,
-        sales: p.sales,
-        origin: p.origin,
-        weight: p.weight,
-        packaging: p.packaging,
-        conservation: p.conservation,
-        category_id: p.category_id,
-        created_at: p.created_at,
-        updated_at: p.updated_at,
-      }))
-
-      return response.status(200).json({
-        success: true,
-        data: {
-          merchant: {
-            id: merchant.id,
-            name: merchant.commercial_name || merchant.shop_name || merchant.full_name,
-            image: merchant.logo_url || merchant.shop_image || merchant.avatar,
-            email: merchant.email,
-            country: merchant.country,
-            neighborhood: merchant.neighborhood,
-            vendor_type: merchant.vendor_type,
-          },
-          products: formattedProducts,
-        },
-        meta: {
-          total: parseInt(totalCount[0]?.total || '0'),
-          per_page: limit,
-          current_page: page,
-          last_page: Math.ceil(parseInt(totalCount[0]?.total || '0') / limit)
-        }
-      })
-    } catch (error: any) {
-      console.error('Erreur merchant products:', error)
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur lors de la récupération des produits',
-      })
-    }
-  }
-
-  // ✅ Méthode privée pour calculer les statistiques d'une boutique
+  // ✅ Méthode privée pour les statistiques
   private async getShopStats(merchantId: string) {
     try {
       const productsCount = await db
@@ -585,19 +422,15 @@ export default class MerchantsController {
         .count('* as total')
 
       return {
-        products: {
-          total: parseInt(productsCount[0]?.total || '0'),
-        },
+        products: { total: parseInt(productsCount[0]?.total || '0') },
         orders: {
           total: parseInt(ordersCount[0]?.total || '0'),
-          completed: parseInt(completedOrdersCount[0]?.total || '0'),
+          completed: parseInt(completedOrdersCount[0]?.total || '0')
         },
-        revenue: {
-          total: parseFloat(totalRevenue[0]?.total || '0'),
-        },
+        revenue: { total: parseFloat(totalRevenue[0]?.total || '0') },
         reviews: {
           average: parseFloat(averageRating[0]?.average || '0').toFixed(1),
-          total: parseInt(reviewsCount[0]?.total || '0'),
+          total: parseInt(reviewsCount[0]?.total || '0')
         }
       }
     } catch (error: any) {

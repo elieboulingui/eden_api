@@ -1,0 +1,83 @@
+@let(product = $props.get('product'))
+@let(productUrl = $props.get('href') ?? '#')
+@let(imageUrl = product?.image_url ?? null)
+@let(name = product?.name ?? 'Produit')
+@let(description = product?.description ?? null)
+@let(price = product?.price ?? null)
+@let(oldPrice = product?.old_price ?? null)
+@let(discountPercent = product?.discountPercentage ?? null)
+@let(rating = Number(product?.rating ?? 0))
+@let(reviewsCount = Number(product?.reviews_count ?? 0))
+@let(starsRounded = Math.max(0, Math.min(5, Math.round(rating))))
+@let(starSteps = [1, 2, 3, 4, 5])
+@let(formattedPrice = price !== null ? `${Number(price).toLocaleString('fr-FR')} FCFA` : null)
+@let(formattedOldPrice = oldPrice !== null ? `${Number(oldPrice).toLocaleString('fr-FR')} FCFA` : null)
+
+<a href="{{ productUrl }}" class="tile tile-product">
+  <div class="tile-media">
+    @if(imageUrl)
+      <img src="{{ imageUrl }}" alt="{{ name }}" loading="lazy" />
+    @else
+      <div class="tile-media-fallback">Produit</div>
+    @end
+    <div class="tile-badges">
+      @if(discountPercent)
+        <span class="tile-badge tile-badge-discount">-{{ discountPercent }}%</span>
+      @end
+      @if(product?.isNew)
+        <span class="tile-badge tile-badge-new">Nouveau</span>
+      @end
+    </div>
+  </div>
+
+  <div class="tile-body">
+    <h3 class="tile-title">{{ name }}</h3>
+
+    <div class="tile-rating">
+      <div class="stars" aria-hidden="true">
+        @each(step in starSteps)
+          @if(step <= starsRounded)
+            <svg class="star star-on" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10 14.8l-5.45 3.2 1.49-6.2L1 7.6l6.4-.54L10 1.2l2.6 5.86 6.4.54-5.04 4.2 1.49 6.2L10 14.8z" />
+            </svg>
+          @else
+            <svg class="star star-off" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10 14.8l-5.45 3.2 1.49-6.2L1 7.6l6.4-.54L10 1.2l2.6 5.86 6.4.54-5.04 4.2 1.49 6.2L10 14.8z" />
+            </svg>
+          @end
+        @end
+      </div>
+      <span class="tile-reviews">({{ reviewsCount }} avis)</span>
+    </div>
+
+    <div class="tile-price">
+      @if(formattedPrice)
+        <span class="price-now">{{ formattedPrice }}</span>
+        @if(oldPrice !== null && price !== null && oldPrice > price && formattedOldPrice)
+          <span class="price-was">{{ formattedOldPrice }}</span>
+        @end
+      @else
+        <span class="price-now">Prix indisponible</span>
+      @end
+    </div>
+
+    @if(description)
+      <p class="tile-desc">{{ description }}</p>
+    @end
+
+    <div class="tile-meta">
+      @if(product?.stock !== null)
+        @if(product?.stock > 0 && product?.stock <= 5)
+          <span class="meta meta-warn">Stock faible</span>
+        @elseif(product?.stock > 0)
+          <span class="meta">En stock</span>
+        @else
+          <span class="meta meta-bad">Rupture</span>
+        @end
+      @end
+      @if(product?.origin)
+        <span class="meta">{{ product.origin }}</span>
+      @end
+    </div>
+  </div>
+</a>

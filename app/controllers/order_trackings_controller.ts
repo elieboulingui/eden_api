@@ -176,14 +176,102 @@ export default class OrderTrackingController {
   }
 
   /**
-   * Mettre à jour le statut d'une commande
+   * Mettre à jour le statut d'une commande avec vérification email
    * PUT /api/tracking/:orderId/status
    */
   async updateOrderStatus({ params, request, response }: HttpContext) {
     try {
       const { orderId } = params
-      const { status, location, description } = request.only(['status', 'location', 'description'])
+      const { status, location, description, email, orderNumber } = request.only([
+        'status',
+        'location',
+        'description',
+        'email',
+        'orderNumber'
+      ])
 
+      // Vérification si le statut est "delivered" (livré)
+      if (status === 'delivered') {
+        // Vérifier que l'email est fourni
+        if (!email) {
+          return response.status(400).json({
+            success: false,
+            message: 'L\'email est requis pour confirmer la livraison'
+          })
+        }
+
+        // Vérifier que le numéro de commande est fourni
+        if (!orderNumber) {
+          return response.status(400).json({
+            success: false,
+            message: 'Le numéro de commande est requis pour confirmer la livraison'
+          })
+        }
+
+        // Trouver la commande par ID
+        const order = await Order.find(orderId)
+
+        if (!order) {
+          return response.status(404).json({
+            success: false,
+            message: 'Commande non trouvée'
+          })
+        }
+
+        // Vérifier que l'email correspond à celui de la commande
+        if (order.customer_email !== email) {
+          return response.status(403).json({
+            success: false,
+            message: 'L\'email ne correspond pas à celui utilisé pour cette commande'
+          })
+        }
+
+        // Vérifier que le numéro de commande correspond
+        if (order.order_number !== orderNumber) {
+          return response.status(403).json({
+            success: false,
+            message: 'Le numéro de commande ne correspond pas'
+          })
+        }
+
+        // Vérifier que la commande n'est pas déjà livrée
+        if (order.status === 'delivered') {
+          return response.status(400).json({
+            success: false,
+            message: 'Cette commande est déjà marquée comme livrée'
+          })
+        }
+
+        // Vérifier que la commande est expédiée avant de pouvoir la marquer comme livrée
+        if (order.status !== 'shipped') {
+          return response.status(400).json({
+            success: false,
+            message: 'La commande doit être expédiée avant de pouvoir être marquée comme livrée'
+          })
+        }
+
+        // Ajouter un événement de suivi pour la confirmation de livraison
+        await OrderTracking.create({
+          order_id: order.id,
+          status: 'delivered',
+          location: location || 'Non spécifié',
+          description: description || 'Livraison confirmée par le client',
+          tracked_at: DateTime.now()
+        })
+
+        // Mettre à jour le statut de la commande
+        order.status = status
+        order.delivered_at = DateTime.now()
+        await order.save()
+
+        return response.status(200).json({
+          success: true,
+          message: 'Livraison confirmée avec succès',
+          data: order
+        })
+      }
+
+      // Pour les autres statuts (admin uniquement, vérification par middleware)
       const order = await Order.find(orderId)
 
       if (!order) {
@@ -204,9 +292,6 @@ export default class OrderTrackingController {
 
       // Mettre à jour le statut de la commande
       order.status = status
-      if (status === 'delivered') {
-        order.delivered_at = DateTime.now()
-      }
       await order.save()
 
       return response.status(200).json({

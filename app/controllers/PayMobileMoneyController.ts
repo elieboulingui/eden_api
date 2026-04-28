@@ -14,7 +14,6 @@ import MypvitSecretService from '../services/mypvit_secret_service.js'
 import MypvitTransactionService from '../services/mypvit_transaction_service.js'
 import MypvitKYCService from '../services/mypvit_kyc_service.js'
 
-const ACCOUNT_OPERATION_CODE = 'ACC_69EA59CBC7495'
 const CALLBACK_URL_CODE = '9ZOXW'
 
 function generateOrderNumber(): string {
@@ -27,19 +26,38 @@ function generateRandomPassword(): string {
 
 export default class PayMobileMoneyController {
 
-  private async renewSecretIfNeeded(): Promise<void> {
-    await MypvitSecretService.renewSecret()
+  private async renewSecretIfNeeded(phoneNumber?: string): Promise<void> {
+    await MypvitSecretService.renewSecret(phoneNumber)
     console.log('🔐 Clé renouvelée')
   }
 
-  private detectOperatorGabon(phoneNumber: string): { name: string; code: string } {
+  private detectOperatorGabon(phoneNumber: string): { name: string; code: string; accountCode: string } {
     const clean = phoneNumber.replace(/[\s\+\.\-]/g, '')
     let local = clean
     if (clean.startsWith('241')) local = clean.substring(3)
     if (local.startsWith('0')) local = local.substring(1)
-    if (local.startsWith('6')) return { name: 'MOOV_MONEY', code: 'MOOV_MONEY' }
-    if (local.startsWith('7')) return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY' }
-    return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY' }
+
+    // Détection selon le préfixe
+    if (local.startsWith('06') || local.startsWith('6')) {
+      return {
+        name: 'LIBERTIS',
+        code: 'LIBERTIS',
+        accountCode: 'ACC_69EA59CBC7495'
+      }
+    }
+    if (local.startsWith('07') || local.startsWith('7')) {
+      return {
+        name: 'AIRTEL_MONEY',
+        code: 'AIRTEL_MONEY',
+        accountCode: 'ACC_69EFB0E02FCA3'
+      }
+    }
+    // Par défaut MOOV
+    return {
+      name: 'MOOV_MONEY',
+      code: 'MOOV_MONEY',
+      accountCode: 'ACC_69EFB143D4F54'
+    }
   }
 
   // ==================== CRÉER UN USER SI PAS D'ID ====================
@@ -74,16 +92,25 @@ export default class PayMobileMoneyController {
   }
 
   private async performKYC(phoneNumber: string): Promise<{
-    operator: string; fullName: string; accountNumber: string; operatorCode: string; isActive: boolean
+    operator: string
+    fullName: string
+    accountNumber: string
+    operatorCode: string
+    accountCode: string
+    isActive: boolean
   }> {
     const detected = this.detectOperatorGabon(phoneNumber)
     let fullName = 'Client'
+
     try {
-      await this.renewSecretIfNeeded()
+      await this.renewSecretIfNeeded(phoneNumber)
       const kycData = await MypvitKYCService.getKYCInfo(phoneNumber, detected.code)
       fullName = kycData.firstname || kycData.full_name || 'Client'
-    } catch { console.log('🟡 KYC fallback') }
+    } catch (error) {
+      console.log('🟡 KYC fallback:', error.message)
+    }
 
+    // Sauvegarder KYC en base
     try {
       const existingKYC = await KYC.findBy('numeroTelephone', phoneNumber)
       if (existingKYC) {
@@ -91,15 +118,29 @@ export default class PayMobileMoneyController {
         existingKYC.operateur = detected.name
         await existingKYC.save()
       } else {
-        await KYC.create({ nomComplet: fullName, numeroTelephone: phoneNumber, operateur: detected.name })
+        await KYC.create({
+          nomComplet: fullName,
+          numeroTelephone: phoneNumber,
+          operateur: detected.name
+        })
       }
-    } catch { }
+    } catch (error) {
+      console.log('🟡 KYC save error:', error.message)
+    }
 
-    return { operator: detected.name, fullName, accountNumber: phoneNumber, operatorCode: detected.code, isActive: true }
+    return {
+      operator: detected.name,
+      fullName,
+      accountNumber: phoneNumber,
+      operatorCode: detected.code,
+      accountCode: detected.accountCode,
+      isActive: true
+    }
   }
 
   private async checkStock(items: any[], useCart: boolean, userId?: string): Promise<{
-    ok: boolean; errors: string[]
+    ok: boolean
+    errors: string[]
   }> {
     const errors: string[] = []
     let toCheck: any[] = []
@@ -114,10 +155,22 @@ export default class PayMobileMoneyController {
     for (const item of toCheck) {
       if (!item.id) continue
       const p = await Product.findBy('id', item.id)
-      if (!p) { errors.push(`Produit ${item.id} introuvable`); continue }
-      if (p.isArchived) { errors.push(`${p.name} - Archivé`); continue }
-      if (p.stock <= 0) { errors.push(`${p.name} - Rupture`); continue }
-      if (p.stock < item.qty) { errors.push(`${p.name}: stock ${p.stock} < ${item.qty}`); continue }
+      if (!p) {
+        errors.push(`Produit ${item.id} introuvable`)
+        continue
+      }
+      if (p.isArchived) {
+        errors.push(`${p.name} - Archivé`)
+        continue
+      }
+      if (p.stock <= 0) {
+        errors.push(`${p.name} - Rupture de stock`)
+        continue
+      }
+      if (p.stock < item.qty) {
+        errors.push(`${p.name}: stock disponible ${p.stock} < ${item.qty} demandé`)
+        continue
+      }
     }
 
     return { ok: errors.length === 0, errors }
@@ -125,19 +178,29 @@ export default class PayMobileMoneyController {
 
   private async decrementStock(productId: string, qty: number): Promise<void> {
     const p = await Product.findBy('id', productId)
-    if (p) { p.stock = Math.max(0, p.stock - qty); if (p.stock === 0) p.isArchived = true; await p.save() }
+    if (p) {
+      p.stock = Math.max(0, p.stock - qty)
+      if (p.stock === 0) p.isArchived = true
+      await p.save()
+    }
   }
 
   private async restoreStock(orderId: string): Promise<void> {
     const items = await OrderItem.query().where('order_id', orderId)
     for (const item of items) {
       const p = await Product.findBy('id', item.product_id)
-      if (p) { p.stock += item.quantity; if (p.isArchived && p.stock > 0) p.isArchived = false; await p.save() }
+      if (p) {
+        p.stock += item.quantity
+        if (p.isArchived && p.stock > 0) p.isArchived = false
+        await p.save()
+      }
     }
   }
 
   private async buildItems(order: Order, items: any[], fromCart: boolean, userId?: string): Promise<{ subtotal: number; count: number }> {
-    let subtotal = 0, count = 0
+    let subtotal = 0
+    let count = 0
+
     const source = fromCart
       ? (await Cart.query().where('user_id', userId).preload('items').first())?.items || []
       : items
@@ -145,14 +208,26 @@ export default class PayMobileMoneyController {
     for (const item of source) {
       const pid = item.productId || item.product_id || item.id
       if (!pid) continue
+
       const p = await Product.findBy('id', pid)
       if (!p) continue
+
       const itemTotal = p.price * (item.quantity || 1)
       subtotal += itemTotal
-      await OrderItem.create({ order_id: order.id, product_id: p.id, product_name: p.name, price: p.price, quantity: item.quantity || 1, subtotal: itemTotal })
+
+      await OrderItem.create({
+        order_id: order.id,
+        product_id: p.id,
+        product_name: p.name,
+        price: p.price,
+        quantity: item.quantity || 1,
+        subtotal: itemTotal
+      })
+
       await this.decrementStock(p.id, item.quantity || 1)
       count++
     }
+
     return { subtotal, count }
   }
 
@@ -167,20 +242,32 @@ export default class PayMobileMoneyController {
       ])
 
       if (!payload.customerAccountNumber) {
-        return response.status(400).json({ success: false, message: 'Numéro de téléphone requis' })
+        return response.status(400).json({
+          success: false,
+          message: 'Numéro de téléphone requis'
+        })
       }
 
       // 1. Vérification stock
       const useCart = !!payload.userId && (!payload.items || payload.items.length === 0)
       const stock = await this.checkStock(payload.items || [], useCart, payload.userId)
       if (!stock.ok) {
-        return response.status(400).json({ success: false, message: 'Stock insuffisant', errors: stock.errors })
+        return response.status(400).json({
+          success: false,
+          message: 'Stock insuffisant',
+          errors: stock.errors
+        })
       }
 
-      await this.renewSecretIfNeeded()
+      // 2. KYC et détection opérateur
       const kyc = await this.performKYC(payload.customerAccountNumber)
+      console.log(`📱 Opérateur détecté: ${kyc.operator} (${kyc.operatorCode})`)
+      console.log(`🔑 Compte: ${kyc.accountCode}`)
 
-      // 2. User ID : si absent → créer un User
+      // 3. Renouveler le secret pour l'opérateur détecté
+      await this.renewSecretIfNeeded(payload.customerAccountNumber)
+
+      // 4. User ID : si absent → créer un User
       let userId = payload.userId
       if (!userId) {
         const newUser = await this.getOrCreateUser({
@@ -191,11 +278,13 @@ export default class PayMobileMoneyController {
         userId = newUser.id
       }
 
-      // 3. Création commande
+      // 5. Création commande
       const order = await Order.create({
         user_id: userId,
         order_number: generateOrderNumber(),
-        status: 'pending', total: 0, subtotal: 0,
+        status: 'pending',
+        total: 0,
+        subtotal: 0,
         shipping_cost: payload.deliveryPrice || 2500,
         delivery_method: payload.deliveryMethod || 'standard',
         customer_name: payload.customerName || kyc.fullName,
@@ -205,28 +294,49 @@ export default class PayMobileMoneyController {
         shipping_address: payload.shippingAddress || 'non renseigné',
       })
 
-      // 4. Items
-      const { subtotal, count } = await this.buildItems(order, payload.items || [], useCart, payload.userId)
+      // 6. Items
+      const { subtotal, count } = await this.buildItems(
+        order,
+        payload.items || [],
+        useCart,
+        payload.userId
+      )
+
       const total = subtotal + (payload.deliveryPrice || 2500)
-      order.subtotal = subtotal; order.total = total
+      order.subtotal = subtotal
+      order.total = total
       await order.save()
 
       await OrderTracking.create({
-        order_id: order.id, status: 'pending',
-        description: `Commande - ${kyc.operator}`,
+        order_id: order.id,
+        status: 'pending',
+        description: `🛒 Commande initiée - ${kyc.operator} - ${count} articles`,
         tracked_at: DateTime.now(),
       })
 
-      // 5. Paiement
-      console.log(`💳 Paiement ${kyc.operatorCode}...`)
+      // 7. Paiement avec le bon compte opérateur
+      console.log(`💳 Lancement paiement ${kyc.operator} via compte ${kyc.accountCode}...`)
+
       const payment = await MypvitTransactionService.processPayment({
-        agent: payload.agent || 'AGENT_DEFAULT', amount: total,
-        reference: `REF${Date.now()}`.substring(0, 15), callback_url_code: CALLBACK_URL_CODE,
-        customer_account_number: kyc.accountNumber, merchant_operation_account_code: ACCOUNT_OPERATION_CODE,
-        owner_charge: 'CUSTOMER', operator_code: kyc.operatorCode,
+        agent: payload.agent || 'AGENT_DEFAULT',
+        amount: total,
+        reference: `REF${Date.now()}`.substring(0, 15),
+        callback_url_code: CALLBACK_URL_CODE,
+        customer_account_number: kyc.accountNumber,
+        merchant_operation_account_code: kyc.accountCode, // Compte spécifique à l'opérateur
+        owner_charge: 'CUSTOMER',
+        operator_code: kyc.operatorCode,
       })
 
+      console.log('💳 Résultat paiement:', {
+        status: payment.status,
+        reference: payment.reference_id,
+        message: payment.message
+      })
+
+      // 8. Traitement selon résultat
       if (payment.status !== 'FAILED' && payment.reference_id) {
+        // Paiement initié avec succès
         order.payment_reference_id = payment.reference_id
         order.payment_operator_simple = kyc.operator
         order.payment_amount = total
@@ -235,8 +345,9 @@ export default class PayMobileMoneyController {
         await order.save()
 
         await OrderTracking.create({
-          order_id: order.id, status: 'pending_payment',
-          description: `⏳ En attente - Réf: ${payment.reference_id}`,
+          order_id: order.id,
+          status: 'pending_payment',
+          description: `⏳ En attente de confirmation - ${kyc.operator} - Réf: ${payment.reference_id}`,
           tracked_at: DateTime.now(),
         })
 
@@ -246,27 +357,53 @@ export default class PayMobileMoneyController {
           success: true,
           message: '⏳ Vérifiez votre téléphone pour confirmer le paiement',
           data: {
-            orderId: order.id, orderNumber: order.order_number, total: order.total,
-            status: 'pending_payment', customerName: order.customer_name,
-            paymentMethod: kyc.operator, itemsCount: count, userId,
-            payment: { reference_id: payment.reference_id, status: 'PENDING' },
+            orderId: order.id,
+            orderNumber: order.order_number,
+            total: order.total,
+            status: 'pending_payment',
+            customerName: order.customer_name,
+            paymentMethod: kyc.operator,
+            itemsCount: count,
+            userId,
+            operator: {
+              name: kyc.operator,
+              code: kyc.operatorCode,
+              accountCode: kyc.accountCode
+            },
+            payment: {
+              reference_id: payment.reference_id,
+              status: 'PENDING'
+            },
           },
         })
       } else {
+        // Échec du paiement
         await this.restoreStock(order.id)
         order.status = 'payment_failed'
-        order.payment_error_message = payment.message
+        order.payment_error_message = payment.message || 'Erreur inconnue'
         await order.save()
+
         await OrderTracking.create({
-          order_id: order.id, status: 'payment_failed',
-          description: `❌ Échec: ${payment.message}`,
+          order_id: order.id,
+          status: 'payment_failed',
+          description: `❌ Échec paiement ${kyc.operator}: ${payment.message}`,
           tracked_at: DateTime.now(),
         })
-        return response.status(400).json({ success: false, message: 'Paiement échoué', error: payment.message })
+
+        return response.status(400).json({
+          success: false,
+          message: 'Paiement échoué',
+          error: payment.message,
+          operator: kyc.operator
+        })
       }
     } catch (error: any) {
-      console.error('🔴 Erreur:', error.message)
-      return response.status(500).json({ success: false, message: 'Erreur', error: error.message })
+      console.error('🔴 Erreur paiement:', error.message)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors du paiement',
+        error: error.message
+      })
     }
   }
 }

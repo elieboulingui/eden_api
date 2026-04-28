@@ -3,6 +3,8 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+import PayPalController from '#controllers/paypal_controller'
+import RefundsController from '#controllers/refunds_controller'
 const CallbackController = () => import('#controllers/CallbackController')
 const PayMobileMoneyController = () => import('#controllers/PayMobileMoneyController')
 const PayQRCodeController = () => import('#controllers/PayQRCodeController')
@@ -28,6 +30,7 @@ import DashboardViewController from '#controllers/dashboard_view_controller'
 import NewsletterController from '#controllers/newsletter_controller'
 import PushSubscriptionsController from '#controllers/push_subscriptions_controller'
 import ReviewsController from '#controllers/reviews_controller'
+import HomeController from '#controllers/home_controller'
 
 // Lazy imports
 const BlogController = () => import('#controllers/blog_controller')
@@ -41,9 +44,9 @@ const GiveChangeController = () => import('#controllers/give_change_controller')
 // ============================================================
 
 // Page d'accueil
-router.get('/', async ({ view }) => {
-  return view.render('pages/home')
-}).as('home')
+router.get('/', [HomeController, 'index']).as('home')
+// Dans la section ROUTES WEB (PAGES) - avant ou après les autres routes web
+router.get('/product/:id', [ProductsController, 'showWeb']).as('product.show')
 
 // Routes d'authentification web
 router.group(() => {
@@ -66,6 +69,10 @@ router.post('logout', [SessionController, 'destroy'])
 
 // Dashboards web
 router.group(() => {
+  router.get('paypal', [DashboardViewController, 'paypal']).as('dashboard.paypal') // Nouvelle route PayPal
+
+  router.get('refund/:id', [DashboardViewController, 'refundDetails']).as('dashboard.refund.details') // Ajoutez cette ligne
+  router.get('refund', [DashboardViewController, 'refund']).as('dashboard.refund') // Add this line
   router.get('admin', [DashboardViewController, 'admin']).as('dashboard.admin')
   router.get('secretary', [DashboardViewController, 'secretary']).as('dashboard.secretary')
   router.get('manager', [DashboardViewController, 'manager']).as('dashboard.manager')
@@ -215,7 +222,6 @@ router.group(() => {
   router.get('/orders/:orderId/invoice/:userId', [OrdersController, 'invoice']).as('orders.invoice')
 
   // Mise à jour du statut (admin)
-  router.put('/orders/:orderId/status', [OrdersController, 'updateStatus']).as('orders.status.update')
 
   // --- ROUTES PAIEMENT QR CODE ---
 
@@ -436,10 +442,17 @@ router.group(() => {
 
   // --- SOLDE MYPVIT ---
   router.get('/mypvit/balance', [MypvitController, 'getBalance']).as('mypvit.balance')
+  router.post('/mypvit/check-balance', [MypvitController, 'checkBalance']).as('mypvit.check-balance')
+  router.get('/mypvit/all-balances', [MypvitController, 'getAllBalances']).as('mypvit.all-balances')
 
   // --- CALLBACK MYPVIT ---
+  router.post('/mypvit/callback', [CallbackController, 'handle'])
 
+  // ============================================================
+  // === ROUTES PAIEMENT MYPVIT =================================
+  // ============================================================
 
+  // 1. Payer par Mobile Money
   router.post('/orders/pay/mobile-money', [PayMobileMoneyController, 'pay'])
     .as('orders.pay.mobile-money')
 
@@ -450,6 +463,60 @@ router.group(() => {
   // 3. Payer par Lien (WEB, VISA_MASTERCARD, RESTLINK)
   router.post('/orders/pay/link', [PayLinkController, 'pay'])
     .as('orders.pay.link')
-  router.post('/mypvit/callback', [CallbackController, 'handle'])
+
+  // --- STATUT COMMANDE ---
+  router.put('/orders/:orderId/status', [OrdersController, 'updateStatus']).as('orders.statuts.updates')
+  router.put('/orders/:orderId/confirm-delivery', [OrdersController, 'confirmDelivery']).as('orders.confirm-delivery')
+
+  // ============================================================
+  // ADMIN - GESTION DES BOUTIQUES (MARCHANDS)
+  // ============================================================
+  router.group(() => {
+    // Récupérer tous les marchands avec pagination et filtres
+    router.get('/merchants', [MerchantsController, 'adminIndex']).as('admin.merchants.index')
+
+    // Récupérer les statistiques des marchands
+    router.get('/merchants/stats', [MerchantsController, 'adminStats']).as('admin.merchants.stats')
+
+    // Activer/Désactiver un marchand
+    router.patch('/merchants/:id/toggle-status', [MerchantsController, 'toggleStatus']).as('admin.merchants.toggle')
+
+    // Vérifier un marchand
+    router.patch('/merchants/:id/verify', [MerchantsController, 'verifyMerchant']).as('admin.merchants.verify')
+
+    // Rejeter un marchand avec motif
+    router.post('/merchants/:id/reject', [MerchantsController, 'rejectMerchant']).as('admin.merchants.reject')
+
+    // Voir les détails d'un marchand
+    router.get('/merchants/:id/details', [MerchantsController, 'adminShow']).as('admin.merchants.show')
+
+    // Supprimer un marchand
+    router.delete('/merchants/:id', [MerchantsController, 'destroy']).as('admin.merchants.destroy')
+  }).prefix('/admin')
+
+  // ----------------------------------------------------------
+  // REMBOURSEMENTS (REFUNDS)
+  // ----------------------------------------------------------
+  router.group(() => {
+    // Routes publiques / client
+    router.get('/', [RefundsController, 'index']).as('refunds.index')
+    router.get('/:id', [RefundsController, 'show']).as('refunds.show')
+    router.post('/', [RefundsController, 'store']).as('refunds.store')
+    router.get('/user/:userId', [RefundsController, 'userRefunds']).as('refunds.user')
+    router.get('/order/:orderId', [RefundsController, 'orderRefunds']).as('refunds.order')
+
+    // Routes admin
+    router.patch('/:id/approve', [RefundsController, 'approve']).as('refunds.approve')
+    router.patch('/:id/reject', [RefundsController, 'reject']).as('refunds.reject')
+    router.patch('/:id/complete', [RefundsController, 'complete']).as('refunds.complete')
+    router.get('/stats/global', [RefundsController, 'stats']).as('refunds.stats')
+  }).prefix('/refunds')
+
+  // ----------------------------------------------------------
+  // PAYPAL
+  // ----------------------------------------------------------
+  router.post('/paypal/create', [PayPalController, 'createPayment'])
+  router.get('/paypal/success/:token', [PayPalController, 'success'])
+  router.get('/paypal/cancel', [PayPalController, 'cancel'])
 
 }).prefix('/api')

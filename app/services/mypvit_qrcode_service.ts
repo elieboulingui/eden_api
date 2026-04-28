@@ -1,6 +1,5 @@
 // app/services/mypvit_qrcode_service.ts
-import axios, { type AxiosInstance, type AxiosError } from 'axios'
-import MypvitSecretService from './mypvit_secret_service.js'
+import axios from 'axios'
 
 interface QRCodeResponse {
   status: string
@@ -18,176 +17,145 @@ interface QRCodeParams {
   callbackUrlCode: string
 }
 
-interface QRCodeError {
-  date: string
-  status_code: number
-  error: string
-  message: string
-  path: string
-}
-
 export class MypvitQRCodeService {
-  private httpClient: AxiosInstance
   private readonly BASE_URL = 'https://api.mypvit.pro/v2'
-  private readonly CODE_URL = 'BVO9ML77GDOFNT3Y'
 
-  constructor() {
-    this.httpClient = axios.create({
-      baseURL: this.BASE_URL,
-      timeout: 15000,
-    })
+  // ✅ Chaque API a son propre CODE_URL
+  private readonly RENEW_SECRET_URL = '6JN5J6U0NBJGKDAQ'   // Pour /renew-secret
+  private readonly QR_CODE_URL = '4XWLIAKA5UFSIIYZ'        // Pour /generate-qr-code
 
-    // Intercepteur pour ajouter automatiquement le X-Secret
-    this.httpClient.interceptors.request.use(async (config) => {
-      const secret = await MypvitSecretService.getSecret()
-      config.headers['X-Secret'] = secret
-      return config
-    })
+  private readonly ACCOUNT_CODE = 'ACC_69EFB143D4F54'
+  private readonly PASSWORD = 'Boulinguisanduku@1'
 
-    // Intercepteur pour gérer les erreurs d'authentification
-    this.httpClient.interceptors.response.use(
-      (response) => response,
-      async (error: AxiosError<QRCodeError>) => {
-        if (error.response?.status === 401 && error.config) {
-          await MypvitSecretService.renewSecret()
-          const secret = await MypvitSecretService.getSecret()
-          error.config.headers['X-Secret'] = secret
-          return this.httpClient.request(error.config)
-        }
-        return Promise.reject(error)
-      }
+  private secret: string | null = null
+  private secretExpiresAt: number = 0
+
+  /**
+   * Récupère un secret valide (renouvelle si nécessaire)
+   * Le secret est généré via RENEW_SECRET_URL mais fonctionne pour tous les CODE_URL
+   */
+  private async getSecret(): Promise<string> {
+    const now = Date.now()
+
+    if (this.secret && now < this.secretExpiresAt) {
+      return this.secret
+    }
+
+    console.log('🔄 Génération secret QR...')
+
+    const body = new URLSearchParams()
+    body.append('operationAccountCode', this.ACCOUNT_CODE)
+    body.append('password', this.PASSWORD)
+
+    const response = await axios.post(
+      `${this.BASE_URL}/${this.RENEW_SECRET_URL}/renew-secret`,
+      body.toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     )
+
+    if (!response.data?.secret) {
+      throw new Error('Secret non reçu')
+    }
+
+    this.secret = response.data.secret
+    this.secretExpiresAt = now + ((response.data.expires_in || 3600) * 1000) - 60000
+    console.log('✅ Secret QR prêt')
+    return this.secret
   }
 
   /**
-   * Génère un QR Code statique (sans montant ni référence)
+   * Appel générique à l'API QR Code
+   */
+  private async callQRCodeAPI(params: Record<string, string>): Promise<QRCodeResponse> {
+    let lastError: any
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const secret = await this.getSecret()
+
+        const response = await axios.get<QRCodeResponse>(
+          `${this.BASE_URL}/${this.QR_CODE_URL}/generate-qr-code`,
+          {
+            headers: {
+              'X-Secret': secret,
+              'Accept': 'application/json'
+            },
+            params
+          }
+        )
+
+        return response.data
+
+      } catch (error: any) {
+        lastError = error
+        const errData = error.response?.data
+        const errCode = errData?.status_code
+
+        console.error(`❌ Tentative ${attempt}:`, {
+          code: errCode,
+          error: errData?.error,
+          message: errData?.message
+        })
+
+        // Si AUTHENTICATION_FAILED (3100) → renouveler le secret et réessayer
+        if (errCode === 3100 && attempt === 1) {
+          console.log('🔄 Secret invalide, renouvellement...')
+          this.secret = null
+          continue
+        }
+
+        // Pour les autres erreurs, ne pas réessayer
+        throw new Error(errData?.message || errData?.error || error.message)
+      }
+    }
+
+    throw lastError
+  }
+
+  /**
+   * Génère un QR Code statique
    */
   public async generateStaticQRCode(params: Omit<QRCodeParams, 'amount' | 'reference'>): Promise<QRCodeResponse> {
-    try {
-      console.log('📷 Génération QR Code statique...')
-      console.log('📦 Params:', {
-        accountOperationCode: params.accountOperationCode,
-        terminalId: params.terminalId,
-        callbackUrlCode: params.callbackUrlCode,
-      })
+    console.log('📷 QR Code statique...')
 
-      // Construire les query params
-      const queryParams: any = {
-        accountOperationCode: params.accountOperationCode,
-        terminalId: params.terminalId,
-        callbackUrlCode: params.callbackUrlCode,
-      }
-
-      if (params.transactionType) {
-        queryParams.transactionType = params.transactionType
-      }
-
-      console.log('📡 URL:', `${this.BASE_URL}/${this.CODE_URL}/generate-qr-code`)
-      console.log('📡 Query params:', queryParams)
-
-      const response = await this.httpClient.get<QRCodeResponse>(
-        `/${this.CODE_URL}/generate-qr-code`,
-        {
-          headers: {
-            'Accept': 'application/json',
-          },
-          params: queryParams,
-        }
-      )
-
-      console.log('✅ QR Code généré avec succès')
-      return response.data
-
-    } catch (error: any) {
-      console.error('❌ Erreur QR Code - Status:', error.response?.status)
-      console.error('❌ Erreur QR Code - Data:', JSON.stringify(error.response?.data))
-
-      if (error.response?.data) {
-        const errData = error.response.data
-        throw new Error(`Failed to generate static QR code: ${errData.message || errData.error || error.message}`)
-      }
-      throw new Error(`Failed to generate static QR code: ${error.message}`)
+    const queryParams: Record<string, string> = {
+      accountOperationCode: params.accountOperationCode || this.ACCOUNT_CODE,
+      terminalId: params.terminalId || 'T001',
+      callbackUrlCode: params.callbackUrlCode || '9ZOXW',
     }
+
+    if (params.transactionType) {
+      queryParams.transactionType = params.transactionType
+    }
+
+    return this.callQRCodeAPI(queryParams)
   }
 
   /**
-   * Génère un QR Code dynamique (avec montant et référence)
+   * Génère un QR Code dynamique
    */
-  public async generateDynamicQRCode(params: Required<Pick<QRCodeParams, 'amount' | 'reference'>> & Omit<QRCodeParams, 'amount' | 'reference'>): Promise<QRCodeResponse> {
-    try {
-      console.log('📷 Génération QR Code dynamique...')
+  public async generateDynamicQRCode(
+    params: Required<Pick<QRCodeParams, 'amount' | 'reference'>> & Omit<QRCodeParams, 'amount' | 'reference'>
+  ): Promise<QRCodeResponse> {
+    console.log('📷 QR Code dynamique...')
 
-      const queryParams: any = {
-        accountOperationCode: params.accountOperationCode,
-        terminalId: params.terminalId,
-        callbackUrlCode: params.callbackUrlCode,
-        amount: params.amount,
-        reference: params.reference,
-      }
-
-      if (params.transactionType) {
-        queryParams.transactionType = params.transactionType
-      }
-
-      const response = await this.httpClient.get<QRCodeResponse>(
-        `/${this.CODE_URL}/generate-qr-code`,
-        {
-          headers: {
-            'Accept': 'application/json',
-          },
-          params: queryParams,
-        }
-      )
-
-      console.log('✅ QR Code dynamique généré avec succès')
-      return response.data
-
-    } catch (error: any) {
-      console.error('❌ Erreur QR Code dynamique:', error.response?.data || error.message)
-
-      if (error.response?.data) {
-        const errData = error.response.data
-        throw new Error(`Failed to generate dynamic QR code: ${errData.message || errData.error || error.message}`)
-      }
-      throw new Error(`Failed to generate dynamic QR code: ${error.message}`)
+    const queryParams: Record<string, string> = {
+      accountOperationCode: params.accountOperationCode || this.ACCOUNT_CODE,
+      terminalId: params.terminalId || 'T001',
+      callbackUrlCode: params.callbackUrlCode || '9ZOXW',
+      amount: params.amount,
+      reference: params.reference,
     }
+
+    if (params.transactionType) {
+      queryParams.transactionType = params.transactionType
+    }
+
+    return this.callQRCodeAPI(queryParams)
   }
 
   /**
-   * Génère un QR Code en format image PNG
-   */
-  public async generateQRCodeAsImage(params: QRCodeParams): Promise<Buffer> {
-    try {
-      const queryParams: any = {
-        accountOperationCode: params.accountOperationCode,
-        terminalId: params.terminalId,
-        callbackUrlCode: params.callbackUrlCode,
-      }
-
-      if (params.amount) queryParams.amount = params.amount
-      if (params.reference) queryParams.reference = params.reference
-      if (params.transactionType) queryParams.transactionType = params.transactionType
-
-      const response = await this.httpClient.get(
-        `/${this.CODE_URL}/generate-qr-code`,
-        {
-          headers: {
-            'Accept': 'image/png',
-          },
-          params: queryParams,
-          responseType: 'arraybuffer',
-        }
-      )
-
-      return Buffer.from(response.data)
-
-    } catch (error: any) {
-      throw new Error(`Failed to generate QR code image: ${error.message}`)
-    }
-  }
-
-  /**
-   * Génère un QR Code automatiquement selon les paramètres
+   * Génération automatique
    */
   public async generateQRCode(params: QRCodeParams): Promise<QRCodeResponse> {
     if (params.amount && params.reference) {
@@ -196,9 +164,8 @@ export class MypvitQRCodeService {
         amount: params.amount,
         reference: params.reference,
       })
-    } else {
-      return this.generateStaticQRCode(params)
     }
+    return this.generateStaticQRCode(params)
   }
 }
 

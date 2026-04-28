@@ -1,16 +1,16 @@
-import app from '@adonisjs/core/services/app'
+// config/cors.ts
 import { defineConfig } from '@adonisjs/cors'
 
 const corsConfig = defineConfig({
   enabled: true,
-  
-  origin: app.inDev 
-    ? true  // En développement : autorise toutes les origines
-    : ['https://eden-azure-one.vercel.app',"https://ecomerce-api-sc1s.onrender.com"],  // En production : uniquement votre frontend
-  
-  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  headers: true,
-  exposeHeaders: [],
+  origin: [
+    'http://localhost:3000',      // Next.js dev
+    'http://localhost:3333',      // Adonis local
+    'https://ton-domaine.com',    // Production
+    /^https:\/\/(.*)\.ton-domaine\.com$/  // Regex pour sous-domaines
+  ],
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  headers: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
   maxAge: 90,
 })

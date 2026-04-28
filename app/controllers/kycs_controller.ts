@@ -67,50 +67,107 @@ export default class KYCsController {
     }
 
     try {
-      // Appel à l'API Render
-      const kycUrl = `https://apist.onrender.com/api/mypvit/kyc/marchant?customerAccountNumber=${numeroTelephone}`
+      // Détecter l'opérateur à partir du préfixe
+      const prefix = numeroTelephone.substring(0, 2)
+
+      // Mapping des codes opérateurs
+      const operatorMapping: { [key: string]: string } = {
+        '06': 'MOOV_MONEY',
+        '07': 'AIRTEL_MONEY'
+      }
+
+      if (!operatorMapping[prefix]) {
+        return response.status(400).json({
+          success: false,
+          message: 'Numéro non reconnu. Utilisez un numéro Moov (06) ou Airtel (07)',
+          prefix: prefix
+        })
+      }
+
+      const operatorCode = operatorMapping[prefix]
+
+      // Appel à l'API Render avec le bon operatorCode
+      const kycUrl = `https://api.mypvit.pro/v2/NH3QVMNQOWNXRZ91/kyc?customerAccountNumber=${numeroTelephone}&operatorCode=${operatorCode}`
+
+      console.log('URL appelée:', kycUrl)
 
       const externalResponse = await fetch(kycUrl)
-      const externalData: any = await externalResponse.json()
 
-      // Prendre les données telles quelles de l'API Render
-      const nomComplet = externalData.data.full_name
-      const operateur = externalData.data.operator
+      // Vérifier si la réponse HTTP est correcte
+      if (!externalResponse.ok) {
+        const errorText = await externalResponse.text()
+        console.error('Erreur API externe:', errorText)
+        return response.status(externalResponse.status).json({
+          success: false,
+          message: `L'API externe a retourné une erreur: ${externalResponse.status}`,
+          error: errorText
+        })
+      }
+
+      const externalData: any = await externalResponse.json()
+      console.log('Réponse API brute:', JSON.stringify(externalData, null, 2))
+
+      // Vérifier la structure de la réponse et extraire les données
+      const nomComplet = externalData.data?.firstname || externalData.data?.full_name || externalData.data?.name
+      const numeroAPI = externalData.data?.phone || externalData.data?.phoneNumber || externalData.data?.customerAccountNumber
+      const operateur = externalData.data?.operator || operatorCode
+
+      if (!nomComplet) {
+        console.error('Données API incomplètes:', externalData)
+        return response.status(500).json({
+          success: false,
+          message: 'Données client non trouvées dans la réponse API',
+          receivedData: externalData.data || externalData
+        })
+      }
+
+      // Utiliser le numéro de téléphone de l'API si disponible, sinon celui fourni
+      const finalNumero = numeroAPI || numeroTelephone
 
       // Vérifier si le numéro existe déjà
-      const existing = await KYC.findBy('numeroTelephone', numeroTelephone)
+      const existing = await KYC.findBy('numeroTelephone', finalNumero)
 
       let kycRecord
 
       if (existing) {
+        // Mise à jour avec les nouvelles données
         existing.nomComplet = nomComplet
         existing.operateur = operateur
+        // Mettre à jour le numéro si l'API en retourne un différent
+        if (numeroAPI && numeroAPI !== existing.numeroTelephone) {
+          existing.numeroTelephone = numeroAPI
+        }
         await existing.save()
         kycRecord = existing
       } else {
+        // Création d'un nouvel enregistrement
         kycRecord = await KYC.create({
           nomComplet: nomComplet,
-          numeroTelephone: numeroTelephone,
+          numeroTelephone: finalNumero,
           operateur: operateur
         })
       }
 
-      // Renvoyer uniquement les données enregistrées
+      // Renvoyer les données enregistrées
       return response.status(200).json({
-        id: kycRecord.id,
-        numeroTelephone: kycRecord.numeroTelephone,
-        nomComplet: kycRecord.nomComplet,
-        operateur: kycRecord.operateur,
-        createdAt: kycRecord.createdAt,
-        updatedAt: kycRecord.updatedAt
+        success: true,
+        message: existing ? 'KYC mis à jour avec succès' : 'KYC créé avec succès',
+        data: {
+          id: kycRecord.id,
+          numeroTelephone: kycRecord.numeroTelephone,
+          nomComplet: kycRecord.nomComplet,
+          operateur: kycRecord.operateur,
+          createdAt: kycRecord.createdAt,
+          updatedAt: kycRecord.updatedAt
+        }
       })
 
     } catch (error: any) {
-      console.error('Erreur KYC:', error)
+      console.error('Erreur KYC complète:', error)
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur',
-        error: error.message
+        error: process.env.NODE_ENV === 'production' ? 'Erreur interne' : error.message
       })
     }
   }

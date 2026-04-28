@@ -1,72 +1,141 @@
 @layout()
-  <section class="hero">
-    <p class="text-sm uppercase tracking-[0.3em] text-slate-400">AdminMarket Manager</p>
-    <h1>Pilotage logistique & opérations</h1>
-    <p>Orchestrez les commandes, surveillez les anomalies et gardez le contact avec l’entrepôt.</p>
-  </section>
+<section class="hero" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 24px; margin: 20px 30px; padding: 60px 50px;">
+  <p class="text-sm uppercase tracking-[0.3em]" style="color: rgba(255,255,255,0.7);">AdminMarket Manager</p>
+  <h1 style="color: white; font-size: 48px; margin: 16px 0; font-weight: 700;">Pilotage logistique & opérations</h1>
+  <p style="color: rgba(255,255,255,0.85); font-size: 18px;">Orchestrez les commandes, surveillez les anomalies et gardez le contact avec l'entrepôt.</p>
+</section>
 
-  <div class="dashboard">
-    <div class="dashboard-grid">
-      @each(stat in managerStats)
-        <article class="metric-card">
-          <p class="label uppercase">{{ stat.title }}</p>
-          <p class="value">{{ stat.value }}</p>
-          <p class="detail">{{ stat.detail }}</p>
-        </article>
-      @end
+<div style="max-width: 1400px; margin: 0 auto; padding: 0 30px 60px;">
+  <!-- Statistiques -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; margin-bottom: 48px;">
+    @each(stat in managerStats)
+      <div style="background: linear-gradient(145deg, #ffffff, #f8fafc); border-radius: 20px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); transition: transform 0.2s, box-shadow 0.2s;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+          <p style="color: #64748b; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600;">{{ stat.title }}</p>
+          <div style="font-size: 28px;">
+            @if(stat.title === 'Commandes en cours')
+              📦
+            @elseif(stat.title === 'Commandes bloquées')
+              ⚠️
+            @elseif(stat.title === 'Livraisons retardées')
+              🚚
+            @else
+              📊
+            @end
+          </div>
+        </div>
+        <p class="value" style="color: #0f172a; font-size: 36px; font-weight: 800; margin-bottom: 8px;">{{ stat.value }}</p>
+        <p class="detail" style="color: #94a3b8; font-size: 13px;">{{ stat.detail }}</p>
+      </div>
+    @end
+  </div>
+
+  <!-- Transporteurs actifs -->
+  <div style="background: white; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 48px; overflow: hidden;">
+    <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
+      <h3 style="font-size: 18px; font-weight: 700; color: #0f172a;">🚚 Transporteurs actifs</h3>
+      <span style="color: #94a3b8; font-size: 13px;">Données par transporteur</span>
     </div>
-
-    <section class="table-card">
-      <header>
-        <h3>Transporteurs actifs</h3>
-        <span>Données par transporteur</span>
-      </header>
-      <table>
+    <div style="overflow-x: auto;">
+      <table style="width: 100%; border-collapse: collapse;">
         <thead>
-          <tr>
-            <th>Transporteur</th>
-            <th>Commandes</th>
+          <tr style="background: #f8fafc;">
+            <th style="text-align: left; padding: 16px 20px; font-size: 12px; font-weight: 600; color: #64748b;">Transporteur</th>
+            <th style="text-align: left; padding: 16px 20px; font-size: 12px; font-weight: 600; color: #64748b;">Commandes</th>
           </tr>
         </thead>
         <tbody>
           @each(row in regionRows)
-            <tr>
-              <td>{{ row.carrier }}</td>
-              <td>{{ row.total }}</td>
-            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.2s;">
+              <td style="padding: 16px 20px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 18px;">📮</div>
+                  <span style="font-weight: 600; color: #0f172a;">{{ row.carrier }}</span>
+                </div>
+               </td>
+              <td style="padding: 16px 20px;">
+                <span style="background: #dbeafe; color: #1e40af; padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 14px;">{{ row.total }} commandes</span>
+               </td>
+             </tr>
           @else
             <tr>
-              <td colspan="2" class="text-sm" style="text-align:center;">Aucun transporteur actif.</td>
+              <td colspan="2" style="padding: 40px; text-align: center; color: #94a3b8;">Aucun transporteur actif.</td>
             </tr>
           @end
         </tbody>
       </table>
-    </section>
+    </div>
+  </div>
 
-    <section class="list-card">
-      <h3>Commandes prioritaires</h3>
+  <!-- Commandes prioritaires -->
+  <div style="background: white; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 48px; overflow: hidden;">
+    <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9;">
+      <h3 style="font-size: 18px; font-weight: 700; color: #0f172a;">⚡ Commandes prioritaires</h3>
+      <p style="color: #94a3b8; font-size: 13px; margin-top: 4px;">À traiter en urgence</p>
+    </div>
+    <div style="padding: 8px 16px;">
       @each(order in priorityRows)
-        <div class="delivery-row">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; margin: 8px 0; background: linear-gradient(145deg, #fef3c7, #fffbeb); border-radius: 16px; border-left: 4px solid #f59e0b;">
           <div>
-            <strong>{{ order.number }}</strong>
-            <p class="detail">{{ order.customer }}</p>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+              <span style="background: #f59e0b; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;">URGENT</span>
+              <strong style="color: #0f172a; font-size: 16px;">{{ order.number }}</strong>
+            </div>
+            <p style="color: #64748b; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+              <span>👤</span> {{ order.customer }}
+            </p>
           </div>
-          <div>
-            <p>{{ order.total }}</p>
-            <p class="detail">{{ order.status }}</p>
+          <div style="text-align: right;">
+            <p style="font-weight: 800; color: #f59e0b; font-size: 18px;">{{ order.total }}</p>
+            <p style="color: #94a3b8; font-size: 12px;">{{ order.status }}</p>
           </div>
         </div>
       @else
-        <p class="text-sm text-slate-500">Aucune commande prioritaire.</p>
+        <p style="padding: 40px; text-align: center; color: #94a3b8;">Aucune commande prioritaire.</p>
       @end
-    </section>
-
-    <div class="dashboard-grid">
-      <article class="metric-card">
-        <p class="label">Actualisé le</p>
-        <p class="value">{{ timestamp }}</p>
-        <p class="detail">Sync temps réel</p>
-      </article>
     </div>
   </div>
+
+  <!-- Dernière mise à jour -->
+  <div style="background: linear-gradient(145deg, #f8fafc, #ffffff); border-radius: 20px; padding: 24px; text-align: center; border: 1px solid #e2e8f0;">
+    <div style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 8px;">
+      <span style="font-size: 24px;">🕐</span>
+      <p style="color: #0f172a; font-weight: 600; font-size: 14px;">Actualisé le</p>
+    </div>
+    <p style="color: #3b82f6; font-weight: 700; font-size: 16px;">{{ timestamp }}</p>
+    <p style="color: #94a3b8; font-size: 12px; margin-top: 8px;">Sync temps réel</p>
+  </div>
+</div>
+
+<style>
+  /* Animations supplémentaires */
+  .metric-card, .table-card, .list-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .metric-card:hover, .table-card:hover, .list-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15);
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .dashboard > div {
+    animation: slideIn 0.4s ease-out forwards;
+  }
+
+  .dashboard > div:nth-child(1) { animation-delay: 0.05s; }
+  .dashboard > div:nth-child(2) { animation-delay: 0.1s; }
+  .dashboard > div:nth-child(3) { animation-delay: 0.15s; }
+  .dashboard > div:nth-child(4) { animation-delay: 0.2s; }
+</style>
 @end

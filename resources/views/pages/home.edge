@@ -1,23 +1,120 @@
 @layout()
-  <div class="hero">
-    <h1>It works — welcome to the simplicity of a Hypermedia app</h1>
-    <p>A lightweight foundation for building modern web interfaces — straightforward, flexible, and true to the web's core simplicity.</p>
+<section class="hero" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 24px; margin: 20px 30px; padding: 60px 50px;">
+  <p class="text-sm uppercase tracking-[0.3em]" style="color: rgba(255,255,255,0.8); letter-spacing: 0.2em;">AdminMarket</p>
+  <h1 style="color: white; font-size: 48px; margin: 16px 0; font-weight: 700;">Bienvenue sur AdminMarket</h1>
+  <p style="color: rgba(255,255,255,0.9); font-size: 18px;">Produits, promotions et offres du moment.</p>
+</section>
+
+<section class="home-section">
+  <header class="home-section-head">
+    <h2>🎁 Promotions</h2>
+    <p>Offres actives</p>
+  </header>
+
+  <div class="home-row">
+    @each(promo in promotions)
+      <a href="/promotion/{{ promo.id }}" class="tile tile-promo" style="text-decoration: none; cursor: pointer;">
+        <div class="promo-bg">
+          @if(promo.image_url)
+            <img src="{{ promo.image_url }}" alt="{{ promo.name }}" style="width: 100%; height: 150px; object-fit: cover;" />
+          @else
+            <div style="background: linear-gradient(135deg, #667eea, #764ba2); height: 150px; display: flex; align-items: center; justify-content: center; font-size: 48px;">🎉</div>
+          @end
+          <div class="promo-overlay" style="background: linear-gradient(90deg, rgba(15,23,42,0.9), rgba(15,23,42,0.4));"></div>
+        </div>
+        <div class="promo-body">
+          <span class="promo-pill">{{ promo.type || 'Promotion' }}</span>
+          <h3 class="promo-title">{{ promo.name }}</h3>
+          @if(promo.description)
+            <p class="promo-desc">{{ promo.description }}</p>
+          @end
+          <span class="promo-cta">Découvrir →</span>
+        </div>
+      </a>
+    @else
+      <p class="home-empty">Aucune promotion pour le moment.</p>
+    @end
   </div>
+</section>
 
-  <div class="cards">
-    <a href="https://insiders.adonisjs.com/docs/v7-alpha/introduction" target="_blank">
-      <h3>Official Docs &nbsp;›</h3>
-      <p>Comprehensive reference for building with AdonisJS</p>
-    </a>
+<section class="home-section">
+  <header class="home-section-head">
+    <h2>🛍️ Produits</h2>
+    <p>Catalogue</p>
+  </header>
 
-    <a href="https://adocasts.com/" target="_blank">
-      <h3>Adocasts &nbsp;›</h3>
-      <p>Guided video tutorials for everyday development</p>
-    </a>
-
-    <a href="https://discord.gg/vDcEjq6" target="_blank">
-      <h3>Discord &nbsp;›</h3>
-      <p>Connect with developers building with AdonisJS every day</p>
-    </a>
+  <div class="home-grid home-grid-products">
+    @each(product in products)
+      <a href="/product/{{ product.id }}" class="tile tile-product" style="text-decoration: none; cursor: pointer;">
+        <div class="tile-media">
+          @if(product.image_url)
+            <img src="{{ product.image_url }}" alt="{{ product.name }}" loading="lazy" style="width: 100%; aspect-ratio: 1/1; object-fit: cover;" />
+          @else
+            <div class="tile-media-fallback" style="aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center; font-size: 48px;">📦</div>
+          @end
+          <div class="tile-badges">
+            @if(product.is_new)
+              <span class="tile-badge tile-badge-new" style="background: #0f172a; color: white; padding: 4px 10px; border-radius: 20px; font-size: 11px;">Nouveau</span>
+            @end
+            @if(product.hasDiscount)
+              <span class="tile-badge tile-badge-discount" style="background: #b91c1c; color: white; padding: 4px 10px; border-radius: 20px; font-size: 11px;">-{{ product.discountPercentage }}%</span>
+            @end
+          </div>
+        </div>
+        <div class="tile-body">
+          <h3 class="tile-title" style="font-size: 16px; font-weight: 700; margin-bottom: 8px;">{{ product.name }}</h3>
+          <div class="tile-price" style="margin-bottom: 8px;">
+            @if(product.old_price && product.old_price > product.price)
+              <span class="price-was" style="text-decoration: line-through; color: #94a3b8; font-size: 12px;">{{ Number(product.old_price).toLocaleString('fr-FR') }} FCFA</span>
+              <span class="price-now" style="font-size: 18px; font-weight: 800; color: #2563eb;">{{ Number(product.price).toLocaleString('fr-FR') }} FCFA</span>
+            @else
+              <span class="price-now" style="font-size: 18px; font-weight: 800; color: #2563eb;">{{ Number(product.price).toLocaleString('fr-FR') }} FCFA</span>
+            @end
+          </div>
+          <div class="tile-meta" style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+            @if(product.user)
+              <span class="meta" style="background: #f1f5f9; padding: 4px 10px; border-radius: 20px; font-size: 11px;">👤 {{ product.user.full_name }}</span>
+              <span class="meta" style="background: #f1f5f9; padding: 4px 10px; border-radius: 20px; font-size: 11px;">🌍 {{ product.user.country || 'GA' }}</span>
+            @else
+              <span class="meta" style="background: #f1f5f9; padding: 4px 10px; border-radius: 20px; font-size: 11px;">👤 Vendeur</span>
+            @end
+            @if(product.stock > 0 && product.stock <= 5)
+              <span class="meta meta-warn" style="background: #fef3c7; color: #d97706; padding: 4px 10px; border-radius: 20px; font-size: 11px;">Stock faible</span>
+            @elseif(product.stock > 0)
+              <span class="meta" style="background: #dcfce7; color: #16a34a; padding: 4px 10px; border-radius: 20px; font-size: 11px;">En stock</span>
+            @else
+              <span class="meta meta-bad" style="background: #fee2e2; color: #dc2626; padding: 4px 10px; border-radius: 20px; font-size: 11px;">Rupture</span>
+            @end
+          </div>
+        </div>
+      </a>
+    @else
+      <p class="home-empty">Aucun produit disponible.</p>
+    @end
   </div>
+</section>
+
+<style>
+  .tile-product:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -12px rgba(0, 0, 0, 0.15);
+    transition: all 0.2s ease;
+  }
+
+  .tile-promo:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -12px rgba(0, 0, 0, 0.15);
+    transition: all 0.2s ease;
+  }
+
+  @media (max-width: 768px) {
+    .hero {
+      padding: 40px 20px !important;
+      margin: 20px !important;
+    }
+    .hero h1 {
+      font-size: 32px !important;
+    }
+  }
+</style>
 @end

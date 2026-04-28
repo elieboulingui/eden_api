@@ -98,6 +98,124 @@ export default class OrdersController {
     }
   }
 
+
+  /**
+ * Confirmer la livraison par le client (avec email + numéro de commande)
+ * PUT /api/orders/:orderId/confirm-delivery
+ */
+  async confirmDelivery({ params, request, response }: HttpContext) {
+    console.log('📦 [Confirmation Livraison] Début')
+
+    try {
+      const { orderId } = params
+      const { email, orderNumber, location } = request.only(['email', 'orderNumber', 'location'])
+
+      if (!email) {
+        return response.status(400).json({
+          success: false,
+          message: 'L\'email est requis pour confirmer la livraison'
+        })
+      }
+
+      if (!orderNumber) {
+        return response.status(400).json({
+          success: false,
+          message: 'Le numéro de commande est requis pour confirmer la livraison'
+        })
+      }
+
+      let order: Order | null = null
+
+      if (orderId.startsWith('CMD-')) {
+        order = await Order.query()
+          .where('order_number', orderId)
+          .preload('items')
+          .preload('tracking')
+          .first()
+      } else {
+        order = await Order.find(orderId)
+      }
+
+      if (!order) {
+        return response.status(404).json({
+          success: false,
+          message: 'Commande non trouvée'
+        })
+      }
+
+      console.log(`📦 Commande: ${order.order_number} | Statut actuel: ${order.status}`)
+
+      if (order.customer_email !== email) {
+        return response.status(403).json({
+          success: false,
+          message: 'L\'email ne correspond pas à celui utilisé pour cette commande'
+        })
+      }
+
+      if (order.order_number !== orderNumber) {
+        return response.status(403).json({
+          success: false,
+          message: 'Le numéro de commande ne correspond pas'
+        })
+      }
+
+      if (order.status === 'delivered') {
+        return response.status(400).json({
+          success: false,
+          message: 'Cette commande est déjà marquée comme livrée'
+        })
+      }
+
+      // ✅ Accepter paid, processing, shipped
+      const allowedStatuses = ['paid', 'processing', 'shipped']
+      if (!allowedStatuses.includes(order.status)) {
+        return response.status(400).json({
+          success: false,
+          message: `La commande ne peut pas être confirmée. Statut actuel: ${order.status}. Statuts acceptés: ${allowedStatuses.join(', ')}`
+        })
+      }
+
+      await OrderTracking.create({
+        order_id: order.id,
+        status: 'delivered',
+        location: location || 'Non spécifié',
+        description: '✅ Livraison confirmée par le client',
+        tracked_at: DateTime.now(),
+      })
+
+      // ✅ Mise à jour SANS delivery_confirmed_by
+      order.status = 'delivered'
+      order.delivered_at = DateTime.now()
+      // ❌ order.delivery_confirmed_by = 'customer'  // Colonne inexistante
+      await order.save()
+
+      console.log(`✅ [Confirmation] Commande ${order.order_number} livrée !`)
+
+      return response.status(200).json({
+        success: true,
+        message: '✅ Livraison confirmée avec succès ! Merci de votre confiance.',
+        data: {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          status: 'delivered',
+          statusLabel: 'Livrée',
+          deliveredAt: order.delivered_at,
+          confirmedBy: 'customer',
+          customerEmail: order.customer_email,
+          total: order.total,
+          items: order.items
+        }
+      })
+
+    } catch (error: any) {
+      console.error('❌ [Confirmation] Erreur:', error.message)
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur lors de la confirmation de livraison',
+        error: error.message
+      })
+    }
+  }
   private async performKYCAndSave(
     phoneNumber: string,
     fallbackOperatorCode?: string,
@@ -544,7 +662,7 @@ export default class OrdersController {
   /**
    * Créer une commande avec le mode de paiement choisi
    * POST /api/orders
-   * 
+   *
    * Logique:
    * - Si le panier est plein → utilise le panier
    * - Si le panier est vide → utilise les items fournis dans le JSON
@@ -1000,6 +1118,8 @@ export default class OrdersController {
     }
   }
 
+  // app/controllers/OrdersController.ts
+
   async updateStatus({ params, request, response }: HttpContext) {
     try {
       const { orderId } = params
@@ -1007,40 +1127,88 @@ export default class OrdersController {
         'status', 'trackingNumber', 'estimatedDelivery', 'location', 'description',
       ])
 
+      console.log('🔵 [updateStatus] Appel reçu:', { orderId, status })
+
+      // Vérifier si le statut est valide
+      const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'pending_payment', 'paid', 'payment_failed']
+      if (!validStatuses.includes(status)) {
+        console.log('❌ Statut invalide:', status)
+        return response.status(400).json({
+          success: false,
+          message: `Statut invalide. Statuts acceptés: ${validStatuses.join(', ')}`
+        })
+      }
+
+      // Rechercher la commande
       let order: Order | null = null
-      if (orderId.startsWith('CMD-')) {
+      if (orderId.startsWith('CMD-') || orderId.startsWith('ORD-')) {
         order = await Order.query().where('order_number', orderId).first()
       } else {
         order = await Order.find(orderId)
       }
 
       if (!order) {
-        return response.status(404).json({ success: false, message: 'Commande non trouvée' })
+        console.log('❌ Commande non trouvée:', orderId)
+        return response.status(404).json({
+          success: false,
+          message: 'Commande non trouvée'
+        })
       }
 
-      await OrderTracking.create({
-        order_id: order.id,
-        status,
-        description: description || getStatusDescription(status),
-        location: location || null,
-        tracked_at: DateTime.now(),
+      console.log('📦 Commande trouvée:', {
+        id: order.id,
+        order_number: order.order_number,
+        ancien_statut: order.status,
+        nouveau_statut: status
       })
 
+      // Sauvegarder l'ancien statut
+      const oldStatus = order.status
+
+      // Mettre à jour la commande
       order.status = status as typeof order.status
       if (trackingNumber) order.tracking_number = trackingNumber
-      if (estimatedDelivery) order.estimated_delivery = estimatedDelivery
+      if (estimatedDelivery) order.estimated_delivery = DateTime.fromISO(estimatedDelivery)
       if (status === 'delivered') order.delivered_at = DateTime.now()
+
       await order.save()
+
+      // Créer un événement de tracking (non bloquant)
+      try {
+        await OrderTracking.create({
+          order_id: order.id,
+          status,
+          description: description || getStatusDescription(status),
+          location: location || null,
+          tracked_at: DateTime.now(),
+        })
+        console.log('✅ Événement de tracking créé')
+      } catch (trackingError) {
+        console.log('⚠️ Erreur tracking (non bloquante):', trackingError)
+      }
+
+      console.log('✅ Statut mis à jour avec succès:', {
+        id: order.id,
+        ancien: oldStatus,
+        nouveau: order.status
+      })
 
       return response.status(200).json({
         success: true,
         message: `✅ Statut mis à jour : ${status}`,
-        data: order
+        data: {
+          id: order.id,
+          order_number: order.order_number,
+          old_status: oldStatus,
+          new_status: order.status,
+          updated_at: order.updated_at
+        }
       })
     } catch (error) {
+      console.error('❌ Erreur updateStatus:', error)
       return response.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        message: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }

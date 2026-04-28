@@ -45,5 +45,15 @@ export default await Env.create(new URL('../', import.meta.url), {
   | Variables for configuring the lock package
   |----------------------------------------------------------
   */
-  LOCK_STORE: Env.schema.enum(['redis', 'memory'] as const)
+  LOCK_STORE: Env.schema.enum(['redis', 'memory'] as const),
+
+  /*
+  |----------------------------------------------------------
+  | Variables for PayPal configuration
+  |----------------------------------------------------------
+  */
+  PAYPAL_CLIENT_ID: Env.schema.string(),
+  PAYPAL_CLIENT_SECRET: Env.schema.string(),
+  PAYPAL_MODE: Env.schema.enum(['sandbox', 'live'] as const),
+  PAYPAL_URL: Env.schema.string({ format: 'url' }),
 })

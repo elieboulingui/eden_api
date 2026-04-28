@@ -1,63 +1,187 @@
 @layout()
-  <section class="hero">
-    <p class="text-sm uppercase tracking-[0.3em] text-slate-400">AdminMarket Promotions</p>
-    <h1>Gestion des campagnes & codes promo</h1>
-    <p>Suivez l’utilisation des promotions, ajoutez-en et ajustez-les au fil des campagnes.</p>
-  </section>
+<section class="hero" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 24px; margin: 20px 30px; padding: 60px 50px;">
+  <p class="text-sm uppercase tracking-[0.3em]" style="color: rgba(255,255,255,0.8);">AdminMarket Promotions</p>
+  <h1 style="color: white; font-size: 48px; margin: 16px 0;">Gestion des campagnes & codes promo</h1>
+  <p style="color: rgba(255,255,255,0.9); font-size: 18px;">Suivez l'utilisation des promotions, ajoutez-en et ajustez-les au fil des campagnes.</p>
+</section>
 
-  <div class="dashboard">
-    <div class="dashboard-grid">
-      @each(stat in promoStats)
-        <article class="metric-card">
-          <p class="label">{{ stat.title }}</p>
-          <p class="value">{{ stat.value }}</p>
-          <p class="detail">{{ stat.detail }}</p>
-        </article>
-      @end
+<div style="max-width: 1400px; margin: 0 auto; padding: 0 30px 60px;">
+  <!-- Statistiques -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; margin-bottom: 48px;">
+    @each(stat in promoStats)
+      <div style="background: white; border-radius: 20px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); transition: transform 0.2s, box-shadow 0.2s;">
+        <div style="font-size: 32px; margin-bottom: 12px;">{{ stat.icon ?? '🎯' }}</div>
+        <p style="color: #6b7280; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">{{ stat.title }}</p>
+        <p style="color: #111827; font-size: 32px; font-weight: 700; margin-bottom: 8px;">{{ stat.value }}</p>
+        <p style="color: #9ca3af; font-size: 13px;">{{ stat.detail }}</p>
+      </div>
+    @end
+  </div>
+
+  <!-- Codes actifs -->
+  <div style="background: white; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 48px; overflow: hidden;">
+    <div style="padding: 20px 24px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center;">
+      <h3 style="font-size: 18px; font-weight: 600; color: #111827;">📋 Codes actifs</h3>
+      <span style="color: #9ca3af; font-size: 13px;">Usage & type</span>
     </div>
-
-    <section class="table-card">
-      <header>
-        <h3>Codes actifs</h3>
-        <span>Usage & type</span>
-      </header>
-      <table>
+    <div style="overflow-x: auto;">
+      <table style="width: 100%; border-collapse: collapse;">
         <thead>
-          <tr>
-            <th>Code</th>
-            <th>Type</th>
-            <th>Réduction</th>
-            <th>Utilisations</th>
-            <th>Statut</th>
+          <tr style="background: #f9fafb; border-bottom: 1px solid #f0f0f0;">
+            <th style="text-align: left; padding: 16px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Code</th>
+            <th style="text-align: left; padding: 16px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Type</th>
+            <th style="text-align: left; padding: 16px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Réduction</th>
+            <th style="text-align: left; padding: 16px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Utilisations</th>
+            <th style="text-align: left; padding: 16px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Statut</th>
           </tr>
         </thead>
         <tbody>
           @each(coupon in couponRows)
-            <tr>
-              <td>{{ coupon.code }}</td>
-              <td>{{ coupon.type }}</td>
-              <td>{{ coupon.discount }}</td>
-              <td>{{ coupon.usage }}</td>
-              <td>{{ coupon.status }}</td>
+            <tr style="border-bottom: 1px solid #f0f0f0;">
+              <td style="padding: 16px 20px; font-weight: 600; color: #111827;">{{ coupon.code }}</td>
+              <td style="padding: 16px 20px; color: #6b7280;">{{ coupon.type }}</td>
+              <td style="padding: 16px 20px; font-weight: 500; color: #10b981;">{{ coupon.discount }}</td>
+              <td style="padding: 16px 20px; color: #6b7280;">{{ coupon.usage_count ?? 0 }}/{{ coupon.max_uses ?? '∞' }}</td>
+              <td style="padding: 16px 20px;">
+                @if(coupon.status === 'actif')
+                  <span style="background: #d1fae5; color: #065f46; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">● Actif</span>
+                @elseif(coupon.status === 'expiré')
+                  <span style="background: #fee2e2; color: #991b1b; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">● Expiré</span>
+                @else
+                  <span style="background: #fed7aa; color: #92400e; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">● Épuisé</span>
+                @end
+              </td>
             </tr>
           @else
             <tr>
-              <td colspan="5" class="text-sm" style="text-align:center;">Aucun coupon actif.</td>
+              <td colspan="5" style="padding: 40px; text-align: center; color: #9ca3af;">Aucun coupon actif.</td>
             </tr>
           @end
         </tbody>
       </table>
-    </section>
-
-    <section class="category-grid">
-      @each(item in redemptionStats)
-        <article class="category-card">
-          <h4>{{ item.label }}</h4>
-          <p class="detail">{{ item.count }} usages</p>
-        </article>
-      @else
-        <p class="text-sm text-slate-500">Pas encore de statistiques.</p>
-      @end
-    </section>
+    </div>
   </div>
+
+  <!-- Historique des utilisations -->
+  <div style="background: white; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 48px; overflow: hidden;">
+    <div style="padding: 20px 24px; border-bottom: 1px solid #f0f0f0;">
+      <h3 style="font-size: 18px; font-weight: 600; color: #111827;">🎟️ Historique des utilisations</h3>
+      <p style="color: #9ca3af; font-size: 13px; margin-top: 4px;">Qui a utilisé quel code ?</p>
+    </div>
+    <div style="overflow-x: auto;">
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="background: #f9fafb;">
+            <th style="text-align: left; padding: 14px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Date</th>
+            <th style="text-align: left; padding: 14px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Utilisateur</th>
+            <th style="text-align: left; padding: 14px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Code promo</th>
+            <th style="text-align: left; padding: 14px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Produit</th>
+            <th style="text-align: left; padding: 14px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Réduction</th>
+            <th style="text-align: left; padding: 14px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          @each(usage in couponUsages)
+            <tr style="border-bottom: 1px solid #f0f0f0;">
+              <td style="padding: 16px 20px; color: #6b7280; font-size: 13px;">{{ usage.used_at }}</td>
+              <td style="padding: 16px 20px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px;">{{ usage.user_initials }}</div>
+                  <div>
+                    <div style="font-weight: 600; color: #111827;">{{ usage.user_name }}</div>
+                    <div style="font-size: 12px; color: #9ca3af;">{{ usage.user_email }}</div>
+                  </div>
+                </div>
+              </td>
+              <td style="padding: 16px 20px;">
+                <span style="background: #e0e7ff; color: #4338ca; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">{{ usage.coupon_code }}</span>
+              </td>
+              <td style="padding: 16px 20px;">
+                <div style="font-weight: 500; color: #111827;">{{ usage.product_name }}</div>
+                <div style="font-size: 11px; color: #9ca3af;">{{ usage.product_category }}</div>
+              </td>
+              <td style="padding: 16px 20px; color: #10b981; font-weight: 600;">-{{ usage.discount_amount }}</td>
+              <td style="padding: 16px 20px; font-weight: 600; color: #111827;">{{ usage.order_total }}</td>
+            </tr>
+          @else
+            <tr>
+              <td colspan="6" style="padding: 60px; text-align: center; color: #9ca3af;">Aucune utilisation de code promo enregistrée.</td>
+            </tr>
+          @end
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Statistiques par code -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-bottom: 48px;">
+    @each(item in redemptionStats)
+      <div style="background: white; border-radius: 20px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); transition: transform 0.2s;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
+          <div>
+            <div style="font-size: 14px; font-weight: 600; background: #f3f4f6; display: inline-block; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px; color: #4b5563;">{{ item.type }}</div>
+            <h4 style="font-size: 20px; font-weight: 700; color: #111827;">{{ item.coupon_code }}</h4>
+            <p style="color: #10b981; font-weight: 600; margin-top: 4px;">-{{ item.discount }}</p>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 32px; font-weight: 800; color: #667eea;">{{ item.count }}</div>
+            <div style="color: #9ca3af; font-size: 12px;">utilisations</div>
+          </div>
+        </div>
+        <div style="margin: 16px 0;">
+          <div style="background: #e5e7eb; height: 8px; border-radius: 10px; overflow: hidden;">
+            <div style="width: {{ item.usage_percent }}%; height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 10px;"></div>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px;">
+          <span style="color: #6b7280;">{{ item.remaining }} restantes</span>
+          <span style="color: #667eea; font-weight: 600;">{{ item.usage_percent }}% utilisé</span>
+        </div>
+      </div>
+    @else
+      <p style="color: #9ca3af;">Aucune statistique disponible.</p>
+    @end
+  </div>
+
+  <!-- Top utilisateurs -->
+  <div style="background: white; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); overflow: hidden;">
+    <div style="padding: 20px 24px; border-bottom: 1px solid #f0f0f0;">
+      <h3 style="font-size: 18px; font-weight: 600; color: #111827;">🏆 Top utilisateurs</h3>
+    </div>
+    <div style="overflow-x: auto;">
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="background: #f9fafb;">
+            <th style="text-align: left; padding: 14px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Utilisateur</th>
+            <th style="text-align: left; padding: 14px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Email</th>
+            <th style="text-align: left; padding: 14px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Codes utilisés</th>
+            <th style="text-align: left; padding: 14px 20px; font-size: 12px; font-weight: 600; color: #6b7280;">Économies</th>
+          </tr>
+        </thead>
+        <tbody>
+          @each(user in topCouponUsers)
+            <tr style="border-bottom: 1px solid #f0f0f0;">
+              <td style="padding: 16px 20px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #f59e0b, #ef4444); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">{{ user.initials }}</div>
+                  <div style="font-weight: 600; color: #111827;">{{ user.name }}</div>
+                </div>
+              </td>
+              <td style="padding: 16px 20px; color: #6b7280;">{{ user.email }}</td>
+              <td style="padding: 16px 20px;">
+                <span style="font-size: 20px; font-weight: 700; color: #667eea;">{{ user.coupons_used }}</span>
+                <span style="color: #9ca3af;"> codes</span>
+              </td>
+              <td style="padding: 16px 20px; font-weight: 600; color: #10b981;">{{ user.total_saved }}</td>
+            </tr>
+          @else
+            <tr>
+              <td colspan="4" style="padding: 40px; text-align: center; color: #9ca3af;">Aucune donnée disponible.</td>
+            </tr>
+          @end
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 @end

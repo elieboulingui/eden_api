@@ -1,0 +1,35 @@
+@let(promotion = $props.get('promotion'))
+@let(link = promotion?.link ?? '#')
+@let(title = promotion?.title ?? 'Promotion')
+@let(description = promotion?.description ?? null)
+@let(imageUrl = promotion?.banner_image ?? promotion?.image_url ?? null)
+@let(buttonText = promotion?.button_text ?? 'Voir')
+@let(discountLabel = null)
+
+@if(promotion?.discount_percentage)
+  @assign(discountLabel = `-${promotion.discount_percentage}%`)
+@elseif(promotion?.discount_amount)
+  @assign(discountLabel = `-${Number(promotion.discount_amount).toLocaleString('fr-FR')} FCFA`)
+@end
+
+<a href="{{ link }}" class="tile tile-promo">
+  <div class="promo-bg">
+    @if(imageUrl)
+      <img src="{{ imageUrl }}" alt="{{ title }}" loading="lazy" />
+    @else
+      <div class="tile-media-fallback">Promotion</div>
+    @end
+    <div class="promo-overlay"></div>
+  </div>
+
+  <div class="promo-body">
+    @if(discountLabel)
+      <span class="promo-pill">{{ discountLabel }}</span>
+    @end
+    <h3 class="promo-title">{{ title }}</h3>
+    @if(description)
+      <p class="promo-desc">{{ description }}</p>
+    @end
+    <span class="promo-cta">{{ buttonText }}</span>
+  </div>
+</a>

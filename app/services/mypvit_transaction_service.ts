@@ -15,7 +15,7 @@ interface TransactionResponse {
 export class MypvitTransactionService {
   private httpClient: AxiosInstance
   private readonly BASE_URL = 'https://api.mypvit.pro/v2'
-  private readonly CODE_URL = 'RURLR7LUPOWTH2WS'
+  private readonly CODE_URL = 'O4PLVRSGUW90JGCY'
 
   constructor() {
     this.httpClient = axios.create({ baseURL: this.BASE_URL, timeout: 30000, headers: { 'Content-Type': 'application/json' } })

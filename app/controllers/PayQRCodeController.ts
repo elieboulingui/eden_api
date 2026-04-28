@@ -12,7 +12,6 @@ import crypto from 'node:crypto'
 import MypvitSecretService from '../services/mypvit_secret_service.js'
 import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
 
-const ACCOUNT_OPERATION_CODE = 'ACC_69EA59CBC7495'
 const CALLBACK_URL_CODE = '9ZOXW'
 
 function generateOrderNumber(): string {
@@ -25,9 +24,45 @@ function generateRandomPassword(): string {
 
 export default class PayQRCodeController {
 
-  private async renewSecretIfNeeded(): Promise<void> {
-    await MypvitSecretService.renewSecret()
+  private async renewSecretIfNeeded(phoneNumber?: string): Promise<void> {
+    await MypvitSecretService.renewSecret(phoneNumber)
     console.log('🔐 Clé renouvelée')
+  }
+
+  private detectOperatorGabon(phoneNumber?: string): { name: string; code: string; accountCode: string } {
+    if (!phoneNumber) {
+      return {
+        name: 'MOOV_MONEY',
+        code: 'MOOV_MONEY',
+        accountCode: 'ACC_69EFB143D4F54'
+      }
+    }
+
+    const clean = phoneNumber.replace(/[\s\+\.\-]/g, '')
+    let local = clean
+    if (clean.startsWith('241')) local = clean.substring(3)
+    if (local.startsWith('0')) local = local.substring(1)
+
+    // ✅ 06 = MOOV_MONEY, 07 = AIRTEL_MONEY
+    if (local.startsWith('06') || local.startsWith('6')) {
+      return {
+        name: 'MOOV_MONEY',
+        code: 'MOOV_MONEY',
+        accountCode: 'ACC_69EFB143D4F54'
+      }
+    }
+    if (local.startsWith('07') || local.startsWith('7')) {
+      return {
+        name: 'AIRTEL_MONEY',
+        code: 'AIRTEL_MONEY',
+        accountCode: 'ACC_69EFB0E02FCA3'
+      }
+    }
+    return {
+      name: 'MOOV_MONEY',
+      code: 'MOOV_MONEY',
+      accountCode: 'ACC_69EFB143D4F54'
+    }
   }
 
   // ==================== CRÉER UN USER SI PAS D'ID ====================
@@ -131,33 +166,61 @@ export default class PayQRCodeController {
   }
 
   private async createOrderItems(order: Order, items: any[]): Promise<{ subtotal: number; itemsCount: number }> {
-    let subtotal = 0; let itemsCount = 0
+    let subtotal = 0
+    let itemsCount = 0
+
     for (const item of items) {
       const productId = item.productId || item.id
       if (!productId) continue
+
       const product = await Product.findBy('id', productId)
       if (!product) throw new Error(`Produit ${productId} non trouvé`)
+
       const itemTotal = item.price * item.quantity
       subtotal += itemTotal
-      await OrderItem.create({ order_id: order.id, product_id: product.id, product_name: product.name, price: item.price, quantity: item.quantity, subtotal: itemTotal })
+
+      await OrderItem.create({
+        order_id: order.id,
+        product_id: product.id,
+        product_name: product.name,
+        price: item.price,
+        quantity: item.quantity,
+        subtotal: itemTotal
+      })
+
       await this.updateProductStock(product.id, item.quantity)
       itemsCount++
     }
+
     return { subtotal, itemsCount }
   }
 
   private async createOrderItemsFromCart(cart: any, order: Order): Promise<{ subtotal: number; itemsCount: number }> {
-    let subtotal = 0; let itemsCount = 0
+    let subtotal = 0
+    let itemsCount = 0
+
     for (const cartItem of cart.items) {
       if (!cartItem.product_id) continue
+
       const product = await Product.findBy('id', cartItem.product_id)
       if (!product) throw new Error(`Produit ${cartItem.product_id} non trouvé`)
+
       const itemTotal = product.price * cartItem.quantity
       subtotal += itemTotal
-      await OrderItem.create({ order_id: order.id, product_id: product.id, product_name: product.name, price: product.price, quantity: cartItem.quantity, subtotal: itemTotal })
+
+      await OrderItem.create({
+        order_id: order.id,
+        product_id: product.id,
+        product_name: product.name,
+        price: product.price,
+        quantity: cartItem.quantity,
+        subtotal: itemTotal
+      })
+
       await this.updateProductStock(product.id, cartItem.quantity)
       itemsCount++
     }
+
     return { subtotal, itemsCount }
   }
 
@@ -178,20 +241,30 @@ export default class PayQRCodeController {
       console.log(`📱 Téléphone: ${payload.customerAccountNumber || 'N/A'}`)
       console.log(`📦 Items: ${payload.items?.length || 0}`)
 
+      // ✅ Détection de l'opérateur selon le numéro (06=MOOV, 07=AIRTEL)
+      const operatorInfo = this.detectOperatorGabon(payload.customerAccountNumber)
+      console.log(`📡 Opérateur détecté: ${operatorInfo.name} | Compte: ${operatorInfo.accountCode}`)
+
       // Vérification stock
       const useCart = !isGuest && payload.userId && (!payload.items || payload.items.length === 0)
       const stockCheck = await this.checkStockAvailability(payload.items || [], useCart, payload.userId)
 
       if (!stockCheck.available) {
         return response.status(400).json({
-          success: false, message: 'Produits indisponibles',
+          success: false,
+          message: 'Produits indisponibles',
           error: 'STOCK_INSUFFISANT',
-          details: { outOfStockProducts: stockCheck.outOfStockProducts, message: stockCheck.message }
+          details: {
+            outOfStockProducts: stockCheck.outOfStockProducts,
+            message: stockCheck.message
+          }
         })
       }
 
       console.log('✅ Stock disponible')
-      await this.renewSecretIfNeeded()
+
+      // Renouveler le secret avec le bon opérateur
+      await this.renewSecretIfNeeded(payload.customerAccountNumber)
 
       // ==================== USER ID ====================
       let userId = payload.userId
@@ -212,89 +285,124 @@ export default class PayQRCodeController {
       const order = await Order.create({
         user_id: userId,
         order_number: orderNumber,
-        status: 'pending', total: 0, subtotal: 0,
+        status: 'pending',
+        total: 0,
+        subtotal: 0,
         shipping_cost: deliveryPrice,
         delivery_method: payload.deliveryMethod || 'standard',
         customer_name: payload.customerName || 'Client',
         customer_phone: payload.customerPhone || payload.customerAccountNumber || '',
-        payment_method: 'qr_code',
+        payment_method: `qr_code_${operatorInfo.name.toLowerCase()}`,
         customer_email: payload.customerEmail || 'invite@email.com',
         shipping_address: payload.shippingAddress || 'non renseigné',
         notes: payload.notes || null,
       })
 
-      let subtotal = 0; let itemsCount = 0
+      let subtotal = 0
+      let itemsCount = 0
 
       if (payload.items && payload.items.length > 0) {
         const r = await this.createOrderItems(order, payload.items)
-        subtotal = r.subtotal; itemsCount = r.itemsCount
+        subtotal = r.subtotal
+        itemsCount = r.itemsCount
         console.log('📦 Items directs utilisés')
       } else if (!isGuest && payload.userId) {
         const cart = await Cart.query().where('user_id', payload.userId).preload('items').first()
         if (cart && cart.items.length > 0) {
           const r = await this.createOrderItemsFromCart(cart, order)
-          subtotal = r.subtotal; itemsCount = r.itemsCount
+          subtotal = r.subtotal
+          itemsCount = r.itemsCount
           await CartItem.query().where('cart_id', cart.id).delete()
           console.log('🛒 Panier utilisé et vidé')
         } else {
           await this.restoreProductStock(order.id)
-          return response.status(400).json({ success: false, message: 'Panier vide' })
+          return response.status(400).json({
+            success: false,
+            message: 'Panier vide'
+          })
         }
       } else {
-        return response.status(400).json({ success: false, message: 'Aucun article' })
+        return response.status(400).json({
+          success: false,
+          message: 'Aucun article'
+        })
       }
 
       const total = subtotal + deliveryPrice
-      order.subtotal = subtotal; order.total = total
+      order.subtotal = subtotal
+      order.total = total
       await order.save()
 
       await OrderTracking.create({
-        order_id: order.id, status: 'pending',
-        description: `Commande QR Code (${isGuest ? 'Invité' : 'Connecté'})`,
+        order_id: order.id,
+        status: 'pending',
+        description: `📷 Commande QR Code ${operatorInfo.name} (${isGuest ? 'Invité' : 'Connecté'}) - ${itemsCount} articles`,
         tracked_at: DateTime.now(),
       })
 
-      // Générer QR Code
-      const terminalId = `T${Date.now().toString(36).toUpperCase()}`
+      // ✅ QR Code - Toujours utiliser le compte MOOV pour la compatibilité API
+      const terminalId = `T${Date.now().toString(36).toUpperCase()}${operatorInfo.code.substring(0, 3)}`
+
+      console.log(`🔑 Génération QR Code pour ${operatorInfo.name}`)
+      console.log(`📡 Compte QR: ACC_69EFB143D4F54 (MOOV) - Compatible API`)
+
       const qrResult = await MypvitQRCodeService.generateStaticQRCode({
-        accountOperationCode: ACCOUNT_OPERATION_CODE,
+        accountOperationCode: 'ACC_69EFB143D4F54', // ✅ MOOV pour compatibilité QR Code
         terminalId: terminalId,
         callbackUrlCode: CALLBACK_URL_CODE,
       })
 
       if (qrResult.reference_id) {
         order.payment_reference_id = qrResult.reference_id
+        order.payment_operator_simple = operatorInfo.name
         order.status = 'pending_payment'
         await order.save()
       }
 
       await OrderTracking.create({
-        order_id: order.id, status: 'pending_payment',
-        description: `QR Code - Réf: ${qrResult.reference_id || order.order_number}`,
+        order_id: order.id,
+        status: 'pending_payment',
+        description: `📱 QR Code ${operatorInfo.name} - Réf: ${qrResult.reference_id || order.order_number}`,
         tracked_at: DateTime.now(),
       })
 
       await order.load('items')
-      console.log('✅ QR Code généré')
+      console.log(`✅ QR Code ${operatorInfo.name} généré avec succès`)
 
       return response.status(201).json({
         success: true,
-        message: '✅ QR Code généré ! Scannez pour payer.',
+        message: `✅ QR Code ${operatorInfo.name} généré ! Scannez pour payer.`,
         data: {
-          orderId: order.id, orderNumber: order.order_number, total: order.total,
-          status: 'pending_payment', customerName: order.customer_name,
-          paymentMethod: 'qr_code', isGuest, itemsCount, userId,
+          orderId: order.id,
+          orderNumber: order.order_number,
+          total: order.total,
+          status: 'pending_payment',
+          customerName: order.customer_name,
+          paymentMethod: `qr_code_${operatorInfo.name.toLowerCase()}`,
+          isGuest,
+          itemsCount,
+          userId,
+          operator: {
+            name: operatorInfo.name,
+            code: operatorInfo.code,
+            accountCode: operatorInfo.accountCode
+          },
           qr_code: {
             data: qrResult.data,
             reference_id: qrResult.reference_id || order.order_number,
-            amount: total, expires_in: 600,
+            amount: total,
+            expires_in: 600,
           },
         },
       })
 
     } catch (error: any) {
       console.error('🔴 Erreur QR:', error.message)
-      return response.status(500).json({ success: false, message: 'Erreur QR Code', error: error.message })
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur QR Code',
+        error: error.message
+      })
     }
   }
 }

@@ -1,0 +1,306 @@
+@layout()
+<section class="hero" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%); border-radius: 24px; margin: 20px 30px; padding: 40px 50px;">
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <p class="text-sm uppercase tracking-[0.3em]" style="color: rgba(255,255,255,0.7); letter-spacing: 0.2em;">AdminMarket · remboursement</p>
+      <h1 style="color: white; font-size: 36px; margin: 16px 0; font-weight: 700;">💰 Détails de la commande</h1>
+      <p style="color: rgba(255,255,255,0.85); font-size: 18px;">
+        Commande #{{ order.order_number }}
+      </p>
+    </div>
+    <div>
+      <span style="display: inline-block; padding: 8px 16px; border-radius: 999px; background: {{ order.statusColor }}20; color: {{ order.statusColor }}; font-weight: 600;">
+        {{ order.statusLabel }}
+      </span>
+    </div>
+  </div>
+</section>
+
+<div style="max-width: 1400px; margin: 0 auto; padding: 0 30px 40px;">
+  
+  <!-- Éligibilité au remboursement -->
+  @if(!eligibility.eligible && refund.refund_status === 'not_requested')
+    <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 24px;">⚠️</span>
+        <div style="flex: 1;">
+          <strong style="color: #92400e;">Cette commande n'est pas éligible au remboursement</strong>
+          <ul style="margin: 8px 0 0 20px; color: #78350f;">
+            @each(reason in eligibility.reasons)
+              @if(!reason.condition)
+                <li>{{ reason.message }}</li>
+              @endif
+            @endeach
+          </ul>
+        </div>
+      </div>
+    </div>
+  @endif
+
+  <!-- Message de statut de remboursement -->
+  @if(refund.refund_status !== 'not_requested')
+    <div style="background: #dbeafe; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 24px;">
+          @if(refund.refund_status === 'pending')
+            ⏳
+          @elseif(refund.refund_status === 'approved')
+            ✅
+          @elseif(refund.refund_status === 'completed')
+            🎉
+          @elseif(refund.refund_status === 'rejected')
+            ❌
+          @endif
+        </span>
+        <div>
+          <strong style="color: #1e40af;">
+            Demande de remboursement - 
+            @if(refund.refund_status === 'pending')
+              En attente de validation
+            @elseif(refund.refund_status === 'approved')
+              Approuvée - En cours de traitement
+            @elseif(refund.refund_status === 'completed')
+              Remboursement complété
+            @elseif(refund.refund_status === 'rejected')
+              Rejetée
+            @endif
+          </strong>
+          @if(refund.refund_reason)
+            <p style="margin: 4px 0 0 0; color: #1e3a8a;">Motif: {{ refund.refund_reason }}</p>
+          @endif
+          @if(refund.refund_rejection_reason)
+            <p style="margin: 4px 0 0 0; color: #dc2626;">Motif du rejet: {{ refund.refund_rejection_reason }}</p>
+          @endif
+        </div>
+      </div>
+    </div>
+  @endif
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    
+    <!-- Colonne gauche : Informations commande et produits -->
+    <div>
+      <!-- Informations client -->
+      <div style="background: white; border-radius: 16px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">👤 Informations client</h2>
+        <div style="space-y: 12px;">
+          <p><strong>Nom:</strong> {{ customer.name }}</p>
+          <p><strong>Email:</strong> {{ customer.email }}</p>
+          <p><strong>Téléphone:</strong> {{ customer.phone }}</p>
+          <p><strong>Adresse:</strong> {{ customer.address }}</p>
+        </div>
+      </div>
+
+      <!-- Produits commandés -->
+      <div style="background: white; border-radius: 16px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">📦 Produits commandés</h2>
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 1px solid #e5e7eb;">
+                <th style="padding: 12px 0; text-align: left;">Produit</th>
+                <th style="padding: 12px 8px; text-align: center;">Quantité</th>
+                <th style="padding: 12px 8px; text-align: right;">Prix unitaire</th>
+                <th style="padding: 12px 8px; text-align: right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              @each(item in items)
+                <tr style="border-bottom: 1px solid #f3f4f6;">
+                  <td style="padding: 12px 0;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                      <img src="{{ item.product_image }}" alt="{{ item.product_name }}" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px;">
+                      <span>{{ item.product_name }}</span>
+                    </div>
+                  </td>
+                  <td style="padding: 12px 8px; text-align: center;">{{ item.quantity }}</td>
+                  <td style="padding: 12px 8px; text-align: right;">{{ item.price }}</td>
+                  <td style="padding: 12px 8px; text-align: right; font-weight: 600;">{{ item.total }}</td>
+                </tr>
+              @endeach
+            </tbody>
+            <tfoot>
+              <tr style="border-top: 2px solid #e5e7eb;">
+                <td colspan="3" style="padding: 12px 8px; text-align: right; font-weight: 600;">Sous-total:</td>
+                <td style="padding: 12px 8px; text-align: right;">{{ totals.subtotal }}</td>
+              </tr>
+              <tr>
+                <td colspan="3" style="padding: 8px 8px; text-align: right;">Livraison:</td>
+                <td style="padding: 8px 8px; text-align: right;">{{ totals.shipping }}</td>
+              </tr>
+              <tr>
+                <td colspan="3" style="padding: 8px 8px; text-align: right;">Taxes:</td>
+                <td style="padding: 8px 8px; text-align: right;">{{ totals.tax }}</td>
+              </tr>
+              @if(totals.discount !== '0 FCFA')
+                <tr>
+                  <td colspan="3" style="padding: 8px 8px; text-align: right; color: #10b981;">Remise:</td>
+                  <td style="padding: 8px 8px; text-align: right; color: #10b981;">-{{ totals.discount }}</td>
+                </tr>
+              @endif
+              <tr style="border-top: 2px solid #e5e7eb; background: #f9fafb;">
+                <td colspan="3" style="padding: 12px 8px; text-align: right; font-size: 16px; font-weight: 700;">TOTAL:</td>
+                <td style="padding: 12px 8px; text-align: right; font-size: 18px; font-weight: 700; color: #059669;">{{ totals.total }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Colonne droite : Livraison et remboursement -->
+    <div>
+      <!-- Informations livraison -->
+      <div style="background: white; border-radius: 16px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">🚚 Informations livraison</h2>
+        <p><strong>Transporteur:</strong> {{ delivery.carrier }}</p>
+        <p><strong>Numéro de suivi:</strong> {{ delivery.tracking_number }}</p>
+        <p><strong>Livraison estimée:</strong> {{ delivery.estimated_delivery }}</p>
+        <p><strong>Date de commande:</strong> {{ order.created_at }}</p>
+      </div>
+
+      <!-- Formulaire de remboursement -->
+      <div style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">💰 Actions de remboursement</h2>
+        
+        @if(refund.refund_status === 'not_requested')
+          @if(eligibility.eligible)
+            <form action="/api/refunds" method="POST" id="refundForm">
+              <input type="hidden" name="order_id" value="{{ order.id }}">
+              
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Motif du remboursement *</label>
+                <select name="reason" required style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px;">
+                  <option value="">Sélectionnez un motif</option>
+                  <option value="produit_defectueux">Produit défectueux</option>
+                  <option value="mauvaise_qualite">Mauvaise qualité</option>
+                  <option value="livraison_retardee">Livraison retardée</option>
+                  <option value="produit_non_conforme">Produit non conforme</option>
+                  <option value="colis_endommage">Colis endommagé</option>
+                  <option value="annulation_client">Annulation par le client</option>
+                  <option value="autre">Autre</option>
+                </select>
+              </div>
+              
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Description détaillée</label>
+                <textarea name="description" rows="3" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px;" placeholder="Expliquez en détail la raison du remboursement..."></textarea>
+              </div>
+              
+              <div style="margin-bottom: 16px;">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                  <input type="checkbox" name="full_refund" value="1" checked style="width: 16px; height: 16px;">
+                  <span>Remboursement total ({{ totals.total }})</span>
+                </label>
+              </div>
+              
+              <button type="submit" style="width: 100%; background: #ef4444; color: white; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                Demander le remboursement
+              </button>
+            </form>
+          @else
+            <div style="background: #fee2e2; border-radius: 8px; padding: 16px; text-align: center;">
+              <p style="color: #991b1b; margin: 0;">❌ Cette commande n'est pas éligible au remboursement</p>
+              <p style="color: #7f1d1d; font-size: 14px; margin: 8px 0 0 0;">Veuillez contacter le support pour plus d'informations</p>
+            </div>
+          @endif
+        @elseif(refund.refund_status === 'pending')
+          <div style="background: #fef3c7; border-radius: 8px; padding: 16px; text-align: center;">
+            <p style="color: #92400e; margin: 0;">⏳ Demande de remboursement en attente de validation</p>
+            <p style="color: #78350f; font-size: 14px; margin: 8px 0 0 0;">Notre équipe traite votre demande dans les plus brefs délais</p>
+          </div>
+        @elseif(refund.refund_status === 'approved')
+          <div style="background: #dbeafe; border-radius: 8px; padding: 16px; text-align: center;">
+            <p style="color: #1e40af; margin: 0;">✅ Remboursement approuvé</p>
+            <p style="color: #1e3a8a; font-size: 14px; margin: 8px 0 0 0;">Le remboursement sera effectué sous 5-10 jours ouvrés</p>
+          </div>
+        @elseif(refund.refund_status === 'completed')
+          <div style="background: #d1fae5; border-radius: 8px; padding: 16px; text-align: center;">
+            <p style="color: #065f46; margin: 0;">🎉 Remboursement complété</p>
+            <p style="color: #064e3b; font-size: 14px; margin: 8px 0 0 0;">Le montant a été remboursé sur votre moyen de paiement</p>
+          </div>
+        @elseif(refund.refund_status === 'rejected')
+          <div style="background: #fee2e2; border-radius: 8px; padding: 16px; text-align: center;">
+            <p style="color: #991b1b; margin: 0;">❌ Demande de remboursement rejetée</p>
+            @if(refund.refund_rejection_reason)
+              <p style="color: #7f1d1d; font-size: 14px; margin: 8px 0 0 0;">Motif: {{ refund.refund_rejection_reason }}</p>
+            @endif
+          </div>
+        @endif
+
+        <!-- Bouton retour -->
+        <div style="margin-top: 16px;">
+          <a href="/dashboards/refund" style="display: inline-block; width: 100%; background: #6b7280; color: white; padding: 12px; text-align: center; text-decoration: none; border-radius: 8px; font-weight: 600;">
+            ← Retour à la liste des remboursements
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Gestion du formulaire de remboursement
+  const refundForm = document.getElementById('refundForm');
+  if (refundForm) {
+    refundForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = new FormData(refundForm);
+      const data = Object.fromEntries(formData.entries());
+      
+      if (!data.reason) {
+        alert('Veuillez sélectionner un motif de remboursement');
+        return;
+      }
+      
+      if (!confirm('Êtes-vous sûr de vouloir demander un remboursement pour cette commande ?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/refunds', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            order_id: data.order_id,
+            reason: data.reason,
+            description: data.description,
+            full_refund: data.full_refund === '1'
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          alert('✅ Demande de remboursement envoyée avec succès !');
+          window.location.reload();
+        } else {
+          alert('Erreur: ' + (result.message || 'Impossible de traiter la demande'));
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Erreur réseau. Veuillez réessayer.');
+      }
+    });
+  }
+</script>
+
+<style>
+  table {
+    border-collapse: collapse;
+  }
+  
+  p {
+    margin: 8px 0;
+  }
+  
+  button:hover, .btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+    transition: all 0.2s ease;
+  }
+</style>
+@end

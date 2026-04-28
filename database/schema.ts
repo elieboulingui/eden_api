@@ -623,6 +623,51 @@ export class PushSubscriptionSchema extends BaseModel {
   declare updatedAt: DateTime
 }
 
+export class RefundSchema extends BaseModel {
+  static $columns = ['adminId', 'adminNotes', 'amount', 'completedAt', 'createdAt', 'currency', 'customerNotes', 'externalTransactionId', 'id', 'method', 'orderId', 'processedAt', 'reason', 'reasonType', 'refundedItems', 'requestedAt', 'status', 'transactionReference', 'updatedAt', 'userId'] as const
+  $columns = RefundSchema.$columns
+  @column()
+  declare adminId: string | null
+  @column()
+  declare adminNotes: string | null
+  @column()
+  declare amount: string
+  @column.dateTime()
+  declare completedAt: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare currency: string | null
+  @column()
+  declare customerNotes: string | null
+  @column()
+  declare externalTransactionId: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare method: string | null
+  @column()
+  declare orderId: string
+  @column.dateTime()
+  declare processedAt: DateTime | null
+  @column()
+  declare reason: string
+  @column()
+  declare reasonType: string | null
+  @column()
+  declare refundedItems: any | null
+  @column.dateTime()
+  declare requestedAt: DateTime
+  @column()
+  declare status: string | null
+  @column()
+  declare transactionReference: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string | null
+}
+
 export class ReviewSchema extends BaseModel {
   static $columns = ['comment', 'createdAt', 'helpfulCount', 'id', 'isVerifiedPurchase', 'merchantId', 'productId', 'rating', 'status', 'title', 'updatedAt', 'userId'] as const
   $columns = ReviewSchema.$columns

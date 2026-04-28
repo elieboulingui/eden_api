@@ -1,0 +1,91 @@
+@layout()
+<section class="hero" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%); border-radius: 24px; margin: 20px 30px; padding: 60px 50px;">
+  <p class="text-sm uppercase tracking-[0.3em]" style="color: rgba(255,255,255,0.7); letter-spacing: 0.2em;">AdminMarket · remboursement</p>
+  <h1 style="color: white; font-size: 48px; margin: 16px 0; font-weight: 700;">💰 Remboursement commande</h1>
+  <p style="color: rgba(255,255,255,0.85); font-size: 18px; max-width: 700px;">
+    Gérez les remboursements des commandes clients.
+  </p>
+</section>
+
+<!-- Section Métriques Remboursement -->
+<section class="home-section" style="padding: 0 30px 40px;">
+  <header class="home-section-head" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px;">
+    <h2 style="font-size: 24px; font-weight: 700;">💰 Métriques des remboursements</h2>
+    <p style="color: #64748b;">Suivi des demandes</p>
+  </header>
+
+  <div class="home-grid home-grid-products" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px;">
+    @each(stat in refundStats)
+      <div class="tile tile-product" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <div class="tile-body">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">{{ stat.icon }}</div>
+          <p class="label" style="color: #64748b; font-size: 0.75rem; letter-spacing: 0.2em; text-transform: uppercase;">{{ stat.title }}</p>
+          <p class="value" style="color: #0f172a; font-size: 2.5rem; font-weight: 700; margin: 0.5rem 0;">{{ stat.value }}</p>
+          <p class="detail" style="color: #64748b; font-size: 0.85rem;">{{ stat.detail }}</p>
+        </div>
+      </div>
+    @else
+      <p class="home-empty">Aucune donnée de remboursement disponible.</p>
+    @end
+  </div>
+</section>
+
+<!-- Section Demandes de remboursement récentes -->
+<section class="home-section" style="padding: 0 30px 40px;">
+  <header class="home-section-head" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px;">
+    <h2 style="font-size: 24px; font-weight: 700;">🔄 Demandes de remboursement récentes</h2>
+    <p style="color: #64748b;">{{ totalRefunds ?? '0' }} demandes totales</p>
+  </header>
+
+  <div class="home-grid home-grid-products" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 24px;">
+    @each(refund in recentRefunds)
+      <div class="tile tile-product" style="background: white; border-radius: 16px; padding: 16px; border-left: 4px solid {{ refund.statusColor }}; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <div class="tile-body">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+            <h3 class="tile-title" style="font-size: 1rem; margin: 0; font-weight: 700;">Commande #{{ refund.order_number }}</h3>
+            <span class="status-pill" style="background: {{ refund.statusColor }}20; color: {{ refund.statusColor }}; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.7rem;">
+              {{ refund.statusLabel }}
+            </span>
+          </div>
+          <div class="tile-meta" style="margin-top: 0.5rem;">
+            <span class="meta" style="background: #f1f5f9; padding: 4px 10px; border-radius: 20px; font-size: 12px;">👤 {{ refund.customer }}</span>
+            <span class="meta" style="background: #f1f5f9; padding: 4px 10px; border-radius: 20px; font-size: 12px;">💰 {{ refund.total }}</span>
+          </div>
+          <div class="tile-meta" style="margin-top: 0.5rem;">
+            <span class="meta" style="background: #f1f5f9; padding: 4px 10px; border-radius: 20px; font-size: 12px;">📅 {{ refund.requested_at }}</span>
+          </div>
+
+          <!-- Boutons d'action pour le remboursement -->
+          <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <a href="/api/refunds/{{ refund.id }}" class="refund-btn" style="flex: 1; background: #3b82f6; color: white; border: none; padding: 8px 12px; border-radius: 10px; font-size: 12px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+              👁️ Voir détails
+            </a>
+          </div>
+        </div>
+      </div>
+    @else
+      <p class="home-empty">Aucune demande de remboursement trouvée.</p>
+    @end
+  </div>
+</section>
+
+<style>
+  .tile-product:hover {
+    transform: translateY(-4px);
+    transition: all 0.2s ease;
+  }
+
+  @media (max-width: 768px) {
+    .hero {
+      padding: 40px 20px !important;
+      margin: 20px !important;
+    }
+    .hero h1 {
+      font-size: 32px !important;
+    }
+    .home-section {
+      padding: 0 20px 30px !important;
+    }
+  }
+</style>
+@end

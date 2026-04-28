@@ -5,6 +5,24 @@ import { DateTime } from 'luxon'
 
 export default class ProductsController {
 
+  async showWeb({ params, view, response }: HttpContext) {
+    try {
+      const product = await Product.query()
+        .where('id', params.id)
+        .where('isArchived', false)
+        .preload('user') // Important : charge les infos du vendeur
+        .first()
+
+      if (!product) {
+        return response.status(404).send('Produit non trouvé')
+      }
+
+      return view.render('pages/product/show', { product })
+    } catch (error) {
+      return response.status(404).send('Produit non trouvé')
+    }
+  }
+
   // 🔥 Récupérer tous les produits non archivés + pays du vendeur
   async index({ response }: HttpContext) {
     try {
@@ -21,7 +39,7 @@ export default class ProductsController {
       // Mettre à jour le statut "isNew" si nécessaire
       for (const product of allProducts) {
         const createdAt = DateTime.fromJSDate(product.createdAt.toJSDate())
-        
+
         // Si le produit a plus d'une semaine et est toujours marqué comme nouveau
         if (createdAt < oneWeekAgo && product.isNew === true) {
           product.isNew = false
@@ -68,7 +86,7 @@ export default class ProductsController {
       // Mettre à jour le statut "isNew" si nécessaire
       const oneWeekAgo = DateTime.now().minus({ weeks: 1 })
       const createdAt = DateTime.fromJSDate(product.createdAt.toJSDate())
-      
+
       if (createdAt < oneWeekAgo && product.isNew === true) {
         product.isNew = false
         await product.save()

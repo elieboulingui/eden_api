@@ -38,11 +38,10 @@ interface ApiError {
 export class MypvitLinkService {
   private httpClient: AxiosInstance
   private readonly BASE_URL = 'https://api.mypvit.pro'
-  private readonly CODE_URL = 'TEBSBVJBBWEGGUES'
+  private readonly CODE_URL = 'MTX1MTKQQCULKA3W'
 
-  // Codes de redirection (configurés dans MyPVit - max 12 caractères)
-  private readonly DEFAULT_SUCCESS_CODE = 'SUCCESS_URL'
-  private readonly DEFAULT_FAILED_CODE = 'FAILED_URL'
+  private readonly DEFAULT_SUCCESS_CODE = 'YTJEI'
+  private readonly DEFAULT_FAILED_CODE = 'YTJEI'
 
   constructor() {
     this.httpClient = axios.create({

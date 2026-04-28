@@ -5,6 +5,7 @@ import type { HasMany, BelongsTo } from '@adonisjs/lucid/types/relations'
 import { randomUUID } from 'node:crypto'
 import User from './user.js'
 import OrderItem from './OrderItem.js'
+import Refund from './Refund.js'
 import OrderTracking from './order_tracking.js'
 import GuestOrder from './GuestOrder.js'
 
@@ -210,6 +211,10 @@ export default class Order extends BaseModel {
     }
   }
 
+  @hasMany(() => Refund, {
+  foreignKey: 'order_id'
+})
+
   // ==================== MÉTHODES UTILITAIRES ====================
 
   /**
@@ -347,6 +352,8 @@ export default class Order extends BaseModel {
   getCustomerPhone(): string {
     return this.customer_phone || 'Non renseigné'
   }
+
+  declare refunds: HasMany<typeof Refund>
 
   /**
    * Vérifier si la commande est éligible pour un remboursement

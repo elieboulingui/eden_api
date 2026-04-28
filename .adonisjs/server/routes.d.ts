@@ -5,11 +5,15 @@ type ParamValue = string | number | bigint | boolean
 export type ScannedRoutes = {
   ALL: {
     'home': { paramsTuple?: []; params?: {} }
+    'product.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'new_account.create': { paramsTuple?: []; params?: {} }
     'new_account.web.store': { paramsTuple?: []; params?: {} }
     'session.create': { paramsTuple?: []; params?: {} }
     'session.web.store': { paramsTuple?: []; params?: {} }
     'session.web.destroy': { paramsTuple?: []; params?: {} }
+    'dashboard.paypal': { paramsTuple?: []; params?: {} }
+    'dashboard.refund.details': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'dashboard.refund': { paramsTuple?: []; params?: {} }
     'dashboard.admin': { paramsTuple?: []; params?: {} }
     'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'dashboard.manager': { paramsTuple?: []; params?: {} }
@@ -84,7 +88,6 @@ export type ScannedRoutes = {
     'orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
     'orders.cancel': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.invoice': { paramsTuple: [ParamValue,ParamValue]; params: {'orderId': ParamValue,'userId': ParamValue} }
-    'orders.status.update': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'orders.qr.generate': { paramsTuple?: []; params?: {} }
     'orders.qr.confirm': { paramsTuple?: []; params?: {} }
     'orders.check-payment': { paramsTuple: [ParamValue]; params: {'referenceId': ParamValue} }
@@ -189,15 +192,42 @@ export type ScannedRoutes = {
     'mypvit.link.visa': { paramsTuple?: []; params?: {} }
     'mypvit.link.rest': { paramsTuple?: []; params?: {} }
     'mypvit.balance': { paramsTuple?: []; params?: {} }
+    'mypvit.check-balance': { paramsTuple?: []; params?: {} }
+    'mypvit.all-balances': { paramsTuple?: []; params?: {} }
+    'callback': { paramsTuple?: []; params?: {} }
     'orders.pay.mobile-money': { paramsTuple?: []; params?: {} }
     'orders.pay.qr-code': { paramsTuple?: []; params?: {} }
     'orders.pay.link': { paramsTuple?: []; params?: {} }
-    'callback': { paramsTuple?: []; params?: {} }
+    'orders.statuts.updates': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'orders.confirm-delivery': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'admin.merchants.index': { paramsTuple?: []; params?: {} }
+    'admin.merchants.stats': { paramsTuple?: []; params?: {} }
+    'admin.merchants.toggle': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'admin.merchants.verify': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'admin.merchants.reject': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'admin.merchants.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'admin.merchants.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.index': { paramsTuple?: []; params?: {} }
+    'refunds.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.store': { paramsTuple?: []; params?: {} }
+    'refunds.user': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'refunds.order': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'refunds.approve': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.reject': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.complete': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.stats': { paramsTuple?: []; params?: {} }
+    'pay_pal.create_payment': { paramsTuple?: []; params?: {} }
+    'pay_pal.success': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
+    'pay_pal.cancel': { paramsTuple?: []; params?: {} }
   }
   GET: {
     'home': { paramsTuple?: []; params?: {} }
+    'product.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'new_account.create': { paramsTuple?: []; params?: {} }
     'session.create': { paramsTuple?: []; params?: {} }
+    'dashboard.paypal': { paramsTuple?: []; params?: {} }
+    'dashboard.refund.details': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'dashboard.refund': { paramsTuple?: []; params?: {} }
     'dashboard.admin': { paramsTuple?: []; params?: {} }
     'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'dashboard.manager': { paramsTuple?: []; params?: {} }
@@ -285,11 +315,26 @@ export type ScannedRoutes = {
     'mypvit.kyc.active': { paramsTuple?: []; params?: {} }
     'mypvit.transaction.status': { paramsTuple?: []; params?: {} }
     'mypvit.balance': { paramsTuple?: []; params?: {} }
+    'mypvit.all-balances': { paramsTuple?: []; params?: {} }
+    'admin.merchants.index': { paramsTuple?: []; params?: {} }
+    'admin.merchants.stats': { paramsTuple?: []; params?: {} }
+    'admin.merchants.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.index': { paramsTuple?: []; params?: {} }
+    'refunds.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.user': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'refunds.order': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'refunds.stats': { paramsTuple?: []; params?: {} }
+    'pay_pal.success': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
+    'pay_pal.cancel': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
     'home': { paramsTuple?: []; params?: {} }
+    'product.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'new_account.create': { paramsTuple?: []; params?: {} }
     'session.create': { paramsTuple?: []; params?: {} }
+    'dashboard.paypal': { paramsTuple?: []; params?: {} }
+    'dashboard.refund.details': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'dashboard.refund': { paramsTuple?: []; params?: {} }
     'dashboard.admin': { paramsTuple?: []; params?: {} }
     'dashboard.secretary': { paramsTuple?: []; params?: {} }
     'dashboard.manager': { paramsTuple?: []; params?: {} }
@@ -377,6 +422,17 @@ export type ScannedRoutes = {
     'mypvit.kyc.active': { paramsTuple?: []; params?: {} }
     'mypvit.transaction.status': { paramsTuple?: []; params?: {} }
     'mypvit.balance': { paramsTuple?: []; params?: {} }
+    'mypvit.all-balances': { paramsTuple?: []; params?: {} }
+    'admin.merchants.index': { paramsTuple?: []; params?: {} }
+    'admin.merchants.stats': { paramsTuple?: []; params?: {} }
+    'admin.merchants.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.index': { paramsTuple?: []; params?: {} }
+    'refunds.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.user': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'refunds.order': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'refunds.stats': { paramsTuple?: []; params?: {} }
+    'pay_pal.success': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
+    'pay_pal.cancel': { paramsTuple?: []; params?: {} }
   }
   POST: {
     'new_account.web.store': { paramsTuple?: []; params?: {} }
@@ -437,10 +493,14 @@ export type ScannedRoutes = {
     'mypvit.link.web': { paramsTuple?: []; params?: {} }
     'mypvit.link.visa': { paramsTuple?: []; params?: {} }
     'mypvit.link.rest': { paramsTuple?: []; params?: {} }
+    'mypvit.check-balance': { paramsTuple?: []; params?: {} }
+    'callback': { paramsTuple?: []; params?: {} }
     'orders.pay.mobile-money': { paramsTuple?: []; params?: {} }
     'orders.pay.qr-code': { paramsTuple?: []; params?: {} }
     'orders.pay.link': { paramsTuple?: []; params?: {} }
-    'callback': { paramsTuple?: []; params?: {} }
+    'admin.merchants.reject': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.store': { paramsTuple?: []; params?: {} }
+    'pay_pal.create_payment': { paramsTuple?: []; params?: {} }
   }
   PUT: {
     'api.profile.update': { paramsTuple?: []; params?: {} }
@@ -452,7 +512,6 @@ export type ScannedRoutes = {
     'categories.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'cart.updateItem': { paramsTuple?: []; params?: {} }
     'cart.update': { paramsTuple?: []; params?: {} }
-    'orders.status.update': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'tracking.status.update': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
     'promo.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -460,12 +519,19 @@ export type ScannedRoutes = {
     'merchant.categories.update': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
     'merchant.coupons.update': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'reviews.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'orders.statuts.updates': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
+    'orders.confirm-delivery': { paramsTuple: [ParamValue]; params: {'orderId': ParamValue} }
   }
   PATCH: {
     'kyc.patch': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pubs.toggle': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'reviews.approve': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'reviews.reject': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'admin.merchants.toggle': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'admin.merchants.verify': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.approve': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.reject': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'refunds.complete': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   DELETE: {
     'kyc.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -484,6 +550,7 @@ export type ScannedRoutes = {
     'merchant.categories.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'categoryId': ParamValue} }
     'merchant.coupons.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'reviews.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'admin.merchants.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
 }
 declare module '@adonisjs/core/types/http' {

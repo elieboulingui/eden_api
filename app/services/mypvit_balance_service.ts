@@ -18,7 +18,7 @@ interface BalanceError {
 export class MypvitBalanceService {
   private httpClient: AxiosInstance
   private readonly BASE_URL = 'https://api.mypvit.pro'
-  private readonly CODE_URL = 'DBMMTBAOKTFOIZQR'
+  private readonly CODE_URL = 'F8LASHPAOPMIAC2V'
 
   constructor() {
     this.httpClient = axios.create({

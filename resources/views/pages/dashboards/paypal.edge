@@ -1,0 +1,181 @@
+@layout()
+
+<section class="hero" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%); border-radius: 24px; margin: 20px 30px; padding: 60px 50px;">
+  <p class="text-sm uppercase tracking-[0.3em]" style="color: rgba(255,255,255,0.7); letter-spacing: 0.2em;">AdminMarket · paiements</p>
+  <h1 style="color: white; font-size: 48px; margin: 16px 0; font-weight: 700;">💳 Transactions PayPal</h1>
+  <p style="color: rgba(255,255,255,0.85); font-size: 18px; max-width: 700px;">
+    Gérez et suivez toutes les transactions effectuées via PayPal.
+  </p>
+</section>
+
+<!-- Section Métriques PayPal -->
+<section class="home-section" style="padding: 0 30px 40px;">
+  <header class="home-section-head" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px;">
+    <h2 style="font-size: 24px; font-weight: 700;">📊 Statistiques PayPal</h2>
+    <p style="color: #64748b;">Aperçu des transactions</p>
+  </header>
+
+  <div class="home-grid home-grid-products" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px;">
+    @each(stat in paypalStats)
+      <div class="tile tile-product" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <div class="tile-body">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">{{ stat.icon }}</div>
+          <p class="label" style="color: #64748b; font-size: 0.75rem; letter-spacing: 0.2em; text-transform: uppercase;">{{ stat.title }}</p>
+          <p class="value" style="color: #0f172a; font-size: 2.5rem; font-weight: 700; margin: 0.5rem 0;">{{ stat.value }}</p>
+          <p class="detail" style="color: #64748b; font-size: 0.85rem;">{{ stat.detail }}</p>
+        </div>
+      </div>
+    @else
+      <p class="home-empty">Aucune donnée PayPal disponible.</p>
+    @end
+  </div>
+</section>
+
+<!-- Section Transactions récentes -->
+<section class="home-section" style="padding: 0 30px 40px;">
+  <header class="home-section-head" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px;">
+    <h2 style="font-size: 24px; font-weight: 700;">🔄 Transactions récentes</h2>
+    <p style="color: #64748b;">{{ totalTransactions }} transactions</p>
+  </header>
+
+  <div style="background: white; border-radius: 16px; overflow-x: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead style="background-color: #f9fafb;">
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <th style="padding: 16px 20px; text-align: left; font-size: 12px; font-weight: 500; color: #6b7280; text-transform: uppercase;">N° Commande</th>
+          <th style="padding: 16px 20px; text-align: left; font-size: 12px; font-weight: 500; color: #6b7280; text-transform: uppercase;">Client</th>
+          <th style="padding: 16px 20px; text-align: left; font-size: 12px; font-weight: 500; color: #6b7280; text-transform: uppercase;">Montant</th>
+          <th style="padding: 16px 20px; text-align: left; font-size: 12px; font-weight: 500; color: #6b7280; text-transform: uppercase;">Statut</th>
+          <th style="padding: 16px 20px; text-align: left; font-size: 12px; font-weight: 500; color: #6b7280; text-transform: uppercase;">Date</th>
+          <th style="padding: 16px 20px; text-align: left; font-size: 12px; font-weight: 500; color: #6b7280; text-transform: uppercase;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @each(transaction in recentTransactions)
+          <tr style="border-bottom: 1px solid #f3f4f6;">
+            <td style="padding: 16px 20px; font-size: 14px; font-weight: 500;">#{{ transaction.order_number }}</td>
+            <td style="padding: 16px 20px; font-size: 14px; color: #6b7280;">{{ transaction.customer }}</td>
+            <td style="padding: 16px 20px; font-size: 14px; font-weight: 600; color: #059669;">{{ transaction.amount }}</td>
+            <td style="padding: 16px 20px;">
+              <span style="display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600;
+                @if(transaction.status === 'completed')
+                  background-color: #d1fae5; color: #065f46;
+                @elseif(transaction.status === 'pending')
+                  background-color: #fef3c7; color: #92400e;
+                @else
+                  background-color: #fee2e2; color: #991b1b;
+                @endif
+              ">
+                {{ transaction.status }}
+              </span>
+            </td>
+            <td style="padding: 16px 20px; font-size: 14px; color: #6b7280;">{{ transaction.created_at }}</td>
+            <td style="padding: 16px 20px;">
+              <a href="/dashboards/refund/{{ transaction.id }}" style="color: #3b82f6; text-decoration: none; font-size: 14px;">
+                Voir détails
+              </a>
+            </td>
+          </tr>
+        @else
+          <tr>
+            <td colspan="6" style="padding: 40px 20px; text-align: center; color: #9ca3af;">
+              Aucune transaction PayPal trouvée
+            </td>
+          </tr>
+        @end
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Section Test de paiement PayPal -->
+<section class="home-section" style="padding: 0 30px 60px;">
+  <header class="home-section-head" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px;">
+    <h2 style="font-size: 24px; font-weight: 700;">🧪 Test de paiement PayPal</h2>
+    <p style="color: #64748b;">Mode Sandbox</p>
+  </header>
+
+  <div style="background: white; border-radius: 16px; padding: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <div style="max-width: 400px; margin: 0 auto;">
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 500;">Montant du test</label>
+        <input type="number" id="test-amount" value="10.00" step="0.01" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px;">
+      </div>
+      <div id="paypal-button-container"></div>
+    </div>
+  </div>
+</section>
+
+<script src="https://www.paypal.com/sdk/js?client-id={{ clientId }}&currency=EUR"></script>
+<script>
+  const clientId = '{{ clientId }}';
+
+  if (clientId && clientId !== 'votre_client_id_ici') {
+    paypal.Buttons({
+      createOrder: function(data, actions) {
+        const amount = document.getElementById('test-amount').value;
+        return actions.order.create({
+          purchase_units: [{
+            amount: {
+              value: amount,
+              currency_code: 'EUR'
+            },
+            description: 'Test de paiement AdminMarket'
+          }],
+          application_context: {
+            brand_name: 'AdminMarket',
+            shipping_preference: 'NO_SHIPPING'
+          }
+        });
+      },
+      onApprove: function(data, actions) {
+        return actions.order.capture().then(function(details) {
+          alert('Transaction completed by ' + details.payer.name.given_name);
+          console.log('Capture result:', details);
+          // Ici vous pouvez envoyer les données à votre serveur
+          fetch('/api/paypal/capture', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId: data.orderID })
+          });
+        });
+      },
+      onError: function(err) {
+        console.error('PayPal error:', err);
+        alert('Une erreur est survenue avec PayPal');
+      }
+    }).render('#paypal-button-container');
+  } else {
+    document.getElementById('paypal-button-container').innerHTML =
+      '<div style="background: #fee2e2; padding: 20px; text-align: center; border-radius: 8px; color: #991b1b;">' +
+      '⚠️ PayPal n\'est pas configuré. Veuillez ajouter PAYPAL_CLIENT_ID dans votre fichier .env' +
+      '</div>';
+  }
+</script>
+
+<style>
+  .tile-product:hover {
+    transform: translateY(-4px);
+    transition: all 0.2s ease;
+  }
+
+  .home-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+  }
+
+  @media (max-width: 768px) {
+    .hero {
+      padding: 40px 20px !important;
+      margin: 20px !important;
+    }
+    .hero h1 {
+      font-size: 32px !important;
+    }
+    .home-section {
+      padding: 0 20px 30px !important;
+    }
+  }
+</style>
+@end
