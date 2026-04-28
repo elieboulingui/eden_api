@@ -400,12 +400,10 @@ export default class DashboardViewController {
   public async promotions({ view }: HttpContext) {
     const [
       coupons,
-      redemptionRows,
       couponUsages,
       topUsers,
     ] = await Promise.all([
       Coupon.query().where('status', 'active').orderBy('created_at', 'desc'),
-      Coupon.query().select('type').count('id as total').groupBy('type').catch(() => [] as Array<{ type: string; total: number }>),
       Order.query().whereNotNull('coupon_id').orderBy('created_at', 'desc').limit(50).preload('user').preload('items', (query) => { query.preload('product') }),
       Order.query().whereNotNull('coupon_id').select('user_id').count('id as total_uses').groupBy('user_id').orderBy('total_uses', 'desc').limit(10).preload('user'),
     ])
@@ -430,10 +428,10 @@ export default class DashboardViewController {
       type: coupon.type === 'percentage' ? 'Pourcentage' : 'Montant fixe',
       discount: coupon.type === 'percentage' ? `${coupon.discount}%` : formatMoney(coupon.discount ?? 0),
       usage_count: coupon.used_count ?? 0,
-      max_uses: coupon.max_uses ?? null,
+      max_uses: (coupon as any).max_uses ?? null,
       status: coupon.status,
       created_at: coupon.created_at?.toFormat('dd LLL yyyy') ?? 'Date inconnue',
-      expires_at: coupon.expires_at?.toFormat('dd LLL yyyy') ?? 'Jamais',
+      expires_at: (coupon as any).expires_at?.toFormat('dd LLL yyyy') ?? 'Jamais',
     }))
 
     const couponUsagesList = []
@@ -465,7 +463,7 @@ export default class DashboardViewController {
 
     const redemptionStats = coupons.map((coupon) => {
       const usedCount = coupon.used_count ?? 0
-      const maxUses = coupon.max_uses ?? 0
+      const maxUses = (coupon as any).max_uses ?? 0
       return {
         coupon_code: coupon.code,
         type: coupon.type === 'percentage' ? 'Pourcentage' : 'Montant fixe',
@@ -500,20 +498,18 @@ export default class DashboardViewController {
   }
 
   // ==================== REFUND DASHBOARD ====================
-  public async refund({ view, response }: HttpContext) {
+  public async refund({ view }: HttpContext) {
     try {
       const [
         totalRefunds,
         pendingRefunds,
         approvedRefunds,
-        rejectedRefunds,
         completedRefunds,
         recentRefunds
       ] = await Promise.all([
         Order.query().where('status', 'refunded').count('* as total'),
         Order.query().where('status', 'refund_requested').count('* as total'),
         Order.query().where('status', 'refund_approved').count('* as total'),
-        Order.query().where('status', 'refund_rejected').count('* as total'),
         Order.query().where('status', 'refund_completed').count('* as total'),
         Order.query()
           .whereIn('status', ['refund_requested', 'refund_approved', 'refunded'])
@@ -598,20 +594,20 @@ export default class DashboardViewController {
       }
 
       const subtotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-      const tax = order.tax_amount || 0
+      const tax = (order as any).tax_amount || 0
       const shipping = order.shipping_cost || 0
       const discount = order.discount_amount || 0
       const total = order.total || 0
 
       const refundInfo = {
         is_refundable: this.isOrderRefundable(order),
-        refund_status: order.refund_status || 'not_requested',
-        refund_amount: order.refund_amount || 0,
-        refund_reason: order.refund_reason || null,
-        refund_requested_at: order.refund_requested_at,
-        refund_approved_at: order.refund_approved_at,
-        refund_completed_at: order.refund_completed_at,
-        refund_rejection_reason: order.refund_rejection_reason || null
+        refund_status: (order as any).refund_status || 'not_requested',
+        refund_amount: (order as any).refund_amount || 0,
+        refund_reason: (order as any).refund_reason || null,
+        refund_requested_at: (order as any).refund_requested_at,
+        refund_approved_at: (order as any).refund_approved_at,
+        refund_completed_at: (order as any).refund_completed_at,
+        refund_rejection_reason: (order as any).refund_rejection_reason || null
       }
 
       const customerDetails = {
@@ -625,10 +621,10 @@ export default class DashboardViewController {
         carrier: order.shipping_carrier || 'Non spécifié',
         tracking_number: order.tracking_number || 'Non disponible',
         estimated_delivery: order.estimated_delivery?.toFormat('dd LLL yyyy HH:mm') || 'Non planifiée',
-        actual_delivery: order.actual_delivery?.toFormat('dd LLL yyyy HH:mm') || 'Non livrée'
+        actual_delivery: (order as any).actual_delivery?.toFormat('dd LLL yyyy HH:mm') || 'Non livrée'
       }
 
-      const statusHistory = order.status_history || []
+      const statusHistory = (order as any).status_history || []
       const refundEligibility = this.checkRefundEligibility(order)
 
       return view.render('pages/dashboards/refund-details', {
@@ -712,7 +708,7 @@ export default class DashboardViewController {
         customer: order.user?.full_name || order.customer_name || 'Client inconnu',
         amount: formatMoney(order.total),
         status: order.payment_status,
-        paypal_order_id: order.paypal_order_id,
+        paypal_order_id: (order as any).paypal_order_id,
         created_at: order.created_at?.toFormat('dd LLL yyyy HH:mm') ?? 'Date inconnue'
       }))
 

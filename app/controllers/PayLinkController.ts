@@ -1,4 +1,3 @@
-// app/controllers/PayLinkController.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -106,9 +105,15 @@ export default class PayLinkController {
 
   private async buildItems(order: Order, items: any[], fromCart: boolean, userId?: string): Promise<{ subtotal: number; count: number }> {
     let subtotal = 0, count = 0
-    const source = fromCart
-      ? (await Cart.query().where('user_id', userId).preload('items').first())?.items || []
-      : items
+
+    // ✅ CORRECTION: Vérifier que userId existe avant la requête
+    let source: any[] = []
+    if (fromCart && userId) {
+      const cart = await Cart.query().where('user_id', userId).preload('items').first()
+      source = cart?.items || []
+    } else {
+      source = items || []
+    }
 
     for (const item of source) {
       const pid = item.productId || item.product_id || item.id
@@ -222,9 +227,6 @@ export default class PayLinkController {
       // Générer le lien de paiement
       console.log(`🔑 Génération lien ${linkTypeCode}...`)
 
-      // ✅ Générer le lien de paiement (conforme doc v1)
-      console.log(`🔑 Génération lien ${linkTypeCode}...`)
-
       const linkPayload: any = {
         amount: total,
         product: orderNumber.substring(0, 15),
@@ -238,12 +240,6 @@ export default class PayLinkController {
         failed_redirection_url_code: 'YTJEI',
       }
 
-      // customer_account_number : optionnel pour WEB, obligatoire pour VISA et REST
-      if (linkTypeCode !== 'WEB' || payload.customerAccountNumber) {
-        linkPayload.customer_account_number = payload.customerAccountNumber
-      }
-
-      console.log('📤 Payload Mypvit:', JSON.stringify(linkPayload, null, 2))
       // customer_account_number : obligatoire pour VISA_MASTERCARD et RESTLINK, optionnel pour WEB
       if (linkTypeCode === 'VISA_MASTERCARD' || linkTypeCode === 'RESTLINK') {
         linkPayload.customer_account_number = payload.customerAccountNumber

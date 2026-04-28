@@ -1,4 +1,3 @@
-// config/cors.ts
 import { defineConfig } from '@adonisjs/cors'
 
 const corsConfig = defineConfig({
@@ -7,7 +6,7 @@ const corsConfig = defineConfig({
     'http://localhost:3000',      // Next.js dev
     'http://localhost:3333',      // Adonis local
     'https://ton-domaine.com',    // Production
-    /^https:\/\/(.*)\.ton-domaine\.com$/  // Regex pour sous-domaines
+    'https://sous-domaine.ton-domaine.com'  // Sous-domaine (sans regex)
   ],
   methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH'],
   headers: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],

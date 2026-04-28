@@ -1,4 +1,3 @@
-// app/services/mypvit_link_service.ts
 import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import MypvitSecretService from './mypvit_secret_service.js'
 
@@ -90,9 +89,11 @@ export class MypvitLinkService {
     customer_account_number?: string
     operator_code?: string
   }): Promise<LinkResponse> {
+    // ✅ CORRECTION: Ajout de transaction_type
     return this.generateLink({
       ...params,
       service: 'WEB',
+      transaction_type: 'PAYMENT',
     })
   }
 
@@ -113,9 +114,11 @@ export class MypvitLinkService {
     success_redirection_url_code?: string
     customer_account_number: string
   }): Promise<LinkResponse> {
+    // ✅ CORRECTION: Ajout de transaction_type
     return this.generateLink({
       ...params,
       service: 'VISA_MASTERCARD',
+      transaction_type: 'PAYMENT',
     })
   }
 
@@ -137,9 +140,11 @@ export class MypvitLinkService {
     customer_account_number: string
     operator_code?: string
   }): Promise<LinkResponse> {
+    // ✅ CORRECTION: Ajout de transaction_type
     return this.generateLink({
       ...params,
       service: 'RESTLINK',
+      transaction_type: 'PAYMENT',
     })
   }
 
@@ -157,11 +162,10 @@ export class MypvitLinkService {
       service: data.service,
       callback_url_code: data.callback_url_code,
       merchant_operation_account_code: data.merchant_operation_account_code,
-      transaction_type: 'PAYMENT',
+      transaction_type: data.transaction_type || 'PAYMENT', // ✅ Valeur par défaut
       owner_charge: data.owner_charge,
       operator_owner_charge: data.operator_owner_charge,
       free_info: data.free_info,
-      // Ce sont des CODES configurés dans MyPVit (max 12 caractères), pas des URLs
       failed_redirection_url_code: data.failed_redirection_url_code || this.DEFAULT_FAILED_CODE,
       success_redirection_url_code: data.success_redirection_url_code || this.DEFAULT_SUCCESS_CODE,
       customer_account_number: data.customer_account_number,
@@ -218,6 +222,11 @@ export class MypvitLinkService {
 
     if (!data.callback_url_code) {
       errors.push('Callback URL code is required')
+    }
+
+    // ✅ CORRECTION: transaction_type validation
+    if (!data.transaction_type) {
+      errors.push('Transaction type is required (must be PAYMENT)')
     }
 
     // Vérifier la longueur des codes de redirection (max 12 caractères)

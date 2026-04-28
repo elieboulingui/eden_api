@@ -12,10 +12,23 @@ interface TransactionResponse {
   message: string
 }
 
+interface TransactionStatusResponse {
+  date: string
+  status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'AMBIGUOUS'
+  amount: number
+  fees: number
+  operator: string
+  merchant_reference_id: string
+  customer_account_number: string
+  merchant_operation_account_code: string
+}
+
 export class MypvitTransactionService {
   private httpClient: AxiosInstance
   private readonly BASE_URL = 'https://api.mypvit.pro/v2'
+  private readonly BASE_URL_V1 = 'https://api.mypvit.pro'
   private readonly CODE_URL = 'O4PLVRSGUW90JGCY'
+  private readonly STATUS_CODE_URL = 'FQDQOGFLKGT9BV0M'
 
   constructor() {
     this.httpClient = axios.create({ baseURL: this.BASE_URL, timeout: 30000, headers: { 'Content-Type': 'application/json' } })
@@ -64,6 +77,44 @@ export class MypvitTransactionService {
       if (error.response?.data) {
         const d = error.response.data
         throw new Error(`[${d.error}] ${d.messages?.join('|') || d.message}`)
+      }
+      throw error
+    }
+  }
+
+  /**
+   * Vérifie le statut d'une transaction
+   * GET https://api.mypvit.pro/{codeUrl}/status
+   */
+  async checkTransactionStatus(
+    transactionId: string,
+    accountOperationCode: string
+  ): Promise<TransactionStatusResponse> {
+    try {
+      const secret = await MypvitSecretService.getSecret()
+
+      const response = await axios.get<TransactionStatusResponse>(
+        `${this.BASE_URL_V1}/${this.STATUS_CODE_URL}/status`,
+        {
+          headers: {
+            'X-Secret': secret,
+            'Accept': 'application/json'
+          },
+          params: {
+            transactionId,
+            accountOperationCode,
+            transactionOperation: 'PAYMENT'
+          }
+        }
+      )
+
+      console.log('✅ [TransactionService] Statut:', response.data.status)
+      return response.data
+    } catch (error: any) {
+      if (error.response?.data) {
+        const d = error.response.data
+        console.error('❌ [TransactionService] Erreur statut:', d)
+        throw new Error(`[${d.error || 'STATUS_ERROR'}] ${d.message || 'Erreur vérification statut'}`)
       }
       throw error
     }

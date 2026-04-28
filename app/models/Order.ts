@@ -167,6 +167,40 @@ export default class Order extends BaseModel {
   @column()
   declare user_agent: string | null
 
+  // ✅ CHAMPS MANQUANTS POUR LE DASHBOARD
+  @column()
+  declare tax_amount: number
+
+  @column()
+  declare refund_status: 'none' | 'pending' | 'approved' | 'completed' | 'rejected' | null
+
+  @column()
+  declare refund_amount: number | null
+
+  @column()
+  declare refund_reason: string | null
+
+  @column.dateTime()
+  declare refund_requested_at: DateTime | null
+
+  @column.dateTime()
+  declare refund_approved_at: DateTime | null
+
+  @column.dateTime()
+  declare refund_completed_at: DateTime | null
+
+  @column()
+  declare refund_rejection_reason: string | null
+
+  @column.dateTime()
+  declare actual_delivery: DateTime | null
+
+  @column()
+  declare paypal_order_id: string | null
+
+  @column()
+  declare status_history: any // ou JSON
+
   @column.dateTime({ autoCreate: true })
   declare created_at: DateTime
 
@@ -197,6 +231,12 @@ export default class Order extends BaseModel {
   })
   declare tracking: HasMany<typeof OrderTracking>
 
+  // ✅ CORRECTION : Relation Refund correctement placée dans la section relations
+  @hasMany(() => Refund, {
+    foreignKey: 'order_id'
+  })
+  declare refunds: HasMany<typeof Refund>
+
   // ==================== HOOKS ====================
 
   @beforeCreate()
@@ -210,10 +250,6 @@ export default class Order extends BaseModel {
       order.order_number = `ORD-${timestamp}-${random}`
     }
   }
-
-  @hasMany(() => Refund, {
-  foreignKey: 'order_id'
-})
 
   // ==================== MÉTHODES UTILITAIRES ====================
 
@@ -295,47 +331,7 @@ export default class Order extends BaseModel {
     }
     return methods[this.payment_method] || this.payment_method || 'Non renseigné'
   }
-  // ==================== COLONNES ====================
-  // ... vos colonnes existantes ...
 
-  // ✅ AJOUTEZ CES PROPRIÉTÉS MANQUANTES :
-
-  // Pour dashboard_view_controller - lignes 601-614
-  @column()
-  declare tax_amount: number
-
-  @column()
-  declare refund_status: 'none' | 'pending' | 'approved' | 'completed' | 'rejected' | null
-
-  @column()
-  declare refund_amount: number | null
-
-  @column()
-  declare refund_reason: string | null
-
-  @column.dateTime()
-  declare refund_requested_at: DateTime | null
-
-  @column.dateTime()
-  declare refund_approved_at: DateTime | null
-
-  @column.dateTime()
-  declare refund_completed_at: DateTime | null
-
-  @column()
-  declare refund_rejection_reason: string | null
-
-  // Pour dashboard_view_controller - ligne 628
-  @column.dateTime()
-  declare actual_delivery: DateTime | null
-
-  // Pour dashboard_view_controller - ligne 715
-  @column()
-  declare paypal_order_id: string | null
-
-  // Pour dashboard_view_controller - ligne 631
-  @column()
-  declare status_history: any // ou JSON
   /**
    * Obtenir le libellé de la méthode de livraison
    */
@@ -392,8 +388,6 @@ export default class Order extends BaseModel {
   getCustomerPhone(): string {
     return this.customer_phone || 'Non renseigné'
   }
-
-  declare refunds: HasMany<typeof Refund>
 
   /**
    * Vérifier si la commande est éligible pour un remboursement

@@ -4,7 +4,6 @@ import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
 import OrderTracking from '#models/order_tracking'
 import Cart from '#models/Cart'
-import CartItem from '#models/CartItem'
 import User from '#models/user'
 import Product from '#models/Product'
 import KYC from '#models/kyc'
@@ -106,7 +105,7 @@ export default class PayMobileMoneyController {
       await this.renewSecretIfNeeded(phoneNumber)
       const kycData = await MypvitKYCService.getKYCInfo(phoneNumber, detected.code)
       fullName = kycData.firstname || kycData.full_name || 'Client'
-    } catch (error) {
+    } catch (error:any) {
       console.log('🟡 KYC fallback:', error.message)
     }
 
@@ -124,7 +123,7 @@ export default class PayMobileMoneyController {
           operateur: detected.name
         })
       }
-    } catch (error) {
+    } catch (error:any) {
       console.log('🟡 KYC save error:', error.message)
     }
 
@@ -202,7 +201,7 @@ export default class PayMobileMoneyController {
     let count = 0
 
     const source = fromCart
-      ? (await Cart.query().where('user_id', userId).preload('items').first())?.items || []
+      ? (await Cart.query().where('user_id', userId!).preload('items').first())?.items || []
       : items
 
     for (const item of source) {

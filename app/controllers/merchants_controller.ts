@@ -1,4 +1,3 @@
-// app/controllers/merchants_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import db from '@adonisjs/lucid/services/db'
@@ -222,8 +221,6 @@ export default class MerchantsController {
   }
 
   // ✅ PATCH /api/admin/merchants/:id/verify - Vérifier un marchand
-  // app/controllers/merchants_controller.ts
-
   async verifyMerchant({ params, request, response }: HttpContext) {
     const merchant = await User.find(params.id)
     if (!merchant) {
@@ -267,10 +264,9 @@ export default class MerchantsController {
     }
 
     const { reason } = request.body()
-    merchant.is_verified = false
-    merchant.verification_status = 'rejected'
-    merchant.rejection_reason = reason || null
-    merchant.is_active = false
+    merchant.is_verified = false;
+    merchant.verification_status = 'rejected';
+    merchant.rejection_reason = reason || null;
     await merchant.save()
 
     return response.ok({
@@ -312,25 +308,25 @@ export default class MerchantsController {
       }
 
       if (merchant.vendor_type === 'boutique_physique') {
-        shopData.address = merchant.shop_address
-        shopData.latitude = merchant.shop_latitude
-        shopData.longitude = merchant.shop_longitude
+        shopData.address = (merchant as any).shop_address
+        shopData.latitude = (merchant as any).shop_latitude
+        shopData.longitude = (merchant as any).shop_longitude
         shopData.photos = {
-          facade1: merchant.facade_photo1_url,
-          facade2: merchant.facade_photo2_url,
-          interior1: merchant.interior_photo1_url,
-          interior2: merchant.interior_photo2_url,
+          facade1: (merchant as any).facade_photo1_url,
+          facade2: (merchant as any).facade_photo2_url,
+          interior1: (merchant as any).interior_photo1_url,
+          interior2: (merchant as any).interior_photo2_url,
         }
       }
 
       if (merchant.vendor_type === 'vendeur_ligne' || merchant.vendor_type === 'particulier') {
-        shopData.stock_address = merchant.stock_address
+        shopData.stock_address = (merchant as any).stock_address
         shopData.social_media = {
-          facebook: merchant.facebook_url,
-          instagram: merchant.instagram_url,
-          tiktok: merchant.tiktok_url,
+          facebook: (merchant as any).facebook_url,
+          instagram: (merchant as any).instagram_url,
+          tiktok: (merchant as any).tiktok_url,
         }
-        shopData.stock_video = merchant.stock_video_url
+        shopData.stock_video = (merchant as any).stock_video_url
       }
 
       shopData.whatsapp = merchant.whatsapp_phone
@@ -349,7 +345,7 @@ export default class MerchantsController {
           neighborhood: merchant.neighborhood,
           residence_address: merchant.residence_address,
           vendor_type: merchant.vendor_type,
-          vendor_type_label: merchant.vendorTypeLabel,
+          vendor_type_label: (merchant as any).vendorTypeLabel,
           shop_description: merchant.shop_description,
           is_verified: merchant.is_verified,
           verification_status: merchant.verification_status,

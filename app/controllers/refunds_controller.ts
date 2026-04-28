@@ -2,9 +2,9 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Refund from '#models/Refund'
 import Order from '#models/Order'
-import User from '#models/user'
 import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
+import db from '@adonisjs/lucid/services/db'
 
 export default class RefundsController {
   // ========== CRUD PRINCIPAL ==========
@@ -46,7 +46,7 @@ export default class RefundsController {
           last_page: refunds.lastPage
         }
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur index refunds:', error)
       return response.internalServerError({
         success: false,
@@ -79,7 +79,7 @@ export default class RefundsController {
         success: true,
         data: refund
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: error.message
@@ -161,7 +161,7 @@ export default class RefundsController {
         message: 'Demande de remboursement créée avec succès',
         data: refund
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur store refund:', error)
       return response.internalServerError({
         success: false,
@@ -215,7 +215,7 @@ export default class RefundsController {
         message: 'Remboursement approuvé avec succès',
         data: refund
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur approve refund:', error)
       return response.internalServerError({
         success: false,
@@ -266,7 +266,7 @@ export default class RefundsController {
         message: 'Remboursement rejeté',
         data: refund
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur reject refund:', error)
       return response.internalServerError({
         success: false,
@@ -313,7 +313,7 @@ export default class RefundsController {
         message: 'Remboursement marqué comme complété',
         data: refund
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur complete refund:', error)
       return response.internalServerError({
         success: false,
@@ -337,23 +337,20 @@ export default class RefundsController {
         .where('status', 'completed')
         .sum('amount as total')
 
-      const monthlyStats = await Refund.query()
-        .select(Refund.query().raw('DATE_TRUNC(\'month\', requested_at) as month'))
-        .count('* as total')
-        .sum('amount as amount')
-        .groupBy('month')
-        .orderBy('month', 'desc')
-        .limit(12)
+      // CORRECTION ICI : Utiliser db.rawQuery() au lieu de Refund.query().raw()
+      const monthlyStats = await db.rawQuery(
+        "SELECT DATE_TRUNC('month', requested_at) as month, COUNT(*) as total, SUM(amount) as amount FROM refunds GROUP BY month ORDER BY month DESC LIMIT 12"
+      )
 
       return response.ok({
         success: true,
         data: {
           by_status: stats,
           total_refunded_amount: totalAmount[0]?.$extras.total || 0,
-          monthly_stats: monthlyStats
+          monthly_stats: monthlyStats.rows || monthlyStats
         }
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur stats refunds:', error)
       return response.internalServerError({
         success: false,
@@ -389,7 +386,7 @@ export default class RefundsController {
         data: refunds,
         count: refunds.length
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: error.message
@@ -414,7 +411,7 @@ export default class RefundsController {
         data: refunds,
         count: refunds.length
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.internalServerError({
         success: false,
         message: error.message

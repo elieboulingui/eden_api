@@ -60,7 +60,7 @@ export class MypvitQRCodeService {
     this.secret = response.data.secret
     this.secretExpiresAt = now + ((response.data.expires_in || 3600) * 1000) - 60000
     console.log('✅ Secret QR prêt')
-    return this.secret
+    return this.secret!  // ← AJOUT DU ! ICI
   }
 
   /**

@@ -1,3 +1,4 @@
+// app/services/paypal_service.ts
 import env from '#start/env'
 import paypal from '@paypal/checkout-server-sdk'
 
@@ -44,7 +45,7 @@ export default class PayPalService {
         orderId: order.result.id,
         approvalUrl: order.result.links.find((link: any) => link.rel === 'approve').href
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('PayPal error:', error)
       return { success: false, error: error.message }
     }
@@ -52,12 +53,14 @@ export default class PayPalService {
 
   async captureOrder(orderId: string) {
     const request = new paypal.orders.OrdersCaptureRequest(orderId)
-    request.requestBody({})
+    request.requestBody({
+      payment_source: {} as any
+    })
 
     try {
       const capture = await this.client.execute(request)
       return { success: true, capture: capture.result }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Capture error:', error)
       return { success: false, error: error.message }
     }

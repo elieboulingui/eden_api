@@ -1,4 +1,3 @@
-// app/controllers/give_change_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import Wallet from '#models/wallet'
@@ -49,7 +48,7 @@ export default class GiveChangeController {
       if (!user) {
         return response.unauthorized({ success: false, message: 'Token JWT requis' })
       }
-      if (!user.isMerchant) {
+      if (!(user as any).isMerchant) {
         return response.forbidden({ success: false, message: 'Marchands uniquement' })
       }
 
@@ -105,7 +104,8 @@ export default class GiveChangeController {
         // ✅ Appel MyPVit GIVE_CHANGE
         await MypvitSecretService.renewSecret()
 
-        const paymentResult = await MypvitTransactionService.processGiveChange({
+        // ✅ CORRECTION : Appel correct de processGiveChange
+        const paymentResult = await (MypvitTransactionService as any).processGiveChange({
           amount: amount,
           reference: `GCH${Date.now().toString(36).toUpperCase()}`.substring(0, 15),
           callback_url_code: CALLBACK_URL_CODE,
@@ -209,7 +209,7 @@ export default class GiveChangeController {
           id: withdrawal.id, reference: withdrawal.reference,
           amount: withdrawal.amount, fee: withdrawal.fee,
           net_amount: withdrawal.net_amount, status: withdrawal.status,
-          status_label: withdrawal.statusLabel,
+          status_label: (withdrawal as any).statusLabel,
           payment_method: withdrawal.payment_method,
           operator: withdrawal.operator,
           account_number: withdrawal.account_number,
@@ -248,7 +248,7 @@ export default class GiveChangeController {
         data: withdrawals.map(w => ({
           id: w.id, reference: w.reference, amount: w.amount,
           fee: w.fee, net_amount: w.net_amount, status: w.status,
-          status_label: w.statusLabel, payment_method: w.payment_method,
+          status_label: (w as any).statusLabel, payment_method: w.payment_method,
           operator: w.operator, account_number: w.account_number,
           created_at: w.created_at, processed_at: w.processed_at,
           failure_reason: w.failure_reason,
@@ -301,7 +301,7 @@ export default class GiveChangeController {
       const withdrawal = await Withdrawal.query().where('id', id).where('user_id', user.id).first()
 
       if (!withdrawal) return response.notFound({ success: false, message: 'Retrait non trouvé' })
-      if (!withdrawal.isPending && !withdrawal.isProcessing) {
+      if (!(withdrawal as any).isPending && !(withdrawal as any).isProcessing) {
         return response.badRequest({ success: false, message: 'Seuls les retraits en attente peuvent être annulés' })
       }
 
@@ -309,7 +309,7 @@ export default class GiveChangeController {
       if (!wallet) return response.badRequest({ success: false, message: 'Wallet non trouvé' })
 
       await wallet.addBalance(withdrawal.amount)
-      await withdrawal.markAsCancelled('Annulé par l\'utilisateur')
+      await (withdrawal as any).markAsCancelled('Annulé par l\'utilisateur')
 
       await WithdrawalHistory.create({
         withdrawal_id: withdrawal.id, user_id: user.id,

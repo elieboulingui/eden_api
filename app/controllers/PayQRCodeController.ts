@@ -295,7 +295,6 @@ export default class PayQRCodeController {
         payment_method: `qr_code_${operatorInfo.name.toLowerCase()}`,
         customer_email: payload.customerEmail || 'invite@email.com',
         shipping_address: payload.shippingAddress || 'non renseigné',
-        notes: payload.notes || null,
       })
 
       let subtotal = 0

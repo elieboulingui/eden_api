@@ -42,27 +42,6 @@ interface KYCInfo {
   kycRecordId?: string
 }
 
-interface OrderData {
-  userId: string | null
-  isGuest?: boolean
-  guestId?: string
-  items: Array<{
-    productId?: string
-    id?: string
-    price: number
-    quantity: number
-  }>
-  customerAccountNumber: string
-  customerName: string
-  customerEmail?: string
-  customerPhone?: string
-  deliveryMethod: string
-  deliveryPrice: number
-  shippingAddress: string
-  notes?: string
-  amount: number
-}
-
 type PaymentMethod = 'mobile_money' | 'qr_code' | 'link'
 
 // ==================== UTILITAIRES ====================
@@ -92,17 +71,16 @@ export default class OrdersController {
     try {
       await MypvitSecretService.renewSecret()
       console.log('🔐 Clé secrète renouvelée')
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur renouvellement clé:', error)
       throw error
     }
   }
 
-
   /**
- * Confirmer la livraison par le client (avec email + numéro de commande)
- * PUT /api/orders/:orderId/confirm-delivery
- */
+   * Confirmer la livraison par le client (avec email + numéro de commande)
+   * PUT /api/orders/:orderId/confirm-delivery
+   */
   async confirmDelivery({ params, request, response }: HttpContext) {
     console.log('📦 [Confirmation Livraison] Début')
 
@@ -183,10 +161,8 @@ export default class OrdersController {
         tracked_at: DateTime.now(),
       })
 
-      // ✅ Mise à jour SANS delivery_confirmed_by
       order.status = 'delivered'
       order.delivered_at = DateTime.now()
-      // ❌ order.delivery_confirmed_by = 'customer'  // Colonne inexistante
       await order.save()
 
       console.log(`✅ [Confirmation] Commande ${order.order_number} livrée !`)
@@ -216,6 +192,7 @@ export default class OrdersController {
       })
     }
   }
+
   private async performKYCAndSave(
     phoneNumber: string,
     fallbackOperatorCode?: string,
@@ -226,7 +203,9 @@ export default class OrdersController {
 
     try {
       await this.renewSecretIfNeeded()
-      const kycData = await MypvitKYCService.getKYCInfo(phoneNumber)
+      // CORRECTION ERREUR 2 : Ajout du paramètre operatorCode
+      const operatorCode = fallbackOperatorCode || fallbackOperatorName || 'MOOV_MONEY'
+      const kycData = await MypvitKYCService.getKYCInfo(phoneNumber, operatorCode)
 
       const operator = fallbackOperatorCode || fallbackOperatorName || 'non renseigné'
       const fullName = kycData.full_name || fallbackFullName || 'non renseigné'
@@ -256,7 +235,7 @@ export default class OrdersController {
         console.error('❌ [KYC] Erreur BDD:', dbError)
         return { operator, fullName, accountNumber }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.log('🟡 [KYC] API injoignable, fallback')
     }
 
@@ -280,6 +259,22 @@ export default class OrdersController {
     return { operator, fullName, accountNumber: phoneNumber }
   }
 
+  // CORRECTION ERREURS 3, 5, 6 : Ajout de la méthode checkTransactionStatus
+
+  private async checkTransactionStatus(referenceId: string): Promise<any> {
+    try {
+      await this.renewSecretIfNeeded()
+      return await MypvitTransactionService.checkTransactionStatus(referenceId, ACCOUNT_OPERATION_CODE)
+    } catch (error: any) {
+      console.error('❌ Erreur vérification statut:', error)
+      return {
+        status: 'FAILED',
+        merchant_reference_id: referenceId,
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
+      }
+    }
+  }
+
   private async verifyPaymentStatus(
     referenceId: string,
     order: Order,
@@ -293,7 +288,8 @@ export default class OrdersController {
 
       try {
         await this.renewSecretIfNeeded()
-        const statusData = await MypvitTransactionService.checkTransactionStatus(referenceId)
+        // CORRECTION : Utilise la méthode privée
+        const statusData = await this.checkTransactionStatus(referenceId)
         console.log(`✅ Statut tentative ${attempt}:`, statusData.status)
 
         if (statusData.status === 'SUCCESS') {
@@ -330,7 +326,7 @@ export default class OrdersController {
         if (attempt < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, retryDelay))
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error(`❌ Erreur tentative ${attempt}:`, error)
         if (attempt < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, retryDelay))
@@ -396,7 +392,7 @@ export default class OrdersController {
         error: paymentResult.message || 'Échec de l\'initiation du paiement'
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur paiement MyPVit:', error)
       return {
         success: false,
@@ -430,7 +426,7 @@ export default class OrdersController {
           expires_in: 600,
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur QR Code:', error)
       return {
         success: false,
@@ -439,7 +435,6 @@ export default class OrdersController {
     }
   }
 
-  // Dans OrdersController, méthode payWithLink
   private async payWithLink(
     amount: number,
     accountNumber: string,
@@ -450,7 +445,6 @@ export default class OrdersController {
     try {
       await this.renewSecretIfNeeded()
 
-      // URLs de redirection (à configurer selon votre frontend)
       const successUrl = 'https://votresite.com/payment/success'
       const failedUrl = 'https://votresite.com/payment/failed'
 
@@ -504,7 +498,7 @@ export default class OrdersController {
           service_type: serviceType,
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur lien:', error)
       return {
         success: false,
@@ -638,7 +632,7 @@ export default class OrdersController {
         await this.creditWallet(sellerId, amount)
         console.log(`✅ Vendeur ${sellerId} crédité: ${amount} FCFA`)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur crédit vendeurs:', error)
     }
   }
@@ -662,10 +656,6 @@ export default class OrdersController {
   /**
    * Créer une commande avec le mode de paiement choisi
    * POST /api/orders
-   *
-   * Logique:
-   * - Si le panier est plein → utilise le panier
-   * - Si le panier est vide → utilise les items fournis dans le JSON
    */
   async store({ request, response }: HttpContext) {
     console.log('🔵 ========== DEBUT CREATION COMMANDE ==========')
@@ -682,7 +672,6 @@ export default class OrdersController {
       const isGuest = payload.isGuest || !payload.userId
       const paymentMethod: PaymentMethod = payload.payment_method || 'mobile_money'
 
-      // Validations
       if (!isGuest && !payload.userId) {
         return response.status(400).json({
           success: false,
@@ -697,10 +686,8 @@ export default class OrdersController {
         })
       }
 
-      // 1. RENOUVELER LA CLÉ
       await this.renewSecretIfNeeded()
 
-      // 2. KYC
       const kycInfo = await this.performKYCAndSave(
         payload.customerAccountNumber,
         payload.mobileOperatorCode,
@@ -708,7 +695,6 @@ export default class OrdersController {
         payload.customerName
       )
 
-      // 3. GUEST ORDER
       let guestOrder = null
       if (isGuest) {
         guestOrder = await GuestOrder.create({
@@ -722,14 +708,12 @@ export default class OrdersController {
         console.log('👤 [Guest] Commande invité créée, ID:', guestOrder.id)
       }
 
-      // 4. USER
       let user = null
       if (!isGuest && payload.userId) {
         user = await User.findBy('id', payload.userId)
         console.log('👤 Utilisateur:', user ? user.email : 'Introuvable')
       }
 
-      // 5. CRÉER COMMANDE
       const deliveryPrice = payload.deliveryPrice || 2500
       const orderNumber = generateOrderNumber()
 
@@ -753,46 +737,38 @@ export default class OrdersController {
 
       console.log(`✅ Commande créée: ${order.order_number}`)
 
-      // 6. GÉRER LES ITEMS
-      // LOGIQUE: Panier plein → utilise le panier | Panier vide → utilise les items JSON
       let subtotal = 0
       let itemsCount = 0
       let itemsSource = ''
 
       if (!isGuest && payload.userId) {
-        // Vérifier le panier d'abord
         const cart = await Cart.query()
           .where('user_id', payload.userId)
           .preload('items')
           .first()
 
         if (cart && cart.items.length > 0) {
-          // PANIER PLEIN → Utiliser le panier
           console.log('🛒 Panier plein → Utilisation du panier')
           const result = await this.createOrderItemsFromCart(cart, order)
           subtotal = result.subtotal
           itemsCount = result.itemsCount
           itemsSource = 'cart'
 
-          // Vider le panier après
           await CartItem.query().where('cart_id', cart.id).delete()
           console.log('✅ Panier vidé')
         } else if (payload.items && Array.isArray(payload.items) && payload.items.length > 0) {
-          // PANIER VIDE → Utiliser les items du JSON
           console.log('📦 Panier vide → Utilisation des items fournis')
           const result = await this.createOrderItems(order, payload.items)
           subtotal = result.subtotal
           itemsCount = result.itemsCount
           itemsSource = 'provided'
         } else {
-          // PANIER VIDE ET PAS D'ITEMS → Erreur
           return response.status(400).json({
             success: false,
             message: 'Votre panier est vide et aucun item n\'a été fourni. Ajoutez des articles au panier ou fournissez des items dans la requête.'
           })
         }
       } else if (payload.items && Array.isArray(payload.items) && payload.items.length > 0) {
-        // INVITÉ ou pas de userId → Utiliser les items fournis
         console.log('📦 Items fournis dans la requête')
         const result = await this.createOrderItems(order, payload.items)
         subtotal = result.subtotal
@@ -812,7 +788,6 @@ export default class OrdersController {
 
       console.log(`💰 Total: ${total} FCFA (subtotal=${subtotal} + livraison=${deliveryPrice}) | Source: ${itemsSource}`)
 
-      // 7. SUIVI INITIAL
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
@@ -825,7 +800,6 @@ export default class OrdersController {
         await guestOrder.save()
       }
 
-      // 8. PAIEMENT SELON LA MÉTHODE CHOISIE
       let paymentResult: any = { success: false, error: 'Aucune méthode de paiement' }
       let paymentStatus: 'success' | 'pending' | 'failed' = 'pending'
       let paymentInfo: PaymentInfo | null = null
@@ -842,11 +816,22 @@ export default class OrdersController {
           )
           if (paymentResult.success && paymentResult.paymentInfo) {
             paymentInfo = paymentResult.paymentInfo
-            const verified = await this.verifyPaymentStatus(paymentInfo.reference_id, order)
-            paymentStatus = verified ? 'success' : 'pending'
-            if (verified && guestOrder) {
-              guestOrder.status = 'paid'
-              await guestOrder.save()
+            // CORRECTION ERREUR 4 : Vérification null
+            if (!paymentInfo) {
+              paymentStatus = 'failed'
+              await OrderTracking.create({
+                order_id: order.id,
+                status: 'payment_failed',
+                description: 'Information de paiement manquante',
+                tracked_at: DateTime.now(),
+              })
+            } else {
+              const verified = await this.verifyPaymentStatus(paymentInfo.reference_id, order)
+              paymentStatus = verified ? 'success' : 'pending'
+              if (verified && guestOrder) {
+                guestOrder.status = 'paid'
+                await guestOrder.save()
+              }
             }
           } else {
             paymentStatus = 'failed'
@@ -933,7 +918,7 @@ export default class OrdersController {
         },
       })
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('🔴 ========== ERREUR CRÉATION COMMANDE ==========')
       console.error('🔴 Message:', error instanceof Error ? error.message : String(error))
       console.error('🔴 Stack:', error instanceof Error ? error.stack : 'N/A')
@@ -983,7 +968,7 @@ export default class OrdersController {
 
       return response.status(200).json(callbackResponse)
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [Callback] Erreur:', error)
       return response.status(500).json({
         responseCode: 500,
@@ -1005,9 +990,9 @@ export default class OrdersController {
       }
 
       await this.renewSecretIfNeeded()
-      const statusData = await MypvitTransactionService.checkTransactionStatus(referenceId)
+      const statusData = await this.checkTransactionStatus(referenceId)
       return response.status(200).json({ success: true, data: statusData })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(500).json({
         success: false,
         message: 'Erreur vérification',
@@ -1053,7 +1038,7 @@ export default class OrdersController {
           status: order.status,
         }
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(500).json({
         success: false,
         message: 'Erreur',
@@ -1078,7 +1063,7 @@ export default class OrdersController {
         .preload('items')
         .orderBy('created_at', 'desc')
       return response.status(200).json({ success: true, data: orders })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -1110,15 +1095,13 @@ export default class OrdersController {
       }
 
       return response.status(200).json({ success: true, data: order })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
-
-  // app/controllers/OrdersController.ts
 
   async updateStatus({ params, request, response }: HttpContext) {
     try {
@@ -1129,7 +1112,6 @@ export default class OrdersController {
 
       console.log('🔵 [updateStatus] Appel reçu:', { orderId, status })
 
-      // Vérifier si le statut est valide
       const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'pending_payment', 'paid', 'payment_failed']
       if (!validStatuses.includes(status)) {
         console.log('❌ Statut invalide:', status)
@@ -1139,7 +1121,6 @@ export default class OrdersController {
         })
       }
 
-      // Rechercher la commande
       let order: Order | null = null
       if (orderId.startsWith('CMD-') || orderId.startsWith('ORD-')) {
         order = await Order.query().where('order_number', orderId).first()
@@ -1162,10 +1143,8 @@ export default class OrdersController {
         nouveau_statut: status
       })
 
-      // Sauvegarder l'ancien statut
       const oldStatus = order.status
 
-      // Mettre à jour la commande
       order.status = status as typeof order.status
       if (trackingNumber) order.tracking_number = trackingNumber
       if (estimatedDelivery) order.estimated_delivery = DateTime.fromISO(estimatedDelivery)
@@ -1173,7 +1152,6 @@ export default class OrdersController {
 
       await order.save()
 
-      // Créer un événement de tracking (non bloquant)
       try {
         await OrderTracking.create({
           order_id: order.id,
@@ -1204,7 +1182,7 @@ export default class OrdersController {
           updated_at: order.updated_at
         }
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur updateStatus:', error)
       return response.status(500).json({
         success: false,
@@ -1258,7 +1236,7 @@ export default class OrdersController {
         message: '✅ Commande annulée avec succès',
         data: order
       })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -1313,7 +1291,7 @@ export default class OrdersController {
           items: order.items,
         },
       })
-    } catch (error) {
+    } catch (error:any) {
       return response.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -1332,7 +1310,7 @@ export default class OrdersController {
 
     try {
       await this.renewSecretIfNeeded()
-      const statusData = await MypvitTransactionService.checkTransactionStatus(referenceId)
+      const statusData = await this.checkTransactionStatus(referenceId)
       return response.status(200).json(statusData)
     } catch (error) {
       return response.status(200).json({
