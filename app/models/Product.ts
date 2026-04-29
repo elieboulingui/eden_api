@@ -1,4 +1,3 @@
-// app/models/Product.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, beforeCreate, beforeSave, belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
@@ -193,12 +192,12 @@ export default class Product extends BaseModel {
   // ============================================================
 
   @beforeCreate()
-  static assignUuid(product: Product) {
+  static async assignUuid(product: Product) {
     if (!product.id) product.id = crypto.randomUUID()
   }
 
   @beforeCreate()
-  static setDefaults(product: Product) {
+  static async setDefaults(product: Product) {
     product.isArchived = product.isArchived ?? false
     product.isNew = product.isNew ?? true
     product.isOnSale = product.isOnSale ?? false
@@ -218,6 +217,8 @@ export default class Product extends BaseModel {
     product.boostSales = product.boostSales ?? 0
     product.boostPosition = product.boostPosition ?? null
     product.boostBadge = product.boostBadge ?? null
+    product.isFeatured = product.isFeatured ?? false
+    product.isTrending = product.isTrending ?? false
   }
 
   @beforeSave()
@@ -449,38 +450,49 @@ export default class Product extends BaseModel {
   // MÉTHODES STATIQUES
   // ============================================================
 
-static async getBoostedProducts(limit: number = 20): Promise<Product[]> {
-  return Product.query()
-    .where('is_boosted', true)
-    .where('boost_end_date', '>', DateTime.now().toISO())
-    .where('is_archived', false)
-    .where('status', 'active')
-    .preload('user')
-    .orderBy('boost_priority', 'desc')
-    .orderBy('boost_multiplier', 'desc')
-    .limit(limit)
-}
-
-static async expireAllBoosts(): Promise<number> {
-  return Product.query()
-    .where('is_boosted', true)
-    .where('boost_end_date', '<=', DateTime.now().toISO())
-    .update({ 
-      is_boosted: false, 
-      boost_multiplier: 1, 
-      boost_level: 'none', 
-      boost_badge: null, 
-      boost_priority: 0, 
-      boost_position: null, 
-      boost_start_date: null, 
-      boost_end_date: null 
-    })
-}
-
-  static async expireAllBoosts(): Promise<number> {
+  static async getBoostedProducts(limit: number = 20): Promise<Product[]> {
     return Product.query()
       .where('is_boosted', true)
-      .where('boost_end_date', '<=', DateTime.now().toSQL())
-      .update({ is_boosted: false, boost_multiplier: 1, boost_level: 'none', boost_badge: null, boost_priority: 0, boost_position: null, boost_start_date: null, boost_end_date: null })
+      .where('boost_end_date', '>', DateTime.now().toISO())
+      .where('is_archived', false)
+      .where('status', 'active')
+      .preload('user')
+      .orderBy('boost_priority', 'desc')
+      .orderBy('boost_multiplier', 'desc')
+      .limit(limit)
+  }
+
+  static async getProductsSortedByBoost(categoryId?: string): Promise<Product[]> {
+    let query = Product.query()
+      .where('is_archived', false)
+      .where('status', 'active')
+      .preload('user')
+      .orderByRaw('CASE WHEN is_boosted = true AND boost_end_date > ? THEN boost_priority ELSE 0 END DESC', [DateTime.now().toISO()])
+      .orderBy('boost_multiplier', 'desc')
+      .orderBy('created_at', 'desc')
+    
+    if (categoryId) {
+      query = query.where('category_id', categoryId)
+    }
+    
+    return query
+  }
+
+  static async expireAllBoosts(): Promise<number> {
+    const result = await Product.query()
+      .where('is_boosted', true)
+      .where('boost_end_date', '<=', DateTime.now().toISO())
+      .update({ 
+        is_boosted: false, 
+        boost_multiplier: 1, 
+        boost_level: 'none', 
+        boost_badge: null, 
+        boost_priority: 0, 
+        boost_position: null, 
+        boost_start_date: null, 
+        boost_end_date: null 
+      })
+    
+    return Array.isArray(result) ? result.length : 0
   }
 }
