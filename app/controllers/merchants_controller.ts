@@ -220,6 +220,56 @@ export default class MerchantsController {
     }
   }
 
+  // ✅ GET /api/merchants/:id/products - Produits d'un marchand spécifique
+  async merchantProducts({ params, response }: HttpContext) {
+    try {
+      const merchant = await User.query()
+        .where('id', params.id)
+        .whereIn('role', ['merchant', 'marchant', 'marchand'])
+        .where('is_verified', true)
+        .where('verification_status', 'approved')
+        .first()
+
+      if (!merchant) {
+        return response.status(404).json({
+          success: false,
+          message: 'Marchand non trouvé'
+        })
+      }
+
+      const products = await db
+        .from('products')
+        .where('user_id', params.id)
+        .select('*')
+        .orderBy('created_at', 'desc')
+
+      return response.status(200).json({
+        success: true,
+        data: products.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          description: p.description,
+          image_url: p.image_url,
+          stock: p.stock,
+          rating: p.rating,
+          isNew: p.isNew,
+          isOnSale: p.isOnSale,
+          category_id: p.category_id,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+        }))
+      })
+    } catch (error: any) {
+      console.error('Erreur merchantProducts:', error)
+      return response.status(500).json({
+        success: false,
+        message: `Erreur: ${error.message}`,
+        data: []
+      })
+    }
+  }
+
   // ✅ PATCH /api/admin/merchants/:id/verify - Vérifier un marchand
   async verifyMerchant({ params, request, response }: HttpContext) {
     const merchant = await User.find(params.id)

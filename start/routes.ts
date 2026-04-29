@@ -335,7 +335,9 @@ router.group(() => {
   // ----------------------------------------------------------
   // MARCHANDS (LISTE PUBLIQUE)
   // ----------------------------------------------------------
+  // Dans le groupe merchants (section MARCHANDS - LISTE PUBLIQUE)
   router.group(() => {
+    router.get('/:id/products', [MerchantsController, 'merchantProducts']).as('merchants.products') // ✅ À ajouter en premier
     router.get('/', [MerchantsController, 'index']).as('merchants.index')
     router.get('/all', [MerchantsController, 'all']).as('merchants.all')
     router.get('/active', [MerchantsController, 'index']).as('merchants.active')
@@ -343,7 +345,6 @@ router.group(() => {
     router.get('/:id', [MerchantsController, 'show']).as('merchants.show')
     router.get('/:id/stats', [MerchantsController, 'show']).as('merchants.stats')
   }).prefix('/merchants')
-
   // ----------------------------------------------------------
   // AVIS (REVIEWS)
   // ----------------------------------------------------------
