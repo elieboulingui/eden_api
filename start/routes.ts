@@ -507,10 +507,13 @@ router.group(() => {
   router.get('/paypal/success/:token', [PayPalController, 'success'])
   router.get('/paypal/cancel', [PayPalController, 'cancel'])
 
-  // ----------------------------------------------------------
-  // VÉRIFICATION STATUT PAIEMENT
-  // ----------------------------------------------------------
-  router.get('/orders/:orderNumber/payment-status', [CheckPaymentStatusController, 'check'])
-  router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check'])
+// ✅ APRÈS (correction) :
+// ----------------------------------------------------------
+// VÉRIFICATION STATUT PAIEMENT
+// ----------------------------------------------------------
+router.get('/orders/:orderNumber/payment-status', [CheckPaymentStatusController, 'check'])
+  .as('check_payment_status.check_by_order')
+router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check'])
+  .as('check_payment_status.check_by_reference')
 
 }).prefix('/api')
