@@ -4,6 +4,7 @@ import { BaseModel, column, belongsTo, beforeCreate } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import crypto from 'node:crypto'
 import User from './user.js'
+import Product from './Product.js'
 
 export enum SubscriptionPlan {
   DAILY = 'daily',
@@ -19,69 +20,59 @@ export enum SubscriptionStatus {
   PENDING = 'pending',
 }
 
+export enum SubscriptionType {
+  ALL_PRODUCTS = 'all_products',
+  SINGLE_PRODUCT = 'single_product',
+}
+
 export const SUBSCRIPTION_PLANS = {
   [SubscriptionPlan.DAILY]: {
     name: 'Journalier',
-    duration: 1, // 1 jour
+    duration: 1,
     price: 4000,
-    boostMultiplier: 2, // Boost x2 visibilité
-    features: [
-      'Visibilité boostée pendant 24h',
-      'Apparition en page d\'accueil',
-      'Badge "Boosté" sur vos produits',
-      'Priorité dans les résultats de recherche',
-    ],
+    boostMultiplier: 2,
+    maxProducts: 1,
+    badge: '🔥 Boosté',
+    level: 'boosted' as const,
     color: 'orange',
     icon: 'Zap',
+    features: ['Visibilité boostée pendant 24h', 'Apparition en page d\'accueil', 'Badge "Boosté"', 'Priorité recherche'],
   },
   [SubscriptionPlan.WEEKLY]: {
     name: 'Hebdomadaire',
-    duration: 7, // 7 jours
+    duration: 7,
     price: 15000,
     boostMultiplier: 3,
-    features: [
-      'Visibilité boostée pendant 7 jours',
-      'Apparition prioritaire en page d\'accueil',
-      'Badge "Boosté" sur vos produits',
-      'Top des résultats de recherche',
-      'Mise en avant dans la newsletter',
-    ],
+    maxProducts: 5,
+    badge: '🚀 Boosté',
+    level: 'boosted' as const,
     color: 'blue',
     icon: 'Rocket',
+    features: ['Visibilité boostée 7 jours', 'Apparition prioritaire', 'Badge "Boosté"', 'Top recherche', 'Newsletter'],
   },
   [SubscriptionPlan.BIWEEKLY]: {
     name: '2 Semaines',
-    duration: 14, // 14 jours
+    duration: 14,
     price: 50000,
     boostMultiplier: 4,
-    features: [
-      'Visibilité boostée pendant 14 jours',
-      'Position premium en page d\'accueil',
-      'Badge "Premium" sur vos produits',
-      'Top absolu des résultats de recherche',
-      'Mise en avant newsletter + réseaux sociaux',
-      'Statistiques de visibilité avancées',
-    ],
+    maxProducts: 15,
+    badge: '👑 Premium',
+    level: 'premium' as const,
     color: 'purple',
     icon: 'Crown',
+    features: ['Visibilité 14 jours', 'Position premium', 'Badge "Premium"', 'Top absolu', 'Réseaux sociaux', 'Stats avancées'],
   },
   [SubscriptionPlan.MONTHLY]: {
     name: 'Mensuel',
-    duration: 30, // 30 jours
+    duration: 30,
     price: 100000,
     boostMultiplier: 5,
-    features: [
-      'Visibilité maximale pendant 30 jours',
-      'Position ultra-premium en page d\'accueil',
-      'Badge "Premium+" sur vos produits',
-      'Top absolu des résultats de recherche',
-      'Mise en avant newsletter + réseaux sociaux',
-      'Statistiques détaillées + rapport hebdomadaire',
-      'Support prioritaire',
-      'Produits épinglés dans la catégorie',
-    ],
+    maxProducts: 999999,
+    badge: '💎 Premium+',
+    level: 'premium_plus' as const,
     color: 'gold',
     icon: 'Diamond',
+    features: ['Visibilité maximale 30 jours', 'Ultra-premium', 'Badge "Premium+"', 'Top absolu', 'Stats + rapport', 'Support prioritaire', 'Illimité'],
   },
 }
 
@@ -94,17 +85,26 @@ export default class Subscription extends BaseModel {
   @column({ columnName: 'user_id' })
   declare userId: string
 
-  @column({ columnName: 'plan' })
+  @column()
   declare plan: SubscriptionPlan
 
-  @column({ columnName: 'status' })
-  declare status: SubscriptionStatus
+  @column()
+  declare status: string
 
-  @column({ columnName: 'price' })
+  @column({ columnName: 'subscription_type' })
+  declare subscriptionType: string
+
+  @column({ columnName: 'product_id' })
+  declare productId: string | null
+
+  @column()
   declare price: number
 
   @column({ columnName: 'boost_multiplier' })
   declare boostMultiplier: number
+
+  @column({ columnName: 'max_products' })
+  declare maxProducts: number
 
   @column({ columnName: 'payment_reference_id' })
   declare paymentReferenceId: string | null
@@ -113,7 +113,7 @@ export default class Subscription extends BaseModel {
   declare paymentMethod: string | null
 
   @column({ columnName: 'payment_status' })
-  declare paymentStatus: 'PENDING' | 'SUCCESS' | 'FAILED' | null
+  declare paymentStatus: string | null
 
   @column.dateTime({ columnName: 'start_date' })
   declare startDate: DateTime
@@ -136,8 +136,8 @@ export default class Subscription extends BaseModel {
   @column({ columnName: 'total_clicks' })
   declare totalClicks: number
 
-  @column({ columnName: 'metadata' })
-  declare metadata: Record<string, any> | null
+  @column()
+  declare metadata: any
 
   @column.dateTime({ autoCreate: true, columnName: 'created_at' })
   declare createdAt: DateTime
@@ -145,138 +145,77 @@ export default class Subscription extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true, columnName: 'updated_at' })
   declare updatedAt: DateTime
 
-  // ==================== RELATIONS ====================
-
+  // Relations
   @belongsTo(() => User, { foreignKey: 'userId' })
   declare user: BelongsTo<typeof User>
 
-  // ==================== HOOKS ====================
+  @belongsTo(() => Product, { foreignKey: 'productId' })
+  declare product: BelongsTo<typeof Product>
 
   @beforeCreate()
   static assignUuid(subscription: Subscription) {
-    if (!subscription.id) {
-      subscription.id = crypto.randomUUID()
-    }
+    if (!subscription.id) subscription.id = crypto.randomUUID()
   }
 
   @beforeCreate()
   static setDefaults(subscription: Subscription) {
-    subscription.status = subscription.status ?? SubscriptionStatus.PENDING
+    subscription.status = subscription.status ?? 'pending'
+    subscription.subscriptionType = subscription.subscriptionType ?? 'all_products'
     subscription.autoRenew = subscription.autoRenew ?? false
     subscription.boostedProductsCount = subscription.boostedProductsCount ?? 0
     subscription.totalViews = subscription.totalViews ?? 0
     subscription.totalClicks = subscription.totalClicks ?? 0
     subscription.metadata = subscription.metadata ?? {}
+    const planConfig = SUBSCRIPTION_PLANS[subscription.plan as SubscriptionPlan]
+    if (planConfig) {
+      subscription.boostMultiplier = subscription.boostMultiplier ?? planConfig.boostMultiplier
+      subscription.maxProducts = subscription.maxProducts ?? planConfig.maxProducts
+    }
   }
 
-  // ==================== GETTERS ====================
-
-  get planConfig() {
-    return SUBSCRIPTION_PLANS[this.plan]
-  }
-
-  get planName(): string {
-    return this.planConfig?.name || this.plan
-  }
-
-  get isActive(): boolean {
-    return this.status === SubscriptionStatus.ACTIVE && this.endDate > DateTime.now()
-  }
-
-  get isExpired(): boolean {
-    return this.status === SubscriptionStatus.EXPIRED || this.endDate <= DateTime.now()
-  }
-
+  // Getters
+  get planConfig() { return (SUBSCRIPTION_PLANS as any)[this.plan] }
+  get planName(): string { return this.planConfig?.name || this.plan }
+  get isActive(): boolean { return this.status === 'active' && this.endDate > DateTime.now() }
+  get isExpired(): boolean { return this.status === 'expired' || this.endDate <= DateTime.now() }
+  get isForAllProducts(): boolean { return this.subscriptionType === 'all_products' }
+  get isForSingleProduct(): boolean { return this.subscriptionType === 'single_product' }
   get remainingDays(): number {
     if (!this.endDate) return 0
-    const now = DateTime.now()
-    const diff = this.endDate.diff(now, 'days').days
-    return Math.max(0, Math.floor(diff))
+    return Math.max(0, Math.floor(this.endDate.diff(DateTime.now(), 'days').days))
   }
-
   get remainingHours(): number {
     if (!this.endDate) return 0
-    const now = DateTime.now()
-    const diff = this.endDate.diff(now, 'hours').hours
-    return Math.max(0, Math.floor(diff))
+    return Math.max(0, Math.floor(this.endDate.diff(DateTime.now(), 'hours').hours))
   }
+  get color(): string { return this.planConfig?.color || 'gray' }
+  get icon(): string { return this.planConfig?.icon || 'Star' }
+  get badge(): string { return this.planConfig?.badge || '🔥 Boosté' }
+  get boostLevel(): string { return this.planConfig?.level || 'boosted' }
+  get canBoostMoreProducts(): boolean { return this.boostedProductsCount < this.maxProducts }
 
-  get progressPercentage(): number {
-    if (!this.startDate || !this.endDate) return 0
-    const total = this.endDate.diff(this.startDate, 'hours').hours
-    const elapsed = DateTime.now().diff(this.startDate, 'hours').hours
-    return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)))
-  }
-
-  get color(): string {
-    return this.planConfig?.color || 'gray'
-  }
-
-  get icon(): string {
-    return this.planConfig?.icon || 'Star'
-  }
-
-  get dailyPrice(): number {
-    const duration = this.planConfig?.duration || 1
-    return Math.round(this.price / duration)
-  }
-
-  get savings(): number | null {
-    // Calculer les économies par rapport au plan journalier
-    const duration = this.planConfig?.duration || 1
-    const dailyTotal = 4000 * duration
-    const diff = dailyTotal - this.price
-    return diff > 0 ? diff : null
-  }
-
-  get savingsPercentage(): number | null {
-    const duration = this.planConfig?.duration || 1
-    const dailyTotal = 4000 * duration
-    return Math.round(((dailyTotal - this.price) / dailyTotal) * 100)
-  }
-
-  // ==================== MÉTHODES ====================
-
+  // Méthodes
   async activate(): Promise<void> {
     const planConfig = this.planConfig
     if (!planConfig) throw new Error('Plan invalide')
-
     const now = DateTime.now()
-    this.status = SubscriptionStatus.ACTIVE
+    this.status = 'active'
     this.startDate = now
     this.endDate = now.plus({ days: planConfig.duration })
-    this.boostMultiplier = planConfig.boostMultiplier
+    this.paymentStatus = 'SUCCESS'
     await this.save()
   }
 
   async cancel(): Promise<void> {
-    this.status = SubscriptionStatus.CANCELLED
+    this.status = 'cancelled'
     this.cancelledAt = DateTime.now()
-    this.endDate = DateTime.now() // Termine immédiatement
+    this.endDate = DateTime.now()
     await this.save()
   }
 
   async expire(): Promise<void> {
-    this.status = SubscriptionStatus.EXPIRED
+    this.status = 'expired'
     await this.save()
-  }
-
-  async renew(): Promise<Subscription> {
-    const planConfig = this.planConfig
-    if (!planConfig) throw new Error('Plan invalide')
-
-    // Créer un nouvel abonnement
-    const newSubscription = await Subscription.create({
-      userId: this.userId,
-      plan: this.plan,
-      status: SubscriptionStatus.PENDING,
-      price: planConfig.price,
-      boostMultiplier: planConfig.boostMultiplier,
-      autoRenew: this.autoRenew,
-      metadata: { renewedFrom: this.id },
-    })
-
-    return newSubscription
   }
 
   async incrementViews(count: number = 1): Promise<void> {
@@ -289,25 +228,21 @@ export default class Subscription extends BaseModel {
     await this.save()
   }
 
-  async updateBoostedProductsCount(count: number): Promise<void> {
-    this.boostedProductsCount = count
-    await this.save()
-  }
-
-  async checkAndUpdateStatus(): Promise<void> {
-    if (this.isActive && this.endDate <= DateTime.now()) {
-      await this.expire()
-    }
-  }
-
-  // ==================== MÉTHODES STATIQUES ====================
-
+  // Statiques
   static async getActiveSubscription(userId: string): Promise<Subscription | null> {
     return Subscription.query()
       .where('userId', userId)
-      .where('status', SubscriptionStatus.ACTIVE)
+      .where('status', 'active')
       .where('endDate', '>', DateTime.now().toSQL())
       .orderBy('endDate', 'desc')
+      .first()
+  }
+
+  static async getActiveSubscriptionForProduct(productId: string): Promise<Subscription | null> {
+    return Subscription.query()
+      .where('productId', productId)
+      .where('status', 'active')
+      .where('endDate', '>', DateTime.now().toSQL())
       .first()
   }
 
@@ -316,43 +251,15 @@ export default class Subscription extends BaseModel {
     return sub !== null
   }
 
-  static async getBoostedMerchants(): Promise<User[]> {
-    const activeSubs = await Subscription.query()
-      .where('status', SubscriptionStatus.ACTIVE)
-      .where('endDate', '>', DateTime.now().toSQL())
-      .preload('user')
-      .orderBy('boostMultiplier', 'desc')
-
-    return activeSubs.map(sub => sub.user).filter(Boolean)
-  }
-
   static async getBoostMultiplier(userId: string): Promise<number> {
     const sub = await Subscription.getActiveSubscription(userId)
     return sub?.boostMultiplier || 1
   }
 
   static async expireStaleSubscriptions(): Promise<number> {
-    const expired = await Subscription.query()
-      .where('status', SubscriptionStatus.ACTIVE)
+    return Subscription.query()
+      .where('status', 'active')
       .where('endDate', '<=', DateTime.now().toSQL())
-      .update({ status: SubscriptionStatus.EXPIRED })
-
-    return expired
+      .update({ status: 'expired' })
   }
-  // Ligne ~340 - getBoostedProducts
-async getBoostedProducts(): Promise<Product[]> {
-  if (this.isForSingleProduct && this.productId) {
-    const product = await Product.find(this.productId)
-    return product ? [product] : []
-  }
-
-  return Product.query()
-    .where('user_id', this.userId)
-    .where('is_boosted', true)
-    .where('boost_end_date', '>', DateTime.now().toSQL())
-}
-
-// Ajouter la relation product si elle manque
-@belongsTo(() => Product, { foreignKey: 'productId' })
-declare product: BelongsTo<typeof Product>
 }
