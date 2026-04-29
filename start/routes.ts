@@ -2,6 +2,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+import CheckPaymentStatusController from '#controllers/CheckPaymentStatusController'
 import PayPalController from '#controllers/paypal_controller'
 import RefundsController from '#controllers/refunds_controller'
 const CallbackController = () => import('#controllers/CallbackController')
@@ -463,5 +464,6 @@ router.group(() => {
   router.post('/paypal/create', [PayPalController, 'createPayment'])
   router.get('/paypal/success/:token', [PayPalController, 'success'])
   router.get('/paypal/cancel', [PayPalController, 'cancel'])
-
+router.get('/orders/:orderNumber/payment-status', [CheckPaymentStatusController, 'check'])
+router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check'])
 }).prefix('/api')
