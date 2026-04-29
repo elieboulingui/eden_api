@@ -1,16 +1,12 @@
 // app/controllers/CheckPaymentStatusController.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
-import OrderTracking from '#models/order_tracking'
-import OrderItem from '#models/OrderItem'
-import Product from '#models/Product'
-import { DateTime } from 'luxon'
 import MypvitTransactionService from '../services/mypvit_transaction_service.js'
 
 export default class CheckPaymentStatusController {
 
   /**
-   * Vérifie le statut d'un paiement Mobile Money
+   * Vérifie le statut d'un paiement (juste vérifier, pas modifier)
    * GET /api/orders/:orderNumber/payment-status
    * POST /api/orders/check-payment-status
    */
@@ -18,7 +14,6 @@ export default class CheckPaymentStatusController {
     console.log('🔍 ========== VÉRIFICATION STATUT PAIEMENT ==========')
 
     try {
-      // Récupérer l'orderNumber depuis les params ou le body
       const orderNumber = params.orderNumber || request.input('orderNumber')
 
       if (!orderNumber) {
@@ -31,7 +26,6 @@ export default class CheckPaymentStatusController {
       // 1. Récupérer la commande
       const order = await Order.query()
         .where('order_number', orderNumber)
-        .preload('items')
         .first()
 
       if (!order) {
@@ -43,38 +37,7 @@ export default class CheckPaymentStatusController {
 
       console.log(`📦 Commande: ${order.order_number} | Statut: ${order.status}`)
 
-      // 2. Si déjà payée, retourner direct
-      if (order.status === 'paid' || order.status === 'delivered') {
-        return response.status(200).json({
-          success: true,
-          message: 'Paiement déjà confirmé ✅',
-          data: {
-            orderId: order.id,
-            orderNumber: order.order_number,
-            status: 'completed',
-            paymentStatus: 'SUCCESS',
-            total: order.total,
-            confirmedAt: order.payment_completed_at,
-          },
-        })
-      }
-
-      // 3. Si échouée, retourner direct
-      if (order.status === 'payment_failed' || order.status === 'cancelled') {
-        return response.status(200).json({
-          success: false,
-          message: 'Paiement échoué ❌',
-          data: {
-            orderId: order.id,
-            orderNumber: order.order_number,
-            status: 'failed',
-            paymentStatus: 'FAILED',
-            errorMessage: order.payment_error_message || 'Paiement non abouti',
-          },
-        })
-      }
-
-      // 4. Si pas de référence de paiement
+      // 2. Si pas de référence de paiement
       if (!order.payment_reference_id) {
         return response.status(200).json({
           success: false,
@@ -82,184 +45,90 @@ export default class CheckPaymentStatusController {
           data: {
             orderId: order.id,
             orderNumber: order.order_number,
-            status: 'unknown',
+            status: order.status,
             paymentStatus: 'UNKNOWN',
           },
         })
       }
 
-      // 5. Vérifier le statut auprès de Mypvit
-      console.log(`🔍 Vérification statut Mypvit pour référence: ${order.payment_reference_id}`)
+      // 3. Vérifier le statut auprès de Mypvit (juste lire)
+      console.log(`🔍 Vérification Mypvit pour: ${order.payment_reference_id}`)
 
-      let paymentStatus = null
+      let paymentStatus: any = null
       try {
-        paymentStatus = await MypvitTransactionService.checkTransactionStatus({
-          reference_id: order.payment_reference_id,
-          order_number: order.order_number,
-        })
-
-        console.log('📊 Résultat vérification Mypvit:', {
-          status: paymentStatus.status,
-          transactionStatus: paymentStatus.transaction_status,
-          message: paymentStatus.message,
-        })
-
+        paymentStatus = await MypvitTransactionService.checkTransactionStatus(
+          order.payment_reference_id,
+          order.order_number
+        )
+        console.log('📊 Résultat Mypvit:', paymentStatus)
       } catch (error: any) {
-        console.log('⚠️ Erreur vérification Mypvit:', error.message)
-        
-        // Si l'API n'est pas dispo, retourner le statut actuel
+        console.log('⚠️ Erreur Mypvit:', error.message)
         return response.status(200).json({
           success: true,
-          message: 'Statut temporairement indisponible, statut actuel retourné',
+          message: 'Service Mypvit temporairement indisponible',
           data: {
             orderId: order.id,
             orderNumber: order.order_number,
-            status: 'pending',
-            paymentStatus: 'PENDING',
-            currentOrderStatus: order.status,
+            status: order.status,
+            paymentStatus: order.payment_status || 'UNKNOWN',
             isPending: true,
-            message: 'En attente de vérification',
           },
         })
       }
 
-      // 6. Traiter selon le résultat
-      const transactionStatus = paymentStatus?.status || paymentStatus?.transaction_status
+      // 4. Mapper le statut Mypvit vers notre format
+      const mypvitStatus = paymentStatus?.status || 'PENDING'
 
-      if (transactionStatus === 'SUCCESS' || transactionStatus === 'SUCCESSFUL' || transactionStatus === 'COMPLETED' || transactionStatus === 'success' || transactionStatus === 'completed') {
-        // ✅ PAIEMENT CONFIRMÉ
-        console.log('✅ Paiement confirmé !')
+      let resultStatus: string
+      let resultPaymentStatus: string
+      let isPending = false
 
-        order.status = 'paid'
-        order.payment_status = 'SUCCESS'
-        order.payment_completed_at = DateTime.now()
-        
-        if (paymentStatus?.transaction_id) {
-          order.payment_transaction_id = paymentStatus.transaction_id
-        }
-        
-        await order.save()
-
-        // Ajouter tracking
-        await OrderTracking.create({
-          order_id: order.id,
-          status: 'paid',
-          description: `✅ Paiement confirmé ${order.payment_method} - Transaction: ${paymentStatus?.transaction_id || 'N/A'}`,
-          tracked_at: DateTime.now(),
-        })
-
-        // Marquer les items comme payés
-        await OrderItem.query()
-          .where('order_id', order.id)
-          .update({ status: 'paid' })
-
-        await order.load('items')
-
-        return response.status(200).json({
-          success: true,
-          message: 'Paiement confirmé ✅',
-          data: {
-            orderId: order.id,
-            orderNumber: order.order_number,
-            status: 'completed',
-            paymentStatus: 'SUCCESS',
-            total: order.total,
-            transactionId: paymentStatus?.transaction_id,
-            confirmedAt: order.payment_completed_at,
-          },
-        })
-
-      } else if (transactionStatus === 'FAILED' || transactionStatus === 'CANCELLED' || transactionStatus === 'REJECTED' || transactionStatus === 'failed' || transactionStatus === 'cancelled') {
-        // ❌ PAIEMENT ÉCHOUÉ
-        console.log('❌ Paiement échoué')
-
-        // Restaurer le stock
-        await this.restoreStock(order.id)
-
-        order.status = 'payment_failed'
-        order.payment_status = 'FAILED'
-        order.payment_error_message = paymentStatus?.message || 'Paiement refusé'
-        await order.save()
-
-        await OrderTracking.create({
-          order_id: order.id,
-          status: 'payment_failed',
-          description: `❌ Paiement échoué - ${paymentStatus?.message || 'Refusé'}`,
-          tracked_at: DateTime.now(),
-        })
-
-        return response.status(200).json({
-          success: false,
-          message: 'Paiement échoué ❌',
-          data: {
-            orderId: order.id,
-            orderNumber: order.order_number,
-            status: 'failed',
-            paymentStatus: 'FAILED',
-            errorMessage: order.payment_error_message,
-          },
-        })
-
-      } else {
-        // ⏳ TOUJOURS EN ATTENTE
-        console.log('⏳ Paiement toujours en attente')
-
-        // Mettre à jour le statut si nécessaire
-        if (order.status !== 'pending_payment') {
-          order.status = 'pending_payment'
-          order.payment_status = 'PENDING'
-          await order.save()
-        }
-
-        return response.status(200).json({
-          success: true,
-          message: 'Paiement en attente ⏳',
-          data: {
-            orderId: order.id,
-            orderNumber: order.order_number,
-            status: 'pending',
-            paymentStatus: 'PENDING',
-            isPending: true,
-            total: order.total,
-            referenceId: order.payment_reference_id,
-            initiatedAt: order.payment_initiated_at,
-            message: paymentStatus?.message || 'En attente de confirmation',
-          },
-          is_pending: true,
-        })
+      switch (mypvitStatus) {
+        case 'SUCCESS':
+          resultStatus = 'completed'
+          resultPaymentStatus = 'SUCCESS'
+          break
+        case 'FAILED':
+          resultStatus = 'failed'
+          resultPaymentStatus = 'FAILED'
+          break
+        case 'PENDING':
+        case 'AMBIGUOUS':
+        default:
+          resultStatus = 'pending'
+          resultPaymentStatus = 'PENDING'
+          isPending = true
+          break
       }
+
+      // 5. Retourner le statut SANS rien modifier en base
+      return response.status(200).json({
+        success: mypvitStatus !== 'FAILED',
+        message: mypvitStatus === 'SUCCESS' 
+          ? '✅ Paiement confirmé' 
+          : mypvitStatus === 'FAILED' 
+            ? '❌ Paiement échoué' 
+            : '⏳ Paiement en attente',
+        data: {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          status: resultStatus,
+          paymentStatus: resultPaymentStatus,
+          currentOrderStatus: order.status,
+          total: order.total,
+          referenceId: order.payment_reference_id,
+          mypvitRawStatus: mypvitStatus,
+        },
+        is_pending: isPending,
+      })
 
     } catch (error: any) {
-      console.error('🔴 Erreur vérification statut:', error)
+      console.error('🔴 Erreur:', error)
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la vérification',
         error: error.message,
       })
-    }
-  }
-
-  /**
-   * Restaurer le stock en cas d'échec
-   */
-  private async restoreStock(orderId: string): Promise<void> {
-    try {
-      const items = await OrderItem.query().where('order_id', orderId)
-      
-      for (const item of items) {
-        const product = await Product.findBy('id', item.product_id)
-        if (product) {
-          product.stock += item.quantity
-          if (product.is_archived && product.stock > 0) {
-            product.is_archived = false
-          }
-          await product.save()
-        }
-      }
-      
-      console.log(`📦 Stock restauré pour la commande ${orderId}`)
-    } catch (error) {
-      console.error('❌ Erreur restauration stock:', error)
     }
   }
 }
