@@ -339,4 +339,20 @@ export default class Subscription extends BaseModel {
 
     return expired
   }
+  // Ligne ~340 - getBoostedProducts
+async getBoostedProducts(): Promise<Product[]> {
+  if (this.isForSingleProduct && this.productId) {
+    const product = await Product.find(this.productId)
+    return product ? [product] : []
+  }
+
+  return Product.query()
+    .where('user_id', this.userId)
+    .where('is_boosted', true)
+    .where('boost_end_date', '>', DateTime.now().toSQL())
+}
+
+// Ajouter la relation product si elle manque
+@belongsTo(() => Product, { foreignKey: 'productId' })
+declare product: BelongsTo<typeof Product>
 }
