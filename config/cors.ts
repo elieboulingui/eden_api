@@ -5,7 +5,8 @@ const corsConfig = defineConfig({
   origin: [
     'http://localhost:3000',      // Next.js dev
     'http://localhost:3333',      // Adonis local
-    'https://ton-domaine.com',    // Production
+    'https://ton-domaine.com',
+    'https://eden-azure-one.vercel.app',// Production
     'https://sous-domaine.ton-domaine.com'  // Sous-domaine (sans regex)
   ],
   methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH'],
