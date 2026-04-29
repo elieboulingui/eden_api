@@ -47,21 +47,15 @@ export default class BoostService {
   }
 
   static async deactivateBoostForMerchant(userId: string): Promise<void> {
-    const products = await Product.query()
-      .where('user_id', userId)
-      .where('is_boosted', true)
-
+    const products = await Product.query().where('user_id', userId).where('is_boosted', true)
     for (const product of products) {
       await product.deactivateBoost()
     }
-
     console.log(`🛑 Boost désactivé pour ${products.length} produits du marchand ${userId}`)
   }
 
   static async deactivateBoostForProduct(productId: string): Promise<void> {
     const product = await Product.find(productId)
-    if (product) {
-      await product.deactivateBoost()
-    }
+    if (product) await product.deactivateBoost()
   }
 }
