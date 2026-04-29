@@ -159,18 +159,30 @@ export default class Subscription extends BaseModel {
         const product = await ProductModel.find(this.productId)
         return product ? [product] : []
       }
-      return ProductModel.query().where('user_id', this.userId).where('is_boosted', true).where('boost_end_date', '>', DateTime.now().toSQL())
+      return ProductModel.query()
+        .where('user_id', this.userId)
+        .where('is_boosted', true)
+        .where('boost_end_date', '>', DateTime.now().toISO())
     } catch {
       return []
     }
   }
 
   static async getActiveSubscription(userId: string): Promise<Subscription | null> {
-    return Subscription.query().where('userId', userId).where('status', 'active').where('endDate', '>', DateTime.now().toSQL()).orderBy('endDate', 'desc').first()
+    return Subscription.query()
+      .where('userId', userId)
+      .where('status', 'active')
+      .where('endDate', '>', DateTime.now().toISO())
+      .orderBy('endDate', 'desc')
+      .first()
   }
 
   static async getActiveSubscriptionForProduct(productId: string): Promise<Subscription | null> {
-    return Subscription.query().where('productId', productId).where('status', 'active').where('endDate', '>', DateTime.now().toSQL()).first()
+    return Subscription.query()
+      .where('productId', productId)
+      .where('status', 'active')
+      .where('endDate', '>', DateTime.now().toISO())
+      .first()
   }
 
   static async hasActiveSubscription(userId: string): Promise<boolean> {
@@ -184,6 +196,12 @@ export default class Subscription extends BaseModel {
   }
 
   static async expireStaleSubscriptions(): Promise<number> {
-    return Subscription.query().where('status', 'active').where('endDate', '<=', DateTime.now().toSQL()).update({ status: 'expired' })
+    const result = await Subscription.query()
+      .where('status', 'active')
+      .where('endDate', '<=', DateTime.now().toISO())
+      .update({ status: 'expired' })
+    
+    // La méthode update() retourne un tableau dans certaines versions d'Adonis/Lucid
+    return Array.isArray(result) ? result.length : (typeof result === 'number' ? result : 0)
   }
 }
