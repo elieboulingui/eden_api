@@ -1,13 +1,11 @@
 import { defineConfig } from '@adonisjs/cors'
 
-const corsConfig = defineConfig({
+export default defineConfig({
   enabled: true,
-  origin: 'https://eden-azure-one.vercel.app', // Ton domaine frontend
-  methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  origin: true, // Autorise toutes les origines
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   headers: true,
-  exposeHeaders: [],
+  exposeHeaders: ['*'],
   credentials: true,
   maxAge: 90,
 })
-
-export default corsConfig
