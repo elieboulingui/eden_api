@@ -4,6 +4,8 @@ import { middleware } from '#start/kernel'
 // Controllers imports
 import SubscriptionController from '#controllers/SubscriptionController'
 const Subscription = new SubscriptionController()
+import SubscriptionCallbackController from '#controllers/SubscriptionCallbackController'
+const SubscriptionCallback = new SubscriptionCallbackController()
 import CheckPaymentStatusController from '#controllers/CheckPaymentStatusController'
 import PayPalController from '#controllers/paypal_controller'
 import RefundsController from '#controllers/refunds_controller'
@@ -417,8 +419,12 @@ router.group(() => {
   router.post('/mypvit/check-balance', [MypvitController as any, 'checkBalance']).as('mypvit.check-balance')
   router.get('/mypvit/all-balances', [MypvitController as any, 'getAllBalances']).as('mypvit.all-balances')
 
-  // --- CALLBACK MYPVIT ---
+  // --- CALLBACK MYPVIT COMMANDES ---
   router.post('/mypvit/callback', [CallbackController as any, 'handle'])
+
+  // 🆕 --- CALLBACK MYPVIT ABONNEMENTS ---
+  router.post('/mypvit/callback/subscription', (ctx) => SubscriptionCallback.handle(ctx))
+  router.post('/mypvit/callback/subscription/test', (ctx) => SubscriptionCallback.test(ctx))
 
   // ============================================================
   // === ROUTES PAIEMENT MYPVIT =================================
@@ -431,6 +437,40 @@ router.group(() => {
   // --- STATUT COMMANDE ---
   router.put('/orders/:orderId/status', [OrdersController, 'updateStatus']).as('orders.statuts.updates')
   router.put('/orders/:orderId/confirm-delivery', [OrdersController, 'confirmDelivery']).as('orders.confirm-delivery')
+
+  // ============================================================
+  // 🆕 ABONNEMENTS (SUBSCRIPTIONS)
+  // ============================================================
+
+  // Voir tous les plans d'abonnement disponibles
+  router.get('/subscriptions/plans', (ctx) => Subscription.getPlans(ctx))
+
+  // Voir l'abonnement actif d'un marchand
+  router.get('/subscriptions/active/:userId', (ctx) => Subscription.getActiveSubscription(ctx))
+
+  // Voir l'historique des abonnements d'un marchand
+  router.get('/subscriptions/history/:userId', (ctx) => Subscription.getHistory(ctx))
+
+  // Voir les statistiques de boost d'un marchand
+  router.get('/subscriptions/stats/:userId', (ctx) => Subscription.getStats(ctx))
+
+  // Souscrire à un abonnement
+  router.post('/subscriptions/subscribe', (ctx) => Subscription.subscribe(ctx))
+
+  // Vérifier le statut de paiement d'un abonnement
+  router.get('/subscriptions/:id/payment-status', (ctx) => Subscription.checkPaymentStatus(ctx))
+
+  // Ajouter un produit au boost
+  router.post('/subscriptions/:id/add-product', (ctx) => Subscription.addProductToBoost(ctx))
+
+  // Retirer un produit du boost
+  router.post('/subscriptions/:id/remove-product', (ctx) => Subscription.removeProductFromBoost(ctx))
+
+  // Annuler un abonnement
+  router.post('/subscriptions/:id/cancel', (ctx) => Subscription.cancel(ctx))
+
+  // Activer/désactiver le renouvellement automatique
+  router.post('/subscriptions/:id/auto-renew', (ctx) => Subscription.toggleAutoRenew(ctx))
 
   // ============================================================
   // ADMIN - GESTION DES BOUTIQUES (MARCHANDS)
@@ -460,51 +500,17 @@ router.group(() => {
     router.get('/stats/global', [RefundsController, 'stats']).as('refunds.stats')
   }).prefix('/refunds')
 
-
-  
-// Voir tous les plans d'abonnement disponibles
-router.get('/api/subscriptions/plans', (ctx) => Subscription.getPlans(ctx))
-
-// ============================================================
-// 🔒 ROUTES PAR ID MARCHAND (userId dans params ou body)
-// ============================================================
-
-// Voir l'abonnement actif d'un marchand
-router.get('/api/subscriptions/active/:userId', (ctx) => Subscription.getActiveSubscription(ctx))
-
-// Voir l'historique des abonnements d'un marchand
-router.get('/api/subscriptions/history/:userId', (ctx) => Subscription.getHistory(ctx))
-
-// Voir les statistiques de boost d'un marchand
-router.get('/api/subscriptions/stats/:userId', (ctx) => Subscription.getStats(ctx))
-
-// ============================================================
-// 🔒 ROUTES POST (userId dans le body)
-// ============================================================
-
-// Souscrire à un abonnement
-router.post('/api/subscriptions/subscribe', (ctx) => Subscription.subscribe(ctx))
-
-// Vérifier le statut de paiement d'un abonnement
-router.get('/api/subscriptions/:id/payment-status', (ctx) => Subscription.checkPaymentStatus(ctx))
-
-// Ajouter un produit au boost
-router.post('/api/subscriptions/:id/add-product', (ctx) => Subscription.addProductToBoost(ctx))
-
-// Retirer un produit du boost
-router.post('/api/subscriptions/:id/remove-product', (ctx) => Subscription.removeProductFromBoost(ctx))
-
-// Annuler un abonnement
-router.post('/api/subscriptions/:id/cancel', (ctx) => Subscription.cancel(ctx))
-
-// Activer/désactiver le renouvellement automatique
-router.post('/api/subscriptions/:id/auto-renew', (ctx) => Subscription.toggleAutoRenew(ctx))
   // ----------------------------------------------------------
   // PAYPAL
   // ----------------------------------------------------------
   router.post('/paypal/create', [PayPalController, 'createPayment'])
   router.get('/paypal/success/:token', [PayPalController, 'success'])
   router.get('/paypal/cancel', [PayPalController, 'cancel'])
-router.get('/orders/:orderNumber/payment-status', [CheckPaymentStatusController, 'check'])
-router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check'])
+
+  // ----------------------------------------------------------
+  // VÉRIFICATION STATUT PAIEMENT
+  // ----------------------------------------------------------
+  router.get('/orders/:orderNumber/payment-status', [CheckPaymentStatusController, 'check'])
+  router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check'])
+
 }).prefix('/api')
