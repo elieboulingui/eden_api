@@ -230,7 +230,6 @@ export default class Product extends BaseModel {
 
   @beforeSave()
   static async validateBoost(product: Product) {
-    // Si le boost est expiré, le désactiver automatiquement
     if (product.isBoosted && product.boostEndDate && product.boostEndDate <= DateTime.now()) {
       product.isBoosted = false
       product.boostMultiplier = 1
@@ -305,7 +304,7 @@ export default class Product extends BaseModel {
   }
 
   // ============================================================
-  // GETTERS - BOOST 🎯
+  // GETTERS - BOOST 🎯 (UNIQUES - PAS DE DOUBLONS)
   // ============================================================
 
   get isBoostActive(): boolean {
@@ -336,18 +335,10 @@ export default class Product extends BaseModel {
     return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)))
   }
 
-  get boostBadgeConfig(): {
-    label: string
-    color: string
-    bgColor: string
-    textColor: string
-    icon: string
-    borderColor: string
-    ribbonColor: string
-  } | null {
+  get boostBadgeConfig(): any {
     if (!this.isBoostActive) return null
 
-    const configs = {
+    const configs: Record<string, any> = {
       boosted: {
         label: '🔥 Boosté',
         color: 'orange',
@@ -377,13 +368,13 @@ export default class Product extends BaseModel {
       },
     }
 
-    return configs[this.boostLevel] || null
+    return configs[this.boostLevel] || configs.boosted
   }
 
   get boostCardStyle(): string {
     if (!this.isBoostActive) return ''
 
-    const styles = {
+    const styles: Record<string, string> = {
       boosted: 'ring-2 ring-orange-500 shadow-lg shadow-orange-500/20',
       premium: 'ring-2 ring-purple-500 shadow-lg shadow-purple-500/20',
       premium_plus: 'ring-2 ring-yellow-500 shadow-lg shadow-yellow-500/20',
@@ -402,16 +393,13 @@ export default class Product extends BaseModel {
   }
 
   get effectivePrice(): number {
-    // Prix effectif avec boost (peut être utilisé pour trier)
     return this.price * (1 / this.boostMultiplier)
   }
 
   get boostScore(): number {
-    // Score de pertinence pour le classement
     let score = this.boostPriority
 
-    // Bonus selon le niveau de boost
-    const levelBonus = {
+    const levelBonus: Record<string, number> = {
       none: 0,
       boosted: 100,
       premium: 200,
@@ -419,14 +407,8 @@ export default class Product extends BaseModel {
     }
 
     score += levelBonus[this.boostLevel] || 0
-
-    // Bonus selon l'engagement
     score += Math.min(this.totalBoostEngagement, 50)
-
-    // Bonus si en stock
     if (this.isInStock) score += 20
-
-    // Bonus si bonne note
     score += Math.min(this.rating * 10, 50)
 
     return score
@@ -472,31 +454,12 @@ export default class Product extends BaseModel {
   async incrementBoostViews(count: number = 1): Promise<void> {
     if (!this.isBoostActive) return
     this.boostViews += count
-
-    // Mettre à jour aussi les vues dans le boost du marchand
-    if (this.user_id) {
-      const Subscription = (await import('#models/Subscription')).default
-      const subscription = await Subscription.getActiveSubscription(this.user_id)
-      if (subscription) {
-        await subscription.incrementViews(count)
-      }
-    }
-
     await this.save()
   }
 
   async incrementBoostClicks(count: number = 1): Promise<void> {
     if (!this.isBoostActive) return
     this.boostClicks += count
-
-    if (this.user_id) {
-      const Subscription = (await import('#models/Subscription')).default
-      const subscription = await Subscription.getActiveSubscription(this.user_id)
-      if (subscription) {
-        await subscription.incrementClicks(count)
-      }
-    }
-
     await this.save()
   }
 
@@ -519,7 +482,6 @@ export default class Product extends BaseModel {
   async archive(): Promise<void> {
     this.isArchived = true
     this.status = 'inactive'
-    // Désactiver le boost si archivé
     if (this.isBoosted) {
       await this.deactivateBoost()
     }
@@ -560,10 +522,10 @@ export default class Product extends BaseModel {
   }
 
   // ============================================================
-  // MÉTHODES STATIQUES
+  // MÉTHODES STATIQUES (UNIQUES - PAS DE DOUBLONS)
   // ============================================================
 
-  static async getBoostedProducts(limit: number = 20) {
+  static async getBoostedProducts(limit: number = 20): Promise<Product[]> {
     return Product.query()
       .where('is_boosted', true)
       .where('boost_end_date', '>', DateTime.now().toSQL())
@@ -613,87 +575,4 @@ export default class Product extends BaseModel {
 
     return expired
   }
-  // Ligne ~380 - boostBadgeConfig
-get boostBadgeConfig(): {
-  label: string
-  color: string
-  bgColor: string
-  textColor: string
-  icon: string
-  borderColor: string
-  ribbonColor: string
-} | null {
-  if (!this.isBoostActive) return null
-
-  const configs: Record<string, { label: string; color: string; bgColor: string; textColor: string; icon: string; borderColor: string; ribbonColor: string }> = {
-    boosted: {
-      label: '🔥 Boosté',
-      color: 'orange',
-      bgColor: 'bg-orange-500',
-      textColor: 'text-white',
-      icon: 'Zap',
-      borderColor: 'border-orange-500',
-      ribbonColor: '#f97316',
-    },
-    premium: {
-      label: '👑 Premium',
-      color: 'purple',
-      bgColor: 'bg-purple-500',
-      textColor: 'text-white',
-      icon: 'Crown',
-      borderColor: 'border-purple-500',
-      ribbonColor: '#a855f7',
-    },
-    premium_plus: {
-      label: '💎 Premium+',
-      color: 'yellow',
-      bgColor: 'bg-yellow-500',
-      textColor: 'text-black',
-      icon: 'Diamond',
-      borderColor: 'border-yellow-500',
-      ribbonColor: '#eab308',
-    },
-  }
-
-  return configs[this.boostLevel] || configs.boosted
-}
-
-// Ligne ~392 - boostCardStyle
-get boostCardStyle(): string {
-  if (!this.isBoostActive) return ''
-  
-  const styles: Record<string, string> = {
-    boosted: 'ring-2 ring-orange-500 shadow-lg shadow-orange-500/20',
-    premium: 'ring-2 ring-purple-500 shadow-lg shadow-purple-500/20',
-    premium_plus: 'ring-2 ring-yellow-500 shadow-lg shadow-yellow-500/20',
-  }
-  
-  return styles[this.boostLevel] || ''
-}
-
-// Ligne ~614 - getBoostedProducts (retourner le nombre)
-static async getBoostedProductsCount(limit: number = 20): Promise<number> {
-  const result = await Product.query()
-    .where('is_boosted', true)
-    .where('boost_end_date', '>', DateTime.now().toSQL())
-    .where('is_archived', false)
-    .where('status', 'active')
-    .count('* as total')
-    .first()
-
-  return Number(result?.$extras?.total) || 0
-}
-
-// Garder l'ancienne méthode pour retourner les produits
-static async getBoostedProducts(limit: number = 20): Promise<Product[]> {
-  return Product.query()
-    .where('is_boosted', true)
-    .where('boost_end_date', '>', DateTime.now().toSQL())
-    .where('is_archived', false)
-    .where('status', 'active')
-    .preload('user')
-    .orderBy('boost_priority', 'desc')
-    .orderBy('boost_multiplier', 'desc')
-    .limit(limit)
-}
 }
