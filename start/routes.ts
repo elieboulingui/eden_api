@@ -2,6 +2,8 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+import SubscriptionController from '#controllers/SubscriptionController'
+const Subscription = new SubscriptionController()
 import CheckPaymentStatusController from '#controllers/CheckPaymentStatusController'
 import PayPalController from '#controllers/paypal_controller'
 import RefundsController from '#controllers/refunds_controller'
@@ -458,6 +460,45 @@ router.group(() => {
     router.get('/stats/global', [RefundsController, 'stats']).as('refunds.stats')
   }).prefix('/refunds')
 
+
+  
+// Voir tous les plans d'abonnement disponibles
+router.get('/api/subscriptions/plans', (ctx) => Subscription.getPlans(ctx))
+
+// ============================================================
+// 🔒 ROUTES PAR ID MARCHAND (userId dans params ou body)
+// ============================================================
+
+// Voir l'abonnement actif d'un marchand
+router.get('/api/subscriptions/active/:userId', (ctx) => Subscription.getActiveSubscription(ctx))
+
+// Voir l'historique des abonnements d'un marchand
+router.get('/api/subscriptions/history/:userId', (ctx) => Subscription.getHistory(ctx))
+
+// Voir les statistiques de boost d'un marchand
+router.get('/api/subscriptions/stats/:userId', (ctx) => Subscription.getStats(ctx))
+
+// ============================================================
+// 🔒 ROUTES POST (userId dans le body)
+// ============================================================
+
+// Souscrire à un abonnement
+router.post('/api/subscriptions/subscribe', (ctx) => Subscription.subscribe(ctx))
+
+// Vérifier le statut de paiement d'un abonnement
+router.get('/api/subscriptions/:id/payment-status', (ctx) => Subscription.checkPaymentStatus(ctx))
+
+// Ajouter un produit au boost
+router.post('/api/subscriptions/:id/add-product', (ctx) => Subscription.addProductToBoost(ctx))
+
+// Retirer un produit du boost
+router.post('/api/subscriptions/:id/remove-product', (ctx) => Subscription.removeProductFromBoost(ctx))
+
+// Annuler un abonnement
+router.post('/api/subscriptions/:id/cancel', (ctx) => Subscription.cancel(ctx))
+
+// Activer/désactiver le renouvellement automatique
+router.post('/api/subscriptions/:id/auto-renew', (ctx) => Subscription.toggleAutoRenew(ctx))
   // ----------------------------------------------------------
   // PAYPAL
   // ----------------------------------------------------------
