@@ -13,7 +13,7 @@ const KYCsController = () => import('#controllers/kycs_controller')
 const ShopController = () => import('#controllers/shop_controller')
 const OtpController = () => import('#controllers/OtpController')
 const ContactsController = () => import('#controllers/contacts_controller')
-const MerchantsController = () => import('#controllers/merchants_controller')
+import MerchantsController from '#controllers/merchants_controller'
 import PromotionsController from '#controllers/promotions_controller'
 import PubsController from '#controllers/pubs_controller'
 import TestimonialsController from '#controllers/testimonials_controller'
