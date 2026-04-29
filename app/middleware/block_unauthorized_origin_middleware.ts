@@ -5,41 +5,15 @@ export default class BlockUnauthorizedOriginMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
     const { request, response } = ctx
 
-    const origin = request.header('origin')
+    // SOLUTION TEMPORAIRE : Autoriser toutes les origines
+    response.header('Access-Control-Allow-Origin', '*')
+    response.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH')
+    response.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept')
+    response.header('Access-Control-Max-Age', '86400')
 
-    // Liste des origines autorisées
-    const allowedOrigins = [
-      'http://localhost',
-      'http://localhost:3000',
-      'http://localhost:3333',
-      'https://eden-azure-one.vercel.app',
-      'https://ecomerce-api-sc1s.onrender.com'
-    ]
-
-    // Vérifier si l'origine est dans la liste des autorisées
-    // On utilise some() pour supporter les différentes variations de localhost avec port
-    const isAllowed = origin ? allowedOrigins.some(allowed =>
-      origin.startsWith(allowed) || origin === allowed
-    ) : false
-
-    // Bloquer les requêtes sans origine ou avec une origine non autorisée
-    if (origin && !isAllowed) {
-      return response.status(403).json({
-        error: 'Forbidden',
-        message: 'Access denied: Origin not allowed'
-      })
-    }
-
-    // Ajouter l'en-tête CORS pour les origines autorisées
-    if (origin && isAllowed) {
-      response.header('Access-Control-Allow-Origin', origin)
-    }
-    response.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-    response.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-
-    // Gérer les requêtes preflight OPTIONS
+    // Gérer les requêtes OPTIONS (preflight)
     if (request.method() === 'OPTIONS') {
-      return response.status(204).send('')
+      return response.status(200).send('OK')
     }
 
     const output = await next()
