@@ -449,29 +449,33 @@ export default class Product extends BaseModel {
   // MÉTHODES STATIQUES
   // ============================================================
 
-  static async getBoostedProducts(limit: number = 20): Promise<Product[]> {
-    return Product.query()
-      .where('is_boosted', true)
-      .where('boost_end_date', '>', DateTime.now().toSQL())
-      .where('is_archived', false)
-      .where('status', 'active')
-      .preload('user')
-      .orderBy('boost_priority', 'desc')
-      .orderBy('boost_multiplier', 'desc')
-      .limit(limit)
-  }
+static async getBoostedProducts(limit: number = 20): Promise<Product[]> {
+  return Product.query()
+    .where('is_boosted', true)
+    .where('boost_end_date', '>', DateTime.now().toISO())
+    .where('is_archived', false)
+    .where('status', 'active')
+    .preload('user')
+    .orderBy('boost_priority', 'desc')
+    .orderBy('boost_multiplier', 'desc')
+    .limit(limit)
+}
 
-  static async getProductsSortedByBoost(categoryId?: string) {
-    let query = Product.query()
-      .where('is_archived', false)
-      .where('status', 'active')
-      .preload('user')
-      .orderByRaw(`CASE WHEN is_boosted = true AND boost_end_date > NOW() THEN boost_priority ELSE 0 END DESC`)
-      .orderBy('boost_multiplier', 'desc')
-      .orderBy('created_at', 'desc')
-    if (categoryId) query = query.where('category_id', categoryId)
-    return query
-  }
+static async expireAllBoosts(): Promise<number> {
+  return Product.query()
+    .where('is_boosted', true)
+    .where('boost_end_date', '<=', DateTime.now().toISO())
+    .update({ 
+      is_boosted: false, 
+      boost_multiplier: 1, 
+      boost_level: 'none', 
+      boost_badge: null, 
+      boost_priority: 0, 
+      boost_position: null, 
+      boost_start_date: null, 
+      boost_end_date: null 
+    })
+}
 
   static async expireAllBoosts(): Promise<number> {
     return Product.query()
