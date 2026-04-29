@@ -6,6 +6,264 @@ import { DateTime } from 'luxon'
 
 export default class SubscriptionCallbackController {
 
+  // Remplacer checkPaymentStatus (ligne ~380)
+async checkPaymentStatus({ params, response }: HttpContext) {
+  const subscription = await Subscription.find(params.id)
+
+  if (!subscription) {
+    return response.status(404).json({
+      success: false,
+      message: 'Abonnement introuvable',
+    })
+  }
+
+  if (subscription.status === 'active') {
+    return response.json({
+      success: true,
+      message: '✅ Abonnement déjà actif',
+      data: {
+        status: 'SUCCESS',
+        subscription: {
+          id: subscription.id,
+          type: subscription.subscriptionType,
+          plan: subscription.planName,
+          remainingDays: subscription.remainingDays,
+          boostedProducts: subscription.boostedProductsCount,
+        },
+      },
+    })
+  }
+
+  if (!subscription.paymentReferenceId) {
+    return response.json({
+      success: false,
+      message: 'Aucune référence de paiement',
+      data: { status: 'UNKNOWN' },
+    })
+  }
+
+  try {
+    const paymentStatus: any = await MypvitTransactionService.checkTransactionStatus(
+      subscription.paymentReferenceId,
+      `SUB-${subscription.id}`
+    )
+
+    const status = paymentStatus?.status || 'PENDING'
+
+    if (status === 'SUCCESS') {
+      await subscription.activate()
+      subscription.paymentStatus = 'SUCCESS'
+      await subscription.save()
+
+      if (subscription.subscriptionType === 'all_products') {
+        await BoostService.activateBoostForMerchant(subscription.userId, subscription.id)
+      } else if (subscription.subscriptionType === 'single_product' && subscription.productId) {
+        await BoostService.activateBoostForProduct(subscription.productId, subscription)
+      }
+
+      return response.json({
+        success: true,
+        message: '✅ Paiement confirmé ! Boost activé.',
+        data: {
+          status: 'SUCCESS',
+          subscription: {
+            id: subscription.id,
+            type: subscription.subscriptionType,
+            plan: subscription.planName,
+            productId: subscription.productId,
+            remainingDays: subscription.remainingDays,
+            startDate: subscription.startDate,
+            endDate: subscription.endDate,
+          },
+        },
+      })
+
+    } else if (status === 'FAILED') {
+      subscription.status = 'cancelled'
+      subscription.paymentStatus = 'FAILED'
+      await subscription.save()
+
+      return response.json({
+        success: false,
+        message: '❌ Paiement échoué',
+        data: { status: 'FAILED', subscription },
+      })
+
+    } else {
+      return response.json({
+        success: true,
+        message: '⏳ Paiement en attente de confirmation',
+        data: { status: 'PENDING', subscription },
+        is_pending: true,
+      })
+    }
+
+  } catch (error: any) {
+    return response.status(500).json({
+      success: false,
+      message: 'Erreur de vérification',
+      error: error.message,
+    })
+  }
+}
+
+// Remplacer addProductToBoost (ligne ~480)
+async addProductToBoost({ params, request, response }: HttpContext) {
+  const { userId, productId } = request.only(['userId', 'productId'])
+  
+  const user = await this.getMerchantById(userId, response)
+  if (!user) return
+
+  const subscription: any = await Subscription.find(params.id)
+
+  if (!subscription || subscription.userId !== user.id) {
+    return response.status(404).json({
+      success: false,
+      message: 'Abonnement introuvable',
+    })
+  }
+
+  if (!subscription.isActive) {
+    return response.status(400).json({
+      success: false,
+      message: 'Cet abonnement n\'est plus actif',
+    })
+  }
+
+  try {
+    await subscription.addProductToBoost(productId)
+
+    return response.json({
+      success: true,
+      message: '✅ Produit ajouté au boost',
+      data: {
+        boostedCount: subscription.boostedProductsCount,
+        maxProducts: subscription.maxProducts,
+        remaining: subscription.maxProducts - subscription.boostedProductsCount,
+      },
+    })
+  } catch (error: any) {
+    return response.status(400).json({
+      success: false,
+      message: error.message,
+    })
+  }
+}
+
+// Remplacer removeProductFromBoost (ligne ~530)
+async removeProductFromBoost({ params, request, response }: HttpContext) {
+  const { userId, productId } = request.only(['userId', 'productId'])
+  
+  const user = await this.getMerchantById(userId, response)
+  if (!user) return
+
+  const subscription: any = await Subscription.find(params.id)
+
+  if (!subscription || subscription.userId !== user.id) {
+    return response.status(404).json({
+      success: false,
+      message: 'Abonnement introuvable',
+    })
+  }
+
+  try {
+    await subscription.removeProductFromBoost(productId)
+
+    return response.json({
+      success: true,
+      message: 'Produit retiré du boost',
+      data: { boostedCount: subscription.boostedProductsCount },
+    })
+  } catch (error: any) {
+    return response.status(400).json({
+      success: false,
+      message: error.message,
+    })
+  }
+}
+
+// Remplacer getHistory (ligne ~560)
+async getHistory({ params, response }: HttpContext) {
+  const userId = params.userId
+  const user = await this.getMerchantById(userId, response)
+  if (!user) return
+  
+  const subscriptions = await Subscription.query()
+    .where('userId', user.id)
+    .orderBy('createdAt', 'desc')
+    .limit(50)
+
+  return response.json({
+    success: true,
+    data: subscriptions.map((sub: any) => ({
+      id: sub.id,
+      type: sub.subscriptionType,
+      plan: sub.planName,
+      price: sub.price,
+      status: sub.status,
+      productName: sub.product?.name || 'Tous les produits',
+      startDate: sub.startDate,
+      endDate: sub.endDate,
+      remainingDays: sub.remainingDays,
+      totalViews: sub.totalViews,
+      totalClicks: sub.totalClicks,
+    })),
+  })
+}
+
+// Remplacer getStats (ligne ~660)
+async getStats({ params, response }: HttpContext) {
+  const userId = params.userId
+  const user = await this.getMerchantById(userId, response)
+  if (!user) return
+
+  const activeSubscriptions: any[] = await Subscription.query()
+    .where('userId', user.id)
+    .where('status', 'active')
+    .where('endDate', '>', DateTime.now().toSQL())
+
+  const globalSub = activeSubscriptions.find(
+    (sub: any) => sub.subscriptionType === 'all_products'
+  )
+
+  const productSubs = activeSubscriptions.filter(
+    (sub: any) => sub.subscriptionType === 'single_product'
+  )
+
+  const totalViews = activeSubscriptions.reduce((sum: number, sub: any) => sum + (sub.totalViews || 0), 0)
+  const totalClicks = activeSubscriptions.reduce((sum: number, sub: any) => sum + (sub.totalClicks || 0), 0)
+
+  return response.json({
+    success: true,
+    data: {
+      activeSubscriptionsCount: activeSubscriptions.length,
+      globalSubscription: globalSub ? {
+        id: globalSub.id,
+        plan: globalSub.planName,
+        remainingDays: globalSub.remainingDays,
+        boostedProductsCount: globalSub.boostedProductsCount,
+        totalViews: globalSub.totalViews,
+        totalClicks: globalSub.totalClicks,
+        operator: globalSub.paymentMethod,
+      } : null,
+      productSubscriptions: productSubs.map((sub: any) => ({
+        id: sub.id,
+        plan: sub.planName,
+        productName: sub.product?.name || 'Produit',
+        remainingDays: sub.remainingDays,
+        totalViews: sub.totalViews,
+        totalClicks: sub.totalClicks,
+        operator: sub.paymentMethod,
+      })),
+      totals: {
+        views: totalViews,
+        clicks: totalClicks,
+        conversionRate: totalViews > 0 ? Math.round((totalClicks / totalViews) * 100) : 0,
+      },
+    },
+  })
+}
+
   /**
    * Callback Mypvit pour les paiements d'abonnement
    * POST /api/subscriptions/callback
