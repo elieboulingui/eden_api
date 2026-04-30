@@ -71,8 +71,7 @@ export default class GiveChangeController {
         merchant_operation_account_code: opInfo.accountCode,
         owner_charge: 'MERCHANT',
         operator_code: opInfo.operatorCode,
-        free_info: `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
-      })
+free_info: `Retrait ${opInfo.operator}`.substring(0, 15),      })
 
       console.log('📡 Réponse MyPVit:', paymentResult)
 
