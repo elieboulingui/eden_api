@@ -8,7 +8,6 @@ import UserWithdrawalStats from '#models/UserWithdrawalStats'
 import MypvitSecretService from '../services/mypvit_secret_service.js'
 import MypvitTransactionService from '../services/mypvit_transaction_service.js'
 
-const CALLBACK_URL_CODE = '4USEG'
 const MIN_WITHDRAWAL_AMOUNT = 150
 
 export default class GiveChangeController {
@@ -58,106 +57,63 @@ export default class GiveChangeController {
       const opInfo = this.getOperatorInfo(customer_account_number)
       console.log('📱 Opérateur détecté:', { phone: customer_account_number, operator: opInfo.operator, accountCode: opInfo.accountCode })
 
-      const withdrawal = await Withdrawal.create({
-        user_id: user.id, wallet_id: wallet.id, amount: Number(amount), fee: 0,
-        net_amount: Number(amount), currency: 'XAF', status: 'pending',
-        payment_method: opInfo.operator, operator: opInfo.operator,
-        account_number: customer_account_number.replace(/\s/g, ''),
-        account_name: user.full_name || user.email || 'Marchand',
-        notes: notes || `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
-        ip_address: request.ip(),
+      // Renouveler le secret
+      await MypvitSecretService.renewSecret(customer_account_number)
+      console.log('🔐 Secret MyPVit renouvelé')
+
+      const reference = `GCH${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 5)}`.substring(0, 20)
+
+      // Appel MyPVit - on attend la réponse avant de débiter
+      const paymentResult = await (MypvitTransactionService as any).processGiveChange({
+        amount: Number(amount),
+        reference: reference,
+        callback_url_code: '4USEG',
+        customer_account_number: customer_account_number.replace(/\s/g, ''),
+        merchant_operation_account_code: opInfo.accountCode,
+        owner_charge: 'MERCHANT',
+        operator_code: opInfo.operatorCode,
+        free_info: `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
       })
 
-      await WithdrawalHistory.create({
-        withdrawal_id: withdrawal.id, user_id: user.id, action: 'created',
-        new_status: 'pending', amount: Number(amount),
-        notes: `Demande de retrait ${amount} FCFA vers ${opInfo.operator} (${customer_account_number})`,
-        ip_address: request.ip(),
-      })
+      console.log('📡 Réponse MyPVit:', paymentResult)
 
-      await wallet.subtractBalance(Number(amount))
-      console.log('💸 Wallet débité:', wallet.balance, 'FCFA')
-
-      // ========== APPEL MYPVIT ==========
-      try {
-        await MypvitSecretService.renewSecret(customer_account_number)
-        console.log('🔐 Secret MyPVit renouvelé')
-
-        const reference = `GCH${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 5)}`.substring(0, 20)
-
-        let paymentResult: any = {
-          status: 'PENDING',
-          reference_id: reference,
-          message: 'En attente de traitement MyPVit'
-        }
-
-        try {
-        const paymentResult = await MypvitTransactionService.processGiveChange({
-  amount: Number(amount),
-  reference: reference,
-  callback_url_code: '4USEG',
-  customer_account_number: customer_account_number.replace(/\s/g, ''),
-  merchant_operation_account_code: opInfo.accountCode,
-  transaction_type: 'GIVE_CHANGE',
-  owner_charge: 'MERCHANT',
-  operator_code: opInfo.operatorCode,
-  free_info: `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
-})
-        } catch (myPVitError: any) {
-          console.log('⚠️ MyPVit erreur, fallback PENDING:', myPVitError.message)
-        }
-
-        if (paymentResult?.reference_id) {
-          withdrawal.transaction_id = paymentResult.reference_id
-          await withdrawal.save()
-        }
-
-        if (paymentResult?.status === 'SUCCESS') {
-          await withdrawal.markAsCompleted(paymentResult.reference_id)
-          await WithdrawalHistory.create({
-            withdrawal_id: withdrawal.id, user_id: user.id, action: 'completed',
-            old_status: 'pending', new_status: 'completed', amount: Number(amount),
-            notes: `✅ Retrait réussi - ${opInfo.operator} - Réf: ${paymentResult.reference_id}`,
-          })
-          return response.status(200).json({
-            success: true,
-            message: `✅ Retrait de ${amount} FCFA effectué avec succès via ${opInfo.operator}`,
-            data: {
-              withdrawal_id: withdrawal.id, reference: withdrawal.reference,
-              amount: Number(amount), status: 'completed', new_balance: wallet.balance,
-              transaction_ref: paymentResult.reference_id, operator: opInfo.operator,
-            },
-          })
-        }
-
-        // PENDING (défaut)
-        withdrawal.status = 'processing'
-        await withdrawal.save()
-        await WithdrawalHistory.create({
-          withdrawal_id: withdrawal.id, user_id: user.id, action: 'processing',
-          old_status: 'pending', new_status: 'processing', amount: Number(amount),
-          notes: `⏳ En attente - ${opInfo.operator} - Réf: ${paymentResult.reference_id || reference}`,
+      if (paymentResult.status === 'SUCCESS') {
+        // Débiter seulement si MyPVit confirme
+        await wallet.subtractBalance(Number(amount))
+        
+        const withdrawal = await Withdrawal.create({
+          user_id: user.id, wallet_id: wallet.id, amount: Number(amount), fee: 0,
+          net_amount: Number(amount), currency: 'XAF', status: 'completed',
+          payment_method: opInfo.operator, operator: opInfo.operator,
+          account_number: customer_account_number.replace(/\s/g, ''),
+          account_name: user.full_name || user.email || 'Marchand',
+          notes: notes || `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
+          ip_address: request.ip(),
+          transaction_id: paymentResult.reference_id,
+          processed_at: new Date(),
         })
+
+        await WithdrawalHistory.create({
+          withdrawal_id: withdrawal.id, user_id: user.id, action: 'completed',
+          new_status: 'completed', amount: Number(amount),
+          notes: `✅ Retrait réussi - ${opInfo.operator} - Réf: ${paymentResult.reference_id}`,
+          ip_address: request.ip(),
+        })
+
         return response.status(200).json({
           success: true,
-          message: `⏳ Retrait de ${amount} FCFA en cours via ${opInfo.operator}`,
+          message: `✅ Retrait de ${amount} FCFA effectué avec succès via ${opInfo.operator}`,
           data: {
-            withdrawal_id: withdrawal.id, amount: Number(amount), status: 'processing',
-            new_balance: wallet.balance,
-            transaction_ref: paymentResult.reference_id || reference,
-            operator: opInfo.operator, accountCode: opInfo.accountCode,
+            withdrawal_id: withdrawal.id, amount: Number(amount), status: 'completed',
+            new_balance: wallet.balance, operator: opInfo.operator,
           },
         })
-
-      } catch (error: any) {
-        console.error('🔴 Erreur technique:', error.message)
-        await wallet.addBalance(Number(amount))
-        withdrawal.status = 'failed'
-        withdrawal.failure_reason = `Erreur: ${error.message}`
-        await withdrawal.save()
-        return response.status(500).json({
-          success: false, message: 'Erreur lors du retrait', error: error.message,
-          data: { withdrawal_id: withdrawal.id, refunded_amount: Number(amount), new_balance: wallet.balance },
+      } else {
+        // MyPVit a refusé
+        return response.status(400).json({
+          success: false,
+          message: `❌ Retrait refusé: ${paymentResult.message || 'Échec'}`,
+          operator: opInfo.operator,
         })
       }
 
@@ -188,7 +144,6 @@ export default class GiveChangeController {
         },
       })
     } catch (error) {
-      console.error('Erreur checkStatus:', error)
       return response.status(500).json({ success: false, message: 'Erreur interne' })
     }
   }
@@ -216,7 +171,6 @@ export default class GiveChangeController {
         current_balance: wallet?.balance || 0,
       })
     } catch (error) {
-      console.error('Erreur history:', error)
       return response.status(500).json({ success: false, message: 'Erreur interne' })
     }
   }
@@ -232,7 +186,6 @@ export default class GiveChangeController {
         data: { summary: stats || { total_withdrawals: 0, total_amount: 0 }, current_balance: wallet?.balance || 0 },
       })
     } catch (error) {
-      console.error('Erreur stats:', error)
       return response.status(500).json({ success: false, message: 'Erreur interne' })
     }
   }
@@ -261,7 +214,6 @@ export default class GiveChangeController {
         data: { withdrawal_id: withdrawal.id, refunded_amount: withdrawal.amount, new_balance: wallet.balance },
       })
     } catch (error) {
-      console.error('Erreur cancel:', error)
       return response.status(500).json({ success: false, message: 'Erreur interne' })
     }
   }
