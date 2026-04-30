@@ -12,6 +12,8 @@ import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
 import crypto from 'node:crypto'
 import axios from 'axios'
+import Withdrawal from '#models/Withdrawal'
+import WithdrawalHistory from '#models/WithdrawalHistory'
 
 export default class MerchantDashboardController {
 
