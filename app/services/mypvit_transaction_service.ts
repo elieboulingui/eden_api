@@ -146,7 +146,59 @@ export class MypvitTransactionService {
 
   /**
    * Vérifie le statut d'une transaction
+
+
+   
    */
+
+  async processGiveChange(params: {
+  amount: number
+  reference: string
+  callback_url_code: string
+  customer_account_number: string
+  merchant_operation_account_code: string
+  owner_charge: 'MERCHANT' | 'CUSTOMER'
+  operator_code: string
+  free_info?: string
+}): Promise<TransactionResponse> {
+  console.log('💸 [TransactionService] GIVE_CHANGE initié:', {
+    amount: params.amount,
+    reference: params.reference,
+    operator: params.operator_code
+  })
+
+  const payload: any = {
+    amount: params.amount,
+    reference: params.reference.substring(0, 15),
+    service: 'RESTFUL',
+    callback_url_code: params.callback_url_code,
+    customer_account_number: params.customer_account_number.substring(0, 23),
+    merchant_operation_account_code: params.merchant_operation_account_code,
+    transaction_type: 'GIVE_CHANGE',
+    owner_charge: params.owner_charge,
+    operator_code: params.operator_code,
+  }
+
+  if (params.free_info) payload.free_info = params.free_info
+
+  try {
+    const response = await this.httpClient.post<TransactionResponse>(
+      `/${this.CODE_URL}/rest`,
+      payload,
+      { headers: { 'X-Callback-MediaType': 'application/json' } }
+    )
+
+    console.log('✅ [TransactionService] GIVE_CHANGE réponse:', {
+      status: response.data.status,
+      referenceId: response.data.reference_id
+    })
+
+    return response.data
+  } catch (error: any) {
+    console.error('❌ [TransactionService] Erreur GIVE_CHANGE:', error.message)
+    throw error
+  }
+} 
   async checkTransactionStatus(
     transactionId: string,
     accountOperationCode: string
