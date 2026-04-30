@@ -618,7 +618,7 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
     }
   }
 
-  async getWithdrawalHistory({ params, response }: HttpContext) {
+async getWithdrawalHistory({ params, response }: HttpContext) {
   try {
     const { userId } = params
 
@@ -632,39 +632,26 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
       return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
     }
 
-    // ✅ Lire depuis la table merchant_withdrawals (où sont vos retraits)
-    let withdrawals: any[] = []
-    
-    try {
-      withdrawals = await Database
-        .from('merchant_withdrawals')
-        .where('user_id', user.id)
-        .orderBy('created_at', 'desc')
-    } catch (error) {
-      console.log('Table merchant_withdrawals non trouvée, tentative avec withdrawals...')
-      
-      // Fallback sur la nouvelle table withdrawals
-      try {
-        withdrawals = await Database
-          .from('withdrawals')
-          .where('user_id', user.id)
-          .orderBy('created_at', 'desc')
-      } catch (e) {
-        console.error('Aucune table de retraits trouvée')
-      }
-    }
+    // ✅ Utiliser le modèle Withdrawal directement
+    const withdrawals = await Withdrawal.query()
+      .where('user_id', user.id)
+      .orderBy('created_at', 'desc')
+
+    console.log(`📦 ${withdrawals.length} retrait(s) trouvé(s) pour l'utilisateur ${userId}`)
 
     // Transformer les données pour le frontend
     const formattedWithdrawals = withdrawals.map(w => ({
       id: w.id,
-      amount: Number(w.amount),
+      amount: w.net_amount || w.amount,
       status: w.status,
-      payment_method: w.payment_method || 'mobile_money',
+      payment_method: w.payment_method,
       account_number: w.account_number,
       account_name: w.account_name,
       operator: w.operator,
       reference: w.reference,
-      created_at: w.created_at
+      created_at: w.created_at,
+      fee: w.fee,
+      net_amount: w.net_amount
     }))
 
     // Calculer les statistiques
@@ -672,7 +659,7 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
     const pending = formattedWithdrawals.filter(w => w.status === 'pending' || w.status === 'processing')
     const failed = formattedWithdrawals.filter(w => w.status === 'failed' || w.status === 'cancelled')
     
-    const totalWithdrawn = completed.reduce((sum, w) => sum + w.amount, 0)
+    const totalWithdrawn = completed.reduce((sum, w) => sum + Number(w.amount), 0)
 
     // Récupérer le solde actuel
     const wallet = await Wallet.query().where('user_id', user.id).first()
