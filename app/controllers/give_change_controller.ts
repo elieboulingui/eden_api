@@ -92,16 +92,17 @@ export default class GiveChangeController {
         }
 
         try {
-          paymentResult = await MypvitTransactionService.processGiveChange({
-            amount: Number(amount),
-            reference: reference,
-            callback_url_code: CALLBACK_URL_CODE,
-            customer_account_number: customer_account_number.replace(/\s/g, ''),
-            merchant_operation_account_code: opInfo.accountCode,
-            owner_charge: 'MERCHANT',
-            operator_code: opInfo.operatorCode,
-            free_info: `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
-          })
+        const paymentResult = await MypvitTransactionService.processGiveChange({
+  amount: Number(amount),
+  reference: reference,
+  callback_url_code: '4USEG',
+  customer_account_number: customer_account_number.replace(/\s/g, ''),
+  merchant_operation_account_code: opInfo.accountCode,
+  transaction_type: 'GIVE_CHANGE',
+  owner_charge: 'MERCHANT',
+  operator_code: opInfo.operatorCode,
+  free_info: `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
+})
         } catch (myPVitError: any) {
           console.log('⚠️ MyPVit erreur, fallback PENDING:', myPVitError.message)
         }
