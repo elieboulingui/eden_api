@@ -279,8 +279,13 @@ router.group(() => {
   router.delete('/push-subscriptions/:id', [PushSubscriptionsController, 'destroy']).as('push.destroy')
 
   // ==========================================================
-  // === NOUVELLES ROUTES GIVE-CHANGE (RETRAITS) ==============
+  // === GIVE-CHANGE (RETRAITS) - ROUTES DÉDIÉES ==============
   // ==========================================================
+  
+  // ✅ Route principale de retrait
+  router.post('/merchant/give-change', [GiveChangeController, 'giveChange']).as('merchant.give-change')
+  
+  // ✅ Routes GiveChange déjà existantes
   router.group(() => {
     router.get('give-change/:reference/status', [GiveChangeController, 'checkStatus']).as('merchant.give-change.status')
     router.get('give-change/history', [GiveChangeController, 'history']).as('merchant.give-change.history')
@@ -291,7 +296,9 @@ router.group(() => {
   // ----------------------------------------------------------
   // MARCHAND (MERCHANT) - ROUTES EXISTANTES
   // ----------------------------------------------------------
-  router.post('/merchant/give-change', [MerchantDashboardController, 'giveChange']).as('merchant.withdraw')
+  // ✅ Note : La route ci-dessous peut être supprimée car on a déjà /merchant/give-change plus haut
+  // router.post('/merchant/give-change', [MerchantDashboardController, 'giveChange']).as('merchant.withdraw')
+  
   router.get('/merchant/withdrawals/:userId', [MerchantDashboardController, 'getWithdrawalHistory']).as('merchant.withdrawals')
   router.get('/merchant/wallet/:userId', [MerchantDashboardController, 'getWallet']).as('merchant.wallet')
   router.get('/merchant/dashboard/:userId', [MerchantDashboardController, 'dashboard']).as('merchant.dashboard')
@@ -424,6 +431,10 @@ router.group(() => {
   // --- CALLBACK MYPVIT COMMANDES ---
   router.post('/mypvit/callback', [CallbackController as any, 'handle'])
 
+  // ✅ --- CALLBACK MYPVIT RENDU-MONEY (GIVE CHANGE) ---
+  router.post('/mypvit/callback/rendu-money', (ctx) => RenduMoneyCallback.handle(ctx))
+    .as('mypvit.callback.rendu-money')
+
   // 🆕 --- CALLBACK MYPVIT ABONNEMENTS ---
   router.post('/mypvit/callback/subscription', (ctx) => SubscriptionCallback.handle(ctx))
   router.post('/mypvit/callback/subscription/test', (ctx) => SubscriptionCallback.test(ctx))
@@ -509,16 +520,13 @@ router.group(() => {
   router.get('/paypal/success/:token', [PayPalController, 'success'])
   router.get('/paypal/cancel', [PayPalController, 'cancel'])
 
-// ✅ APRÈS (correction) :
-// ----------------------------------------------------------
-// VÉRIFICATION STATUT PAIEMENT
-// ----------------------------------------------------------
-router.get('/orders/:orderNumber/payment-status', [CheckPaymentStatusController, 'check'])
-  .as('check_payment_status.check_by_order')
-router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check'])
-  .as('check_payment_status.check_by_reference')
-
-  router.post('/mypvit/callback/rendu-money', (ctx) => RenduMoneyCallback.handle(ctx))
-  .as('mypvit.callback.rendu-money')
+  // ✅ APRÈS (correction) :
+  // ----------------------------------------------------------
+  // VÉRIFICATION STATUT PAIEMENT
+  // ----------------------------------------------------------
+  router.get('/orders/:orderNumber/payment-status', [CheckPaymentStatusController, 'check'])
+    .as('check_payment_status.check_by_order')
+  router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check'])
+    .as('check_payment_status.check_by_reference')
 
 }).prefix('/api')
