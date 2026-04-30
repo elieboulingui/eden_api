@@ -674,6 +674,160 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
     }
   }
 
+  /**
+   * Récupère les statistiques détaillées des retraits pour un marchand
+   * GET /api/merchant/give-change/stats?userId={userId}
+   */
+  async getWithdrawalStats({ request, response }: HttpContext) {
+    try {
+      const userId = request.qs().userId || request.input('userId')
+
+      if (!userId) {
+        return response.badRequest({ 
+          success: false, 
+          message: "Paramètre userId manquant" 
+        })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ 
+          success: false, 
+          message: 'Utilisateur non trouvé' 
+        })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ 
+          success: false, 
+          message: 'Accès réservé aux marchands' 
+        })
+      }
+
+      // Récupérer le wallet
+      const wallet = await Wallet.query()
+        .where('user_id', user.id)
+        .first()
+
+      const currentBalance = wallet ? wallet.balance : 0
+
+      // Vérifier si la table merchant_withdrawals existe
+      const hasWithdrawalsTable = await Database.rawQuery(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_name = 'merchant_withdrawals'
+        )
+      `)
+
+      let withdrawals: any[] = []
+
+      if (hasWithdrawalsTable.rows[0].exists) {
+        withdrawals = await Database
+          .from('merchant_withdrawals')
+          .where('user_id', user.id)
+          .orderBy('created_at', 'desc')
+      }
+
+      // Statistiques globales
+      const completed = withdrawals.filter(w => w.status === 'completed')
+      const pending = withdrawals.filter(w => w.status === 'pending')
+      const failed = withdrawals.filter(w => w.status === 'failed')
+
+      const totalWithdrawn = completed.reduce((sum, w) => sum + Number(w.amount), 0)
+      const averageWithdrawal = completed.length > 0 ? totalWithdrawn / completed.length : 0
+
+      // Dernier retrait
+      const lastWithdrawal = withdrawals.length > 0 ? {
+        id: withdrawals[0].id,
+        amount: Number(withdrawals[0].amount),
+        status: withdrawals[0].status,
+        payment_method: withdrawals[0].payment_method,
+        account_number: withdrawals[0].account_number,
+        account_name: withdrawals[0].account_name,
+        operator: withdrawals[0].operator,
+        reference: withdrawals[0].reference,
+        created_at: withdrawals[0].created_at
+      } : null
+
+      // Statistiques par mois (24 derniers mois)
+      const monthlyStats: { month: string; amount: number; count: number }[] = []
+      const now = DateTime.now()
+      const twoYearsAgo = now.minus({ years: 2 })
+
+      for (let i = 0; i <= 24; i++) {
+        const monthDate = now.minus({ months: i })
+        if (monthDate < twoYearsAgo) continue
+
+        const monthStr = monthDate.toFormat('yyyy-MM')
+        const monthName = monthDate.toFormat('MMM yyyy')
+
+        const monthWithdrawals = completed.filter(w => {
+          const wDate = DateTime.fromSQL(w.created_at)
+          return wDate.toFormat('yyyy-MM') === monthStr
+        })
+
+        monthlyStats.unshift({
+          month: monthName,
+          amount: monthWithdrawals.reduce((sum, w) => sum + Number(w.amount), 0),
+          count: monthWithdrawals.length
+        })
+      }
+
+      // Statistiques par opérateur
+      const operatorStats: { operator: string; amount: number; count: number }[] = []
+      const operatorMap = new Map<string, { amount: number; count: number }>()
+
+      for (const w of completed) {
+        const operator = w.operator || w.payment_method || 'Autre'
+        const existing = operatorMap.get(operator) || { amount: 0, count: 0 }
+        operatorMap.set(operator, {
+          amount: existing.amount + Number(w.amount),
+          count: existing.count + 1
+        })
+      }
+
+      for (const [operator, data] of operatorMap) {
+        operatorStats.push({
+          operator,
+          amount: data.amount,
+          count: data.count
+        })
+      }
+
+      operatorStats.sort((a, b) => b.amount - a.amount)
+
+      // Résumé
+      const summary = {
+        totalWithdrawn,
+        totalWithdrawals: withdrawals.length,
+        completedWithdrawals: completed.length,
+        pendingWithdrawals: pending.length,
+        failedWithdrawals: failed.length,
+        averageWithdrawal,
+        currentBalance
+      }
+
+      return response.ok({
+        success: true,
+        data: {
+          summary,
+          monthly: monthlyStats,
+          by_operator: operatorStats,
+          last_withdrawal: lastWithdrawal,
+          current_balance: currentBalance
+        }
+      })
+
+    } catch (error: any) {
+      console.error('Erreur dans getWithdrawalStats:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message || 'Erreur lors de la récupération des statistiques'
+      })
+    }
+  }
+
   // ============= COMMANDES MARCHAND =============
 
   async getMerchantOrders({ params, response }: HttpContext) {
@@ -695,6 +849,7 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
       // ✅ Récupérer TOUS les produits du marchand
       const merchantProducts = await Product.query()
         .where('user_id', user.id)
+        .where('isArchived', false)  // ✅ Exclure les produits archivés
         .select('id', 'name', 'price', 'image_url')
 
       const productIds = merchantProducts.map(p => p.id)
@@ -884,6 +1039,7 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
       // ✅ Récupérer les produits du marchand
       const merchantProducts = await Product.query()
         .where('user_id', user.id)
+        .where('isArchived', false)
         .select('id')
 
       const productIds = merchantProducts.map(p => p.id)
@@ -988,6 +1144,7 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
 
       const merchantProducts = await Product.query()
         .where('user_id', user.id)
+        .where('isArchived', false)
         .select('id')
 
       const merchantProductIds = merchantProducts.map(p => p.id)
