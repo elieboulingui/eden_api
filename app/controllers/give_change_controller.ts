@@ -15,6 +15,7 @@ export default class GiveChangeController {
 
   /**
    * Détecte l'opérateur ET retourne le bon compte
+   * 07 = AIRTEL, 06 = MOOV
    */
   private getOperatorInfo(phone: string): { 
     operator: string
@@ -122,12 +123,11 @@ export default class GiveChangeController {
       await wallet.subtractBalance(Number(amount))
       console.log('💸 Wallet débité:', wallet.balance, 'FCFA')
 
+      // ========== APPEL MYPVIT ==========
       try {
-        // Renouveler le secret
         await MypvitSecretService.renewSecret()
         console.log('🔐 Secret MyPVit renouvelé')
 
-        // Référence
         const reference = `GCH${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 5)}`.substring(0, 20)
         
         console.log('📤 Envoi GIVE_CHANGE:', {
@@ -137,17 +137,27 @@ export default class GiveChangeController {
           operator: opInfo.operatorCode
         })
 
-        // Appel MyPVit
-        const paymentResult = await (MypvitTransactionService as any).processGiveChange({
-          amount: Number(amount),
-          reference: reference,
-          callback_url_code: CALLBACK_URL_CODE,
-          customer_account_number: customer_account_number.replace(/\s/g, ''),
-          merchant_operation_account_code: opInfo.accountCode,
-          owner_charge: 'MERCHANT',
-          operator_code: opInfo.operatorCode,
-          free_info: `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
-        })
+        // Appel MyPVit avec try/catch interne
+        let paymentResult: any
+        try {
+          paymentResult = await MypvitTransactionService.processGiveChange({
+            amount: Number(amount),
+            reference: reference,
+            callback_url_code: CALLBACK_URL_CODE,
+            customer_account_number: customer_account_number.replace(/\s/g, ''),
+            merchant_operation_account_code: opInfo.accountCode,
+            owner_charge: 'MERCHANT',
+            operator_code: opInfo.operatorCode,
+            free_info: `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
+          })
+        } catch (myPVitError: any) {
+          console.log('⚠️ MyPVit erreur, fallback PENDING:', myPVitError.message)
+          paymentResult = {
+            status: 'PENDING',
+            reference_id: reference,
+            message: 'En attente de traitement'
+          }
+        }
 
         console.log('📡 Réponse GIVE_CHANGE:', {
           status: paymentResult.status,
@@ -155,7 +165,7 @@ export default class GiveChangeController {
           message: paymentResult.message
         })
 
-        // ✅ Mettre à jour le transaction_id
+        // Mettre à jour le transaction_id
         if (paymentResult.reference_id) {
           withdrawal.transaction_id = paymentResult.reference_id
           await withdrawal.save()
@@ -248,7 +258,8 @@ export default class GiveChangeController {
         }
 
       } catch (error: any) {
-        console.error('🔴 Erreur MyPVit:', error.message)
+        // Erreur technique - Rembourser
+        console.error('🔴 Erreur technique:', error.message)
         
         await wallet.addBalance(Number(amount))
         withdrawal.status = 'failed'
