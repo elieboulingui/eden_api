@@ -617,63 +617,87 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
   }
 
   async getWithdrawalHistory({ params, response }: HttpContext) {
+  try {
+    const { userId } = params
+
+    if (!userId) {
+      return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+    }
+
+    const user = await User.findBy('id', userId)
+
+    if (!user) {
+      return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+    }
+
+    // ✅ Lire depuis la table merchant_withdrawals (où sont vos retraits)
+    let withdrawals: any[] = []
+    
     try {
-      const { userId } = params
-
-      if (!userId) {
-        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
-      }
-
-      const user = await User.findBy('id', userId)
-
-      if (!user) {
-        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
-      }
-
-      // Vérifier si la table merchant_withdrawals existe
-      const hasWithdrawalsTable = await Database.rawQuery(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables
-          WHERE table_name = 'merchant_withdrawals'
-        )
-      `)
-
-      let withdrawals: any[] = []
-
-      if (hasWithdrawalsTable.rows[0].exists) {
+      withdrawals = await Database
+        .from('merchant_withdrawals')
+        .where('user_id', user.id)
+        .orderBy('created_at', 'desc')
+    } catch (error) {
+      console.log('Table merchant_withdrawals non trouvée, tentative avec withdrawals...')
+      
+      // Fallback sur la nouvelle table withdrawals
+      try {
         withdrawals = await Database
-          .from('merchant_withdrawals')
+          .from('withdrawals')
           .where('user_id', user.id)
           .orderBy('created_at', 'desc')
+      } catch (e) {
+        console.error('Aucune table de retraits trouvée')
       }
-
-      // Calculer les statistiques
-      const stats = {
-        total_withdrawn: withdrawals
-          .filter(w => w.status === 'completed')
-          .reduce((sum, w) => sum + Number(w.amount), 0),
-        total_withdrawals: withdrawals.length,
-        completed_count: withdrawals.filter(w => w.status === 'completed').length,
-        pending_count: withdrawals.filter(w => w.status === 'pending').length,
-        failed_count: withdrawals.filter(w => w.status === 'failed').length
-      }
-
-      return response.ok({
-        success: true,
-        data: withdrawals,
-        stats: stats,
-        count: withdrawals.length
-      })
-
-    } catch (error: any) {
-      console.error('Erreur dans getWithdrawalHistory:', error)
-      return response.internalServerError({
-        success: false,
-        message: error.message
-      })
     }
-  }
 
+    // Transformer les données pour le frontend
+    const formattedWithdrawals = withdrawals.map(w => ({
+      id: w.id,
+      amount: Number(w.amount),
+      status: w.status,
+      payment_method: w.payment_method || 'mobile_money',
+      account_number: w.account_number,
+      account_name: w.account_name,
+      operator: w.operator,
+      reference: w.reference,
+      created_at: w.created_at
+    }))
+
+    // Calculer les statistiques
+    const completed = formattedWithdrawals.filter(w => w.status === 'completed')
+    const pending = formattedWithdrawals.filter(w => w.status === 'pending' || w.status === 'processing')
+    const failed = formattedWithdrawals.filter(w => w.status === 'failed' || w.status === 'cancelled')
+    
+    const totalWithdrawn = completed.reduce((sum, w) => sum + w.amount, 0)
+
+    // Récupérer le solde actuel
+    const wallet = await Wallet.query().where('user_id', user.id).first()
+    const currentBalance = wallet ? wallet.balance : 0
+
+    return response.ok({
+      success: true,
+      data: formattedWithdrawals,
+      stats: {
+        total_withdrawn: totalWithdrawn,
+        total_withdrawals: withdrawals.length,
+        completed_count: completed.length,
+        pending_count: pending.length,
+        failed_count: failed.length
+      },
+      count: withdrawals.length,
+      current_balance: currentBalance
+    })
+
+  } catch (error: any) {
+    console.error('Erreur dans getWithdrawalHistory:', error)
+    return response.internalServerError({
+      success: false,
+      message: error.message
+    })
+  }
+}
   /**
    * Récupère les statistiques détaillées des retraits pour un marchand
    * GET /api/merchant/give-change/stats?userId={userId}
