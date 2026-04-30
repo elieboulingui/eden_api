@@ -184,7 +184,7 @@ export default class PayLinkController {
         userId = newUser.id
       }
 
-      const deliveryPrice = payload.deliveryPrice || 2500
+      const deliveryPrice = payload.deliveryPrice || 1
       const orderNumber = generateOrderNumber()
 
       // Créer la commande
