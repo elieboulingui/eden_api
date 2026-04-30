@@ -34,17 +34,17 @@ interface PaymentParams {
   operator_code: string
   product?: string
   free_info?: string
+  transaction_type?: string  // ✅ AJOUTÉ - optionnel
+  operator_owner_charge?: string  // ✅ AJOUTÉ - pour les liens de paiement
 }
 
 export class MypvitTransactionService {
   private httpClient: AxiosInstance
   private readonly BASE_URL_V2 = 'https://api.mypvit.pro/v2'
   
-  // ✅ Tous les endpoints en V2
-  private readonly TRANSACTION_CODE_URL = 'O4PLVRSGUW90JGCY'  // Pour /rest
-  private readonly STATUS_CODE_URL = 'FQDQOGFLKGT9BV0M'      // Pour /status
+  private readonly TRANSACTION_CODE_URL = 'O4PLVRSGUW90JGCY'
+  private readonly STATUS_CODE_URL = 'FQDQOGFLKGT9BV0M'
   
-  // ✅ Callback configuré dans MyPVit
   private readonly SUBSCRIPTION_CALLBACK_CODE = 'T2D7X'
   public readonly SUBSCRIPTION_CALLBACK_URL = 'https://eden-api-zklf.onrender.com/api/mypvit/callback/subscription'
 
@@ -55,13 +55,11 @@ export class MypvitTransactionService {
       headers: { 'Content-Type': 'application/json' } 
     })
     
-    // Interceptor pour ajouter le secret automatiquement
     this.httpClient.interceptors.request.use(async (config) => {
       config.headers['X-Secret'] = await MypvitSecretService.getSecret()
       return config
     })
     
-    // Interceptor pour gérer les erreurs 401 (secret expiré)
     this.httpClient.interceptors.response.use(
       (r) => r,
       async (error: AxiosError) => {
@@ -87,7 +85,6 @@ export class MypvitTransactionService {
     operator_code: string
     product?: string
   }): Promise<TransactionResponse> {
-    // Détecter l'opérateur pour obtenir le bon compte
     const operatorInfo = MypvitSecretService.getOperatorInfo(params.customer_account_number)
     
     console.log('📱 [TransactionService] Opérateur détecté:', {
@@ -102,7 +99,6 @@ export class MypvitTransactionService {
       callback_url_code: this.SUBSCRIPTION_CALLBACK_CODE,
       customer_account_number: params.customer_account_number.replace(/\s/g, '').substring(0, 23),
       merchant_operation_account_code: operatorInfo.accountCode,
-      transaction_type: 'PAYMENT',
       owner_charge: 'CUSTOMER',
       operator_code: params.operator_code || operatorInfo.operator,
       product: params.product || 'Abonnement Boost',
@@ -123,21 +119,23 @@ export class MypvitTransactionService {
    * Méthode interne pour exécuter le paiement
    */
   private async executePayment(params: PaymentParams): Promise<TransactionResponse> {
-    const payload: any = {
+    // ✅ Construire le payload pour l'API Mypvit
+    const payload: Record<string, any> = {
       amount: params.amount,
       reference: params.reference.substring(0, 15),
       service: 'RESTFUL',
       callback_url_code: params.callback_url_code,
       customer_account_number: params.customer_account_number.substring(0, 23),
       merchant_operation_account_code: params.merchant_operation_account_code,
-      transaction_type: 'PAYMENT',
       owner_charge: params.owner_charge,
       operator_code: params.operator_code,
     }
     
+    // ✅ Propriétés optionnelles
     if (params.agent) payload.agent = params.agent
     if (params.product) payload.product = params.product
     if (params.free_info) payload.free_info = params.free_info
+    if (params.transaction_type) payload.transaction_type = params.transaction_type
 
     try {
       console.log('💳 [TransactionService] Paiement initié v2:', {
@@ -176,15 +174,13 @@ export class MypvitTransactionService {
   }
 
   /**
-   * Vérifie le statut d'une transaction - ENDPOINT V2
-   * GET https://api.mypvit.pro/v2/{codeUrl}/status
+   * Vérifie le statut d'une transaction
    */
   async checkTransactionStatus(
     transactionId: string,
     accountOperationCode?: string
   ): Promise<TransactionStatusResponse> {
     try {
-      // Si pas de code compte fourni, utiliser celui d'AIRTEL par défaut
       const accountCode = accountOperationCode || 'ACC_69EFB0E02FCA3'
       
       console.log('🔍 [TransactionService] Vérification statut v2:', {
@@ -192,7 +188,6 @@ export class MypvitTransactionService {
         accountCode
       })
 
-      // ✅ Utilisation de l'API v2
       const response = await axios.get<TransactionStatusResponse>(
         `${this.BASE_URL_V2}/${this.STATUS_CODE_URL}/status`,
         {
@@ -232,16 +227,13 @@ export class MypvitTransactionService {
   }
 
   /**
-   * Vérifie le solde d'un compte - ENDPOINT V2
-   * GET https://api.mypvit.pro/v2/{codeUrl}/balance
+   * Vérifie le solde d'un compte
    */
   async checkBalance(accountOperationCode?: string): Promise<any> {
     try {
       const accountCode = accountOperationCode || 'ACC_69EFB0E02FCA3'
       
-      console.log('💰 [TransactionService] Vérification solde v2:', {
-        accountCode
-      })
+      console.log('💰 [TransactionService] Vérification solde v2:', { accountCode })
 
       const response = await axios.get(
         `${this.BASE_URL_V2}/${this.STATUS_CODE_URL}/balance`,
@@ -250,9 +242,7 @@ export class MypvitTransactionService {
             'X-Secret': await MypvitSecretService.getSecret(),
             'Accept': 'application/json'
           },
-          params: {
-            accountOperationCode: accountCode
-          }
+          params: { accountOperationCode: accountCode }
         }
       )
 
@@ -265,8 +255,61 @@ export class MypvitTransactionService {
   }
 
   /**
-   * Récupère les frais de transaction - ENDPOINT V2
-   * GET https://api.mypvit.pro/v2/{codeUrl}/get-fees
+   * Génère un lien de paiement
+   */
+  async generatePaymentLink(params: {
+    amount: number
+    reference: string
+    customer_account_number: string
+    service: 'WEB' | 'VISA_MASTERCARD' | 'RESTLINK'
+    success_redirection_url_code?: string
+    failed_redirection_url_code?: string
+  }): Promise<any> {
+    try {
+      const operatorInfo = MypvitSecretService.getOperatorInfo(params.customer_account_number)
+
+      const payload: Record<string, any> = {
+        amount: params.amount,
+        reference: params.reference.substring(0, 15),
+        customer_account_number: params.customer_account_number.replace(/\s/g, ''),
+        service: params.service,
+        callback_url_code: this.SUBSCRIPTION_CALLBACK_CODE,
+        merchant_operation_account_code: operatorInfo.accountCode,
+        owner_charge: 'CUSTOMER',
+        operator_code: operatorInfo.operator,
+      }
+
+      if (params.success_redirection_url_code) {
+        payload.success_redirection_url_code = params.success_redirection_url_code
+      }
+      if (params.failed_redirection_url_code) {
+        payload.failed_redirection_url_code = params.failed_redirection_url_code
+      }
+
+      console.log('🔗 [TransactionService] Génération lien v2:', payload)
+
+      const response = await axios.post(
+        `${this.BASE_URL_V2}/${this.TRANSACTION_CODE_URL}/link`,
+        payload,
+        {
+          headers: {
+            'X-Secret': await MypvitSecretService.getSecret(),
+            'Content-Type': 'application/json',
+            'X-Callback-MediaType': 'application/json'
+          }
+        }
+      )
+
+      console.log('✅ [TransactionService] Lien v2 généré:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('❌ [TransactionService] Erreur génération lien v2:', error.message)
+      throw error
+    }
+  }
+
+  /**
+   * Récupère les frais de transaction
    */
   async getFees(params: {
     amount: number
@@ -305,8 +348,7 @@ export class MypvitTransactionService {
   }
 
   /**
-   * Récupère la liste des opérateurs - ENDPOINT V2
-   * GET https://api.mypvit.pro/v2/{codeUrl}/get-operators
+   * Récupère la liste des opérateurs
    */
   async getOperators(): Promise<any> {
     try {
@@ -331,8 +373,7 @@ export class MypvitTransactionService {
   }
 
   /**
-   * Vérifie la santé du service - ENDPOINT V2
-   * GET https://api.mypvit.pro/v2/{codeUrl}/services/health
+   * Vérifie la santé du service
    */
   async checkServiceHealth(): Promise<any> {
     try {
@@ -352,63 +393,6 @@ export class MypvitTransactionService {
       return response.data
     } catch (error: any) {
       console.error('❌ [TransactionService] Service santé erreur v2:', error.message)
-      throw error
-    }
-  }
-
-  /**
-   * Génère un lien de paiement - ENDPOINT V2
-   * POST https://api.mypvit.pro/v2/{codeUrl}/link
-   */
-  async generatePaymentLink(params: {
-    amount: number
-    reference: string
-    customer_account_number: string
-    service: 'WEB' | 'VISA_MASTERCARD' | 'RESTLINK'
-    success_redirection_url_code?: string
-    failed_redirection_url_code?: string
-  }): Promise<any> {
-    try {
-      const operatorInfo = MypvitSecretService.getOperatorInfo(params.customer_account_number)
-
-      const payload = {
-        amount: params.amount,
-        reference: params.reference.substring(0, 15),
-        customer_account_number: params.customer_account_number.replace(/\s/g, ''),
-        service: params.service,
-        callback_url_code: this.SUBSCRIPTION_CALLBACK_CODE,
-        merchant_operation_account_code: operatorInfo.accountCode,
-        transaction_type: 'PAYMENT',
-        owner_charge: 'CUSTOMER',
-        operator_owner_charge: 'MERCHANT',
-        operator_code: operatorInfo.operator,
-      }
-
-      if (params.success_redirection_url_code) {
-        (payload as any).success_redirection_url_code = params.success_redirection_url_code
-      }
-      if (params.failed_redirection_url_code) {
-        (payload as any).failed_redirection_url_code = params.failed_redirection_url_code
-      }
-
-      console.log('🔗 [TransactionService] Génération lien v2:', payload)
-
-      const response = await axios.post(
-        `${this.BASE_URL_V2}/${this.TRANSACTION_CODE_URL}/link`,
-        payload,
-        {
-          headers: {
-            'X-Secret': await MypvitSecretService.getSecret(),
-            'Content-Type': 'application/json',
-            'X-Callback-MediaType': 'application/json'
-          }
-        }
-      )
-
-      console.log('✅ [TransactionService] Lien v2 généré:', response.data)
-      return response.data
-    } catch (error: any) {
-      console.error('❌ [TransactionService] Erreur génération lien v2:', error.message)
       throw error
     }
   }
