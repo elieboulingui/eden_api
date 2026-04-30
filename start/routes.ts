@@ -2,6 +2,8 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+import RenduMoneyCallbackController from '#controllers/RenduMoneyCallbackController'
+const RenduMoneyCallback = new RenduMoneyCallbackController()
 import SubscriptionController from '#controllers/SubscriptionController'
 const Subscription = new SubscriptionController()
 import SubscriptionCallbackController from '#controllers/SubscriptionCallbackController'
@@ -515,5 +517,8 @@ router.get('/orders/:orderNumber/payment-status', [CheckPaymentStatusController,
   .as('check_payment_status.check_by_order')
 router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check'])
   .as('check_payment_status.check_by_reference')
+
+  router.post('/mypvit/callback/rendu-money', (ctx) => RenduMoneyCallback.handle(ctx))
+  .as('mypvit.callback.rendu-money')
 
 }).prefix('/api')
