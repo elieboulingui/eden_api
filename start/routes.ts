@@ -293,6 +293,9 @@ router.group(() => {
     router.post('give-change/:id/cancel', [GiveChangeController, 'cancel']).as('merchant.give-change.cancel')
   }).prefix('/merchant')
 
+  // ✅ NOUVELLE ROUTE - Statistiques des retraits via MerchantDashboardController (sans conflit)
+  router.get('/merchant/dashboard/withdrawal-stats', [MerchantDashboardController, 'getWithdrawalStats']).as('merchant.dashboard.withdrawal-stats')
+
   // ----------------------------------------------------------
   // MARCHAND (MERCHANT) - ROUTES EXISTANTES
   // ----------------------------------------------------------
@@ -359,6 +362,7 @@ router.group(() => {
     router.get('/:id', [MerchantsController, 'show']).as('merchants.show')
     router.get('/:id/stats', [MerchantsController, 'show']).as('merchants.stats')
   }).prefix('/merchants')
+  
   // ----------------------------------------------------------
   // AVIS (REVIEWS)
   // ----------------------------------------------------------
