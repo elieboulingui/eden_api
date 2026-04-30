@@ -3,7 +3,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Withdrawal from '#models/Withdrawal'
 import WithdrawalHistory from '#models/WithdrawalHistory'
 import Wallet from '#models/wallet'
-import User from '#models/user'
+import UserWithdrawalStats from '#models/UserWithdrawalStats'
 import { DateTime } from 'luxon'
 
 export default class RenduMoneyCallbackController {
@@ -48,7 +48,7 @@ export default class RenduMoneyCallbackController {
       // ==================== RECHERCHE DU RETRAIT ====================
       let withdrawal: any = null
 
-      // Méthode 1 : Chercher par reference (GCH...)
+      // Méthode 1 : Chercher par reference (WTH...)
       if (refId) {
         withdrawal = await Withdrawal.query()
           .where('reference', refId)
@@ -56,23 +56,23 @@ export default class RenduMoneyCallbackController {
         if (withdrawal) console.log('✅ Retrait trouvé via reference = refId')
       }
 
-      // Méthode 2 : Chercher par transaction_reference
+      // Méthode 2 : Chercher par transaction_id
       if (!withdrawal && refId) {
         withdrawal = await Withdrawal.query()
-          .where('transaction_reference', refId)
+          .where('transaction_id', refId)
           .first()
-        if (withdrawal) console.log('✅ Retrait trouvé via transaction_reference = refId')
+        if (withdrawal) console.log('✅ Retrait trouvé via transaction_id = refId')
       }
 
       // Méthode 3 : Chercher par txId
       if (!withdrawal && txId) {
         withdrawal = await Withdrawal.query()
-          .where('transaction_reference', txId)
+          .where('transaction_id', txId)
           .first()
-        if (withdrawal) console.log('✅ Retrait trouvé via transaction_reference = txId')
+        if (withdrawal) console.log('✅ Retrait trouvé via transaction_id = txId')
       }
 
-      // Méthode 4 : Chercher dans les retraits récents en pending
+      // Méthode 4 : Chercher dans les retraits récents en pending/processing
       if (!withdrawal) {
         const recentWithdrawals = await Withdrawal.query()
           .where('status', 'pending')
@@ -107,17 +107,17 @@ export default class RenduMoneyCallbackController {
         console.log(`   Montant: ${withdrawal.amount} FCFA`)
         console.log(`   Opérateur: ${withdrawal.operator}`)
 
-        // Mettre à jour la référence de transaction si manquante
-        if (!withdrawal.transaction_reference && (txId || refId)) {
-          withdrawal.transaction_reference = txId || refId
-          console.log('📝 transaction_reference mise à jour:', txId || refId)
+        // Mettre à jour le transaction_id si manquant
+        if (!withdrawal.transaction_id && (txId || refId)) {
+          withdrawal.transaction_id = txId || refId
+          console.log('📝 transaction_id mise à jour:', txId || refId)
         }
 
         if (status === 'SUCCESS') {
           // ========== RETRAIT RÉUSSI ==========
           withdrawal.status = 'completed'
           withdrawal.processed_at = DateTime.now()
-          withdrawal.transaction_reference = txId || refId || withdrawal.transaction_reference
+          withdrawal.transaction_id = txId || refId || withdrawal.transaction_id
           await withdrawal.save()
 
           console.log('✅ Retrait marqué comme complété')
@@ -192,7 +192,7 @@ export default class RenduMoneyCallbackController {
           console.log('⏳ [Rendu-Money] Retrait en attente')
         }
 
-        // ✅ Mettre à jour les stats de retrait
+        // Mettre à jour les stats de retrait
         await this.updateWithdrawalStats(withdrawal.user_id)
 
       } else {
@@ -211,7 +211,7 @@ export default class RenduMoneyCallbackController {
         }
       }
 
-      // ✅ Toujours renvoyer 200
+      // Toujours renvoyer 200
       return response.status(200).json({
         responseCode: 200,
         transactionId: txId || refId || 'unknown',
