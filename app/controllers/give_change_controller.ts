@@ -137,7 +137,6 @@ export default class GiveChangeController {
           operator: opInfo.operatorCode
         })
 
-        // Appel MyPVit avec try/catch interne
         let paymentResult: any
         try {
           paymentResult = await MypvitTransactionService.processGiveChange({
