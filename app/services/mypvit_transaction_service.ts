@@ -98,7 +98,8 @@ export class MypvitTransactionService {
     console.log('💸 [TransactionService] GIVE_CHANGE initié:', {
       amount: params.amount,
       reference: params.reference,
-      operator: params.operator_code
+      operator: params.operator_code,
+      accountCode: params.merchant_operation_account_code
     })
 
     const payload: any = {
@@ -124,16 +125,29 @@ export class MypvitTransactionService {
 
       console.log('✅ [TransactionService] GIVE_CHANGE réponse:', {
         status: response.data.status,
-        referenceId: response.data.reference_id
+        referenceId: response.data.reference_id,
+        message: response.data.message
       })
 
       return response.data
     } catch (error: any) {
-      console.error('❌ [TransactionService] Erreur GIVE_CHANGE:', error.message)
+      console.error('❌ [TransactionService] Erreur GIVE_CHANGE:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      })
+
+      if (error.response?.data) {
+        const d = error.response.data
+        throw new Error(`[${d.error || 'GIVE_CHANGE_ERROR'}] ${d.messages?.join('|') || d.message || 'Erreur de retrait'}`)
+      }
       throw error
     }
   }
 
+  /**
+   * Vérifie le statut d'une transaction
+   */
   async checkTransactionStatus(
     transactionId: string,
     accountOperationCode: string
