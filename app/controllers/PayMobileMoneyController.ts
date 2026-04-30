@@ -301,7 +301,7 @@ export default class PayMobileMoneyController {
         payload.userId
       )
 
-      const total = subtotal + (payload.deliveryPrice || 2500)
+      const total = subtotal + (payload.deliveryPrice || 1)
       order.subtotal = subtotal
       order.total = total
       await order.save()
