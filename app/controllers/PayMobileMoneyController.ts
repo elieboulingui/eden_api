@@ -284,7 +284,7 @@ export default class PayMobileMoneyController {
         status: 'pending',
         total: 0,
         subtotal: 0,
-        shipping_cost: payload.deliveryPrice || 2500,
+        shipping_cost: payload.deliveryPrice || 1,
         delivery_method: payload.deliveryMethod || 'standard',
         customer_name: payload.customerName || kyc.fullName,
         customer_phone: kyc.accountNumber,
