@@ -278,7 +278,7 @@ export default class PayQRCodeController {
         userId = newUser.id
       }
 
-      const deliveryPrice = payload.deliveryPrice || 2500
+      const deliveryPrice = payload.deliveryPrice || 1
       const orderNumber = generateOrderNumber()
 
       // ✅ Création commande SANS guestOrderId
