@@ -1,5 +1,6 @@
 // app/controllers/give_change_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
+import { DateTime } from 'luxon'
 import User from '#models/user'
 import Wallet from '#models/wallet'
 import Withdrawal from '#models/Withdrawal'
@@ -57,13 +58,11 @@ export default class GiveChangeController {
       const opInfo = this.getOperatorInfo(customer_account_number)
       console.log('📱 Opérateur détecté:', { phone: customer_account_number, operator: opInfo.operator, accountCode: opInfo.accountCode })
 
-      // Renouveler le secret
       await MypvitSecretService.renewSecret(customer_account_number)
       console.log('🔐 Secret MyPVit renouvelé')
 
       const reference = `GCH${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 5)}`.substring(0, 20)
 
-      // Appel MyPVit - on attend la réponse avant de débiter
       const paymentResult = await (MypvitTransactionService as any).processGiveChange({
         amount: Number(amount),
         reference: reference,
@@ -78,7 +77,6 @@ export default class GiveChangeController {
       console.log('📡 Réponse MyPVit:', paymentResult)
 
       if (paymentResult.status === 'SUCCESS') {
-        // Débiter seulement si MyPVit confirme
         await wallet.subtractBalance(Number(amount))
         
         const withdrawal = await Withdrawal.create({
@@ -90,7 +88,7 @@ export default class GiveChangeController {
           notes: notes || `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
           ip_address: request.ip(),
           transaction_id: paymentResult.reference_id,
-          processed_at: new Date(),
+          processed_at: DateTime.now(),
         })
 
         await WithdrawalHistory.create({
@@ -109,7 +107,6 @@ export default class GiveChangeController {
           },
         })
       } else {
-        // MyPVit a refusé
         return response.status(400).json({
           success: false,
           message: `❌ Retrait refusé: ${paymentResult.message || 'Échec'}`,
