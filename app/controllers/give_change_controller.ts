@@ -1,4 +1,4 @@
-// app/controllers/GiveChangeController.ts
+// app/controllers/give_change_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import Wallet from '#models/wallet'
@@ -15,8 +15,6 @@ export default class GiveChangeController {
 
   /**
    * Détecte l'opérateur ET retourne le bon compte
-   * 06 → MOOV_MONEY → ACC_69EFB143D4F54
-   * 07 → AIRTEL_MONEY → ACC_69EFB0E02FCA3
    */
   private getOperatorInfo(phone: string): { 
     operator: string
@@ -33,33 +31,16 @@ export default class GiveChangeController {
       return {
         operator: 'MOOV_MONEY',
         operatorCode: 'MOOV_MONEY',
-        accountCode: 'ACC_69EFB143D4F54'  // ✅ Compte MOOV Eden
+        accountCode: 'ACC_69EFB143D4F54'
       }
     }
     
     // 07 = AIRTEL
-    if (local.startsWith('7')) {
-      return {
-        operator: 'AIRTEL_MONEY',
-        operatorCode: 'AIRTEL_MONEY',
-        accountCode: 'ACC_69EFB0E02FCA3'  // ✅ Compte AIRTEL Eden
-      }
-    }
-
-    // Par défaut AIRTEL
     return {
       operator: 'AIRTEL_MONEY',
       operatorCode: 'AIRTEL_MONEY',
       accountCode: 'ACC_69EFB0E02FCA3'
     }
-  }
-
-  /**
-   * Récupère l'utilisateur par son ID
-   */
-  private async getUserById(userId: string): Promise<User | null> {
-    if (!userId) return null
-    return await User.find(userId)
   }
 
   /**
@@ -72,57 +53,34 @@ export default class GiveChangeController {
     try {
       const { userId, amount, customer_account_number, notes } = request.body()
 
-      // ✅ Validation userId
       if (!userId) {
-        return response.status(400).json({ 
-          success: false, 
-          message: 'ID utilisateur requis' 
-        })
+        return response.status(400).json({ success: false, message: 'ID utilisateur requis' })
       }
 
-      // ✅ Récupérer l'utilisateur
-      const user = await this.getUserById(userId)
+      const user = await User.find(userId)
       if (!user) {
-        return response.status(404).json({ 
-          success: false, 
-          message: 'Utilisateur introuvable' 
-        })
+        return response.status(404).json({ success: false, message: 'Utilisateur introuvable' })
       }
 
-      // ✅ Validation montant
       if (!amount || Number(amount) < MIN_WITHDRAWAL_AMOUNT) {
-        return response.status(400).json({ 
-          success: false, 
-          message: `Montant minimum: ${MIN_WITHDRAWAL_AMOUNT} FCFA` 
-        })
+        return response.status(400).json({ success: false, message: `Montant minimum: ${MIN_WITHDRAWAL_AMOUNT} FCFA` })
       }
 
-      // ✅ Validation téléphone
       if (!customer_account_number) {
-        return response.status(400).json({ 
-          success: false, 
-          message: 'Numéro de téléphone requis' 
-        })
+        return response.status(400).json({ success: false, message: 'Numéro de téléphone requis' })
       }
 
-      // ✅ Vérifier le wallet
       const wallet = await Wallet.query().where('user_id', user.id).first()
       if (!wallet) {
-        return response.status(400).json({ 
-          success: false, 
-          message: 'Wallet non trouvé' 
-        })
+        return response.status(400).json({ success: false, message: 'Wallet non trouvé' })
       }
 
       const currentBalance = Number(wallet.balance)
       if (currentBalance < Number(amount)) {
-        return response.status(400).json({ 
-          success: false, 
-          message: `Solde insuffisant: ${currentBalance} FCFA. Demandé: ${amount} FCFA` 
-        })
+        return response.status(400).json({ success: false, message: `Solde insuffisant: ${currentBalance} FCFA` })
       }
 
-      // ✅ Détecter l'opérateur et son compte
+      // Détecter l'opérateur
       const opInfo = this.getOperatorInfo(customer_account_number)
       console.log('📱 Opérateur détecté:', {
         phone: customer_account_number,
@@ -130,7 +88,7 @@ export default class GiveChangeController {
         accountCode: opInfo.accountCode
       })
 
-      // ✅ Créer le retrait
+      // Créer le retrait
       const withdrawal = await Withdrawal.create({
         user_id: user.id,
         wallet_id: wallet.id,
@@ -149,7 +107,7 @@ export default class GiveChangeController {
 
       console.log('📝 Retrait créé:', withdrawal.id)
 
-      // ✅ Historique
+      // Historique
       await WithdrawalHistory.create({
         withdrawal_id: withdrawal.id,
         user_id: user.id,
@@ -160,16 +118,16 @@ export default class GiveChangeController {
         ip_address: request.ip(),
       })
 
-      // ✅ Débiter le wallet immédiatement
+      // Débiter le wallet
       await wallet.subtractBalance(Number(amount))
       console.log('💸 Wallet débité:', wallet.balance, 'FCFA')
 
       try {
-        // ✅ Renouveler le secret MyPVit
+        // Renouveler le secret
         await MypvitSecretService.renewSecret()
         console.log('🔐 Secret MyPVit renouvelé')
 
-        // ✅ Appel MyPVit GIVE_CHANGE avec le BON compte
+        // Référence
         const reference = `GCH${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 5)}`.substring(0, 20)
         
         console.log('📤 Envoi GIVE_CHANGE:', {
@@ -179,12 +137,13 @@ export default class GiveChangeController {
           operator: opInfo.operatorCode
         })
 
+        // Appel MyPVit
         const paymentResult = await (MypvitTransactionService as any).processGiveChange({
           amount: Number(amount),
           reference: reference,
           callback_url_code: CALLBACK_URL_CODE,
           customer_account_number: customer_account_number.replace(/\s/g, ''),
-          merchant_operation_account_code: opInfo.accountCode,  // ✅ Compte dynamique
+          merchant_operation_account_code: opInfo.accountCode,
           owner_charge: 'MERCHANT',
           operator_code: opInfo.operatorCode,
           free_info: `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
@@ -196,16 +155,14 @@ export default class GiveChangeController {
           message: paymentResult.message
         })
 
-        // ✅ Mettre à jour la référence de transaction
+        // ✅ Mettre à jour le transaction_id
         if (paymentResult.reference_id) {
-          withdrawal.transaction_reference = paymentResult.reference_id
+          withdrawal.transaction_id = paymentResult.reference_id
           await withdrawal.save()
         }
 
         if (paymentResult.status === 'SUCCESS') {
-          // ✅ Retrait réussi
-          await (withdrawal as any).markAsCompleted?.(paymentResult.reference_id) 
-            || await this.markWithdrawalCompleted(withdrawal, paymentResult.reference_id)
+          await withdrawal.markAsCompleted(paymentResult.reference_id)
 
           await WithdrawalHistory.create({
             withdrawal_id: withdrawal.id,
@@ -233,7 +190,6 @@ export default class GiveChangeController {
           })
 
         } else if (paymentResult.status === 'PENDING') {
-          // ⏳ En attente
           withdrawal.status = 'processing'
           await withdrawal.save()
 
@@ -250,7 +206,7 @@ export default class GiveChangeController {
           console.log('⏳ Retrait PENDING')
           return response.status(200).json({
             success: true,
-            message: '⏳ Retrait en cours de traitement. Vous recevrez une confirmation.',
+            message: '⏳ Retrait en cours de traitement',
             data: {
               withdrawal_id: withdrawal.id,
               amount: Number(amount),
@@ -262,7 +218,7 @@ export default class GiveChangeController {
           })
 
         } else {
-          // ❌ Échec - Rembourser
+          // Échec - Rembourser
           await wallet.addBalance(Number(amount))
           withdrawal.status = 'failed'
           withdrawal.failure_reason = paymentResult.message || 'Échec du retrait'
@@ -292,7 +248,6 @@ export default class GiveChangeController {
         }
 
       } catch (error: any) {
-        // ⚠️ Erreur technique - Rembourser
         console.error('🔴 Erreur MyPVit:', error.message)
         
         await wallet.addBalance(Number(amount))
@@ -323,18 +278,7 @@ export default class GiveChangeController {
   }
 
   /**
-   * Marquer un retrait comme complété (fallback si markAsCompleted n'existe pas)
-   */
-  private async markWithdrawalCompleted(withdrawal: any, transactionRef: string): Promise<void> {
-    withdrawal.status = 'completed'
-    withdrawal.processed_at = new Date()
-    withdrawal.transaction_reference = transactionRef
-    await withdrawal.save()
-  }
-
-  /**
    * Vérifier le statut d'un retrait
-   * GET /api/merchant/give-change/:reference/status
    */
   async checkStatus({ params, request, response }: HttpContext) {
     try {
@@ -371,7 +315,7 @@ export default class GiveChangeController {
           created_at: withdrawal.created_at,
           processed_at: withdrawal.processed_at,
           failure_reason: withdrawal.failure_reason,
-          transaction_reference: withdrawal.transaction_reference,
+          transaction_reference: withdrawal.transaction_id,
           notes: withdrawal.notes,
           new_balance: wallet?.balance || 0,
         },
@@ -384,7 +328,6 @@ export default class GiveChangeController {
 
   /**
    * Historique des retraits
-   * GET /api/merchant/give-change/history
    */
   async history({ request, response }: HttpContext) {
     try {
@@ -419,7 +362,7 @@ export default class GiveChangeController {
           created_at: w.created_at,
           processed_at: w.processed_at,
           failure_reason: w.failure_reason,
-          transaction_reference: w.transaction_reference,
+          transaction_reference: w.transaction_id,
         })),
         meta: withdrawals.getMeta(),
         stats: stats || { total_withdrawals: 0, total_amount: 0 },
@@ -433,7 +376,6 @@ export default class GiveChangeController {
 
   /**
    * Statistiques des retraits
-   * GET /api/merchant/give-change/stats
    */
   async stats({ request, response }: HttpContext) {
     try {
@@ -461,7 +403,6 @@ export default class GiveChangeController {
 
   /**
    * Annuler un retrait
-   * POST /api/merchant/give-change/:id/cancel
    */
   async cancel({ params, request, response }: HttpContext) {
     try {
@@ -481,9 +422,7 @@ export default class GiveChangeController {
         return response.status(404).json({ success: false, message: 'Retrait non trouvé' })
       }
 
-      // Vérifier si le retrait peut être annulé
-      const canCancel = withdrawal.status === 'pending' || withdrawal.status === 'processing'
-      if (!canCancel) {
+      if (withdrawal.status !== 'pending' && withdrawal.status !== 'processing') {
         return response.status(400).json({ 
           success: false, 
           message: 'Seuls les retraits en attente ou en cours peuvent être annulés' 
@@ -495,25 +434,16 @@ export default class GiveChangeController {
         return response.status(400).json({ success: false, message: 'Wallet non trouvé' })
       }
 
-      // Rembourser
-      const refundAmount = Number(withdrawal.amount)
-      const currentBalance = Number(wallet.balance)
-      wallet.balance = currentBalance + refundAmount
-      await wallet.save()
+      await wallet.addBalance(withdrawal.amount)
+      await withdrawal.markAsCancelled('Annulé par l\'utilisateur')
 
-      // Marquer comme annulé
-      withdrawal.status = 'cancelled'
-      withdrawal.failure_reason = 'Annulé par l\'utilisateur'
-      await withdrawal.save()
-
-      // Historique
       await WithdrawalHistory.create({
         withdrawal_id: withdrawal.id,
         user_id: userId,
         action: 'cancelled',
-        old_status: withdrawal.status === 'cancelled' ? 'processing' : withdrawal.status,
+        old_status: 'pending',
         new_status: 'cancelled',
-        amount: refundAmount,
+        amount: withdrawal.amount,
         notes: 'Retrait annulé par l\'utilisateur',
         ip_address: request.ip(),
       })
@@ -523,7 +453,7 @@ export default class GiveChangeController {
         message: 'Retrait annulé et remboursé',
         data: {
           withdrawal_id: withdrawal.id,
-          refunded_amount: refundAmount,
+          refunded_amount: withdrawal.amount,
           new_balance: wallet.balance,
         },
       })
