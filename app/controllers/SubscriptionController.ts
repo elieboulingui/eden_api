@@ -28,7 +28,13 @@ export default class SubscriptionController {
   }
 
   async getPlans({ response }: HttpContext) {
-    return response.json({ success: true, data: Object.entries(SUBSCRIPTION_PLANS).map(([key, value]: [string, any]) => ({ id: key, ...value })) })
+    return response.json({ 
+      success: true, 
+      data: Object.entries(SUBSCRIPTION_PLANS).map(([key, value]: [string, any]) => ({ 
+        id: key, 
+        ...value 
+      })) 
+    })
   }
 
   async getActiveSubscription({ params, response }: HttpContext) {
@@ -36,28 +42,39 @@ export default class SubscriptionController {
     if (!user) return
 
     const activeSubscriptions: any[] = await Subscription.query()
-      .where('userId', user.id).where('status', 'active').where('endDate', '>', DateTime.now().toSQL())
-      .preload('product').orderBy('endDate', 'desc')
+      .where('userId', user.id)
+      .where('status', 'active')
+      .where('endDate', '>', DateTime.now().toSQL())
+      .preload('product')
+      .orderBy('endDate', 'desc')
 
     const globalSubscription = activeSubscriptions.find((sub: any) => sub.subscriptionType === 'all_products')
     const productSubscriptions = activeSubscriptions.filter((sub: any) => sub.subscriptionType === 'single_product')
 
     return response.json({
       success: true,
-      data: { global: globalSubscription || null, products: productSubscriptions, hasActiveSubscription: activeSubscriptions.length > 0, totalBoostedProducts: productSubscriptions.length },
+      data: { 
+        global: globalSubscription || null, 
+        products: productSubscriptions, 
+        hasActiveSubscription: activeSubscriptions.length > 0, 
+        totalBoostedProducts: productSubscriptions.length 
+      },
     })
   }
 
   async subscribe({ request, response }: HttpContext) {
-    const { userId, plan, subscriptionType, productId, customerAccountNumber, autoRenew = false } = request.only(['userId', 'plan', 'subscriptionType', 'productId', 'customerAccountNumber', 'autoRenew'])
+    const { userId, plan, subscriptionType, productId, customerAccountNumber, autoRenew = false } = 
+      request.only(['userId', 'plan', 'subscriptionType', 'productId', 'customerAccountNumber', 'autoRenew'])
 
     const user = await this.getMerchantById(userId, response)
     if (!user) return
 
+    // Validation du plan
     if (!Object.values(SubscriptionPlan).includes(plan)) {
       return response.status(400).json({ success: false, message: 'Plan invalide' })
     }
 
+    // Validation produit si single_product
     if (subscriptionType === 'single_product') {
       if (!productId) return response.status(400).json({ success: false, message: 'Un produit est requis' })
       const product = await Product.find(productId)
@@ -66,11 +83,21 @@ export default class SubscriptionController {
       if (product.isArchived || product.status !== 'active') return response.status(400).json({ success: false, message: 'Produit non disponible' })
     }
 
+    // Vérifier abonnement global existant
     if (subscriptionType === 'all_products') {
       const existingGlobal: any = await Subscription.query()
-        .where('userId', user.id).where('subscriptionType', 'all_products').where('status', 'active').where('endDate', '>', DateTime.now().toSQL()).first()
+        .where('userId', user.id)
+        .where('subscriptionType', 'all_products')
+        .where('status', 'active')
+        .where('endDate', '>', DateTime.now().toSQL())
+        .first()
+        
       if (existingGlobal) {
-        return response.status(400).json({ success: false, message: 'Vous avez déjà un abonnement global actif', data: { remainingDays: existingGlobal.remainingDays } })
+        return response.status(400).json({ 
+          success: false, 
+          message: 'Vous avez déjà un abonnement global actif', 
+          data: { remainingDays: existingGlobal.remainingDays } 
+        })
       }
     }
 
@@ -80,6 +107,7 @@ export default class SubscriptionController {
       const phoneNumber = customerAccountNumber || user.phone || ''
       const operator = this.detectOperatorGabon(phoneNumber)
 
+      // Créer l'abonnement en statut "pending"
       const subscription = await Subscription.create({
         userId: user.id,
         plan,
@@ -91,11 +119,27 @@ export default class SubscriptionController {
         maxProducts: planConfig.maxProducts,
         paymentMethod: operator.name,
         autoRenew,
-        metadata: { productName: subscriptionType === 'single_product' ? (await Product.find(productId))?.name : 'Tous les produits', operator: operator.name, operatorCode: operator.code, accountCode: operator.accountCode, phoneNumber: phoneNumber.replace(/\s/g, '') },
+        metadata: { 
+          productName: subscriptionType === 'single_product' 
+            ? (await Product.find(productId))?.name 
+            : 'Tous les produits', 
+          operator: operator.name, 
+          operatorCode: operator.code, 
+          accountCode: operator.accountCode, 
+          phoneNumber: phoneNumber.replace(/\s/g, '') 
+        },
       })
 
+      console.log('💳 [SubscriptionController] Initiation paiement:', {
+        subscriptionId: subscription.id,
+        plan: planConfig.name,
+        amount: planConfig.price,
+        operator: operator.name,
+        phone: phoneNumber.replace(/\s/g, '')
+      })
+
+      // ✅ Appel au service de paiement SANS agent
       const paymentResult: any = await MypvitTransactionService.processPayment({
-        agent: 'AGENT_DEFAULT',
         amount: planConfig.price,
         reference: `SUB-${subscription.id.substring(0, 8)}`,
         callback_url_code: 'T2D7X',
@@ -105,13 +149,26 @@ export default class SubscriptionController {
         owner_charge: 'CUSTOMER',
       })
 
+      console.log('📥 [SubscriptionController] Résultat paiement:', {
+        status: paymentResult.status,
+        referenceId: paymentResult.reference_id,
+        message: paymentResult.message
+      })
+
+      // Gestion de l'échec
       if (paymentResult.status === 'FAILED' || !paymentResult.reference_id) {
         subscription.status = 'cancelled'
         subscription.paymentStatus = 'FAILED'
         await subscription.save()
-        return response.status(400).json({ success: false, message: 'Paiement échoué', error: paymentResult.message })
+        
+        return response.status(400).json({ 
+          success: false, 
+          message: 'Paiement échoué', 
+          error: paymentResult.message 
+        })
       }
 
+      // Paiement en attente
       subscription.paymentReferenceId = paymentResult.reference_id
       subscription.paymentStatus = 'PENDING'
       await subscription.save()
@@ -119,51 +176,134 @@ export default class SubscriptionController {
       return response.status(201).json({
         success: true,
         message: `⏳ Paiement ${operator.name} initié. Vérifiez votre téléphone.`,
-        data: { subscriptionId: subscription.id, type: subscriptionType, plan: planConfig.name, price: planConfig.price, paymentReferenceId: paymentResult.reference_id, operator: { name: operator.name, code: operator.code }, status: 'pending_payment' },
+        data: { 
+          subscriptionId: subscription.id, 
+          type: subscriptionType, 
+          plan: planConfig.name, 
+          price: planConfig.price, 
+          paymentReferenceId: paymentResult.reference_id, 
+          operator: { name: operator.name, code: operator.code }, 
+          status: 'pending_payment' 
+        },
       })
     } catch (error: any) {
-      return response.status(500).json({ success: false, message: 'Erreur lors de la souscription', error: error.message })
+      console.error('❌ [SubscriptionController] Erreur souscription:', error)
+      return response.status(500).json({ 
+        success: false, 
+        message: 'Erreur lors de la souscription', 
+        error: error.message 
+      })
     }
   }
 
   async checkPaymentStatus({ params, response }: HttpContext) {
     const subscription: any = await Subscription.find(params.id)
-    if (!subscription) return response.status(404).json({ success: false, message: 'Abonnement introuvable' })
-
-    if (subscription.status === 'active') {
-      return response.json({ success: true, message: '✅ Abonnement déjà actif', data: { status: 'SUCCESS', subscription: { id: subscription.id, type: subscription.subscriptionType, plan: subscription.planName, remainingDays: subscription.remainingDays } } })
+    if (!subscription) {
+      return response.status(404).json({ success: false, message: 'Abonnement introuvable' })
     }
 
+    // Déjà actif
+    if (subscription.status === 'active') {
+      return response.json({ 
+        success: true, 
+        message: '✅ Abonnement déjà actif', 
+        data: { 
+          status: 'SUCCESS', 
+          subscription: { 
+            id: subscription.id, 
+            type: subscription.subscriptionType, 
+            plan: subscription.planName, 
+            remainingDays: subscription.remainingDays 
+          } 
+        } 
+      })
+    }
+
+    // Pas de référence de paiement
     if (!subscription.paymentReferenceId) {
-      return response.json({ success: false, message: 'Aucune référence de paiement', data: { status: 'UNKNOWN' } })
+      return response.json({ 
+        success: false, 
+        message: 'Aucune référence de paiement', 
+        data: { status: 'UNKNOWN' } 
+      })
     }
 
     try {
-      const paymentStatus: any = await MypvitTransactionService.checkTransactionStatus(subscription.paymentReferenceId, `SUB-${subscription.id}`)
+      console.log('🔍 [SubscriptionController] Vérification statut:', {
+        subscriptionId: subscription.id,
+        paymentRef: subscription.paymentReferenceId
+      })
+
+      // ✅ Vérification du statut avec l'accountCode du metadata
+      const paymentStatus: any = await MypvitTransactionService.checkTransactionStatus(
+        subscription.paymentReferenceId,
+        subscription.metadata?.accountCode || 'ACC_69EFB0E02FCA3'
+      )
+      
       const status = paymentStatus?.status || 'PENDING'
 
+      console.log('📊 [SubscriptionController] Statut reçu:', status)
+
       if (status === 'SUCCESS') {
+        // Activer l'abonnement
         await subscription.activate()
         subscription.paymentStatus = 'SUCCESS'
         await subscription.save()
 
+        // Activer le boost selon le type
         if (subscription.subscriptionType === 'all_products') {
           await BoostService.activateBoostForMerchant(subscription.userId, subscription.id)
+          console.log('🚀 [SubscriptionController] Boost global activé')
         } else if (subscription.subscriptionType === 'single_product' && subscription.productId) {
           await BoostService.activateBoostForProduct(subscription.productId, subscription)
+          console.log('🚀 [SubscriptionController] Boost produit activé')
         }
 
-        return response.json({ success: true, message: '✅ Paiement confirmé ! Boost activé.', data: { status: 'SUCCESS', subscription: { id: subscription.id, type: subscription.subscriptionType, plan: subscription.planName, remainingDays: subscription.remainingDays } } })
+        return response.json({ 
+          success: true, 
+          message: '✅ Paiement confirmé ! Boost activé.', 
+          data: { 
+            status: 'SUCCESS', 
+            subscription: { 
+              id: subscription.id, 
+              type: subscription.subscriptionType, 
+              plan: subscription.planName, 
+              remainingDays: subscription.remainingDays 
+            } 
+          } 
+        })
       } else if (status === 'FAILED') {
         subscription.status = 'cancelled'
         subscription.paymentStatus = 'FAILED'
         await subscription.save()
-        return response.json({ success: false, message: '❌ Paiement échoué', data: { status: 'FAILED' } })
+        
+        return response.json({ 
+          success: false, 
+          message: '❌ Paiement échoué', 
+          data: { status: 'FAILED' } 
+        })
+      } else if (status === 'AMBIGUOUS') {
+        return response.json({ 
+          success: true, 
+          message: '⚠️ Statut ambigu, veuillez réessayer', 
+          data: { status: 'AMBIGUOUS' }, 
+          is_pending: true 
+        })
       } else {
-        return response.json({ success: true, message: '⏳ Paiement en attente', data: { status: 'PENDING' }, is_pending: true })
+        return response.json({ 
+          success: true, 
+          message: '⏳ Paiement en attente', 
+          data: { status: 'PENDING' }, 
+          is_pending: true 
+        })
       }
     } catch (error: any) {
-      return response.status(500).json({ success: false, message: 'Erreur de vérification', error: error.message })
+      console.error('❌ [SubscriptionController] Erreur vérification:', error)
+      return response.status(500).json({ 
+        success: false, 
+        message: 'Erreur de vérification', 
+        error: error.message 
+      })
     }
   }
 
@@ -173,11 +313,17 @@ export default class SubscriptionController {
     if (!user) return
 
     const subscription: any = await Subscription.find(params.id)
-    if (!subscription || subscription.userId !== user.id) return response.status(404).json({ success: false, message: 'Abonnement introuvable' })
-    if (!subscription.isActive) return response.status(400).json({ success: false, message: 'Abonnement inactif' })
+    if (!subscription || subscription.userId !== user.id) {
+      return response.status(404).json({ success: false, message: 'Abonnement introuvable' })
+    }
+    if (!subscription.isActive) {
+      return response.status(400).json({ success: false, message: 'Abonnement inactif' })
+    }
 
     const product = await Product.find(productId)
-    if (!product || product.user_id !== user.id) return response.status(400).json({ success: false, message: 'Produit invalide' })
+    if (!product || product.user_id !== user.id) {
+      return response.status(400).json({ success: false, message: 'Produit invalide' })
+    }
 
     product.isBoosted = true
     product.boostMultiplier = subscription.boostMultiplier
@@ -191,7 +337,15 @@ export default class SubscriptionController {
     subscription.boostedProductsCount++
     await subscription.save()
 
-    return response.json({ success: true, message: '✅ Produit ajouté au boost', data: { boostedCount: subscription.boostedProductsCount, maxProducts: subscription.maxProducts, remaining: subscription.maxProducts - subscription.boostedProductsCount } })
+    return response.json({ 
+      success: true, 
+      message: '✅ Produit ajouté au boost', 
+      data: { 
+        boostedCount: subscription.boostedProductsCount, 
+        maxProducts: subscription.maxProducts, 
+        remaining: subscription.maxProducts - subscription.boostedProductsCount 
+      } 
+    })
   }
 
   async removeProductFromBoost({ params, request, response }: HttpContext) {
@@ -200,7 +354,9 @@ export default class SubscriptionController {
     if (!user) return
 
     const subscription: any = await Subscription.find(params.id)
-    if (!subscription || subscription.userId !== user.id) return response.status(404).json({ success: false, message: 'Abonnement introuvable' })
+    if (!subscription || subscription.userId !== user.id) {
+      return response.status(404).json({ success: false, message: 'Abonnement introuvable' })
+    }
 
     const product = await Product.find(productId)
     if (product) await product.deactivateBoost()
@@ -208,18 +364,37 @@ export default class SubscriptionController {
     subscription.boostedProductsCount = Math.max(0, subscription.boostedProductsCount - 1)
     await subscription.save()
 
-    return response.json({ success: true, message: 'Produit retiré du boost', data: { boostedCount: subscription.boostedProductsCount } })
+    return response.json({ 
+      success: true, 
+      message: 'Produit retiré du boost', 
+      data: { boostedCount: subscription.boostedProductsCount } 
+    })
   }
 
   async getHistory({ params, response }: HttpContext) {
     const user = await this.getMerchantById(params.userId, response)
     if (!user) return
 
-    const subscriptions: any[] = await Subscription.query().where('userId', user.id).orderBy('createdAt', 'desc').limit(50)
+    const subscriptions: any[] = await Subscription.query()
+      .where('userId', user.id)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
 
     return response.json({
       success: true,
-      data: subscriptions.map((sub: any) => ({ id: sub.id, type: sub.subscriptionType, plan: sub.planName, price: sub.price, status: sub.status, productName: sub.product?.name || 'Tous les produits', startDate: sub.startDate, endDate: sub.endDate, remainingDays: sub.remainingDays, totalViews: sub.totalViews, totalClicks: sub.totalClicks })),
+      data: subscriptions.map((sub: any) => ({ 
+        id: sub.id, 
+        type: sub.subscriptionType, 
+        plan: sub.planName, 
+        price: sub.price, 
+        status: sub.status, 
+        productName: sub.product?.name || 'Tous les produits', 
+        startDate: sub.startDate, 
+        endDate: sub.endDate, 
+        remainingDays: sub.remainingDays, 
+        totalViews: sub.totalViews, 
+        totalClicks: sub.totalClicks 
+      })),
     })
   }
 
@@ -229,8 +404,12 @@ export default class SubscriptionController {
     if (!user) return
 
     const subscription: any = await Subscription.find(params.id)
-    if (!subscription || subscription.userId !== user.id) return response.status(404).json({ success: false, message: 'Abonnement introuvable' })
-    if (!subscription.isActive) return response.status(400).json({ success: false, message: 'Abonnement inactif' })
+    if (!subscription || subscription.userId !== user.id) {
+      return response.status(404).json({ success: false, message: 'Abonnement introuvable' })
+    }
+    if (!subscription.isActive) {
+      return response.status(400).json({ success: false, message: 'Abonnement inactif' })
+    }
 
     await subscription.cancel()
     return response.json({ success: true, message: 'Abonnement annulé' })
@@ -242,18 +421,29 @@ export default class SubscriptionController {
     if (!user) return
 
     const subscription: any = await Subscription.find(params.id)
-    if (!subscription || subscription.userId !== user.id) return response.status(404).json({ success: false, message: 'Abonnement introuvable' })
+    if (!subscription || subscription.userId !== user.id) {
+      return response.status(404).json({ success: false, message: 'Abonnement introuvable' })
+    }
 
     subscription.autoRenew = !subscription.autoRenew
     await subscription.save()
-    return response.json({ success: true, message: subscription.autoRenew ? 'Renouvellement automatique activé' : 'Renouvellement automatique désactivé' })
+    
+    return response.json({ 
+      success: true, 
+      message: subscription.autoRenew 
+        ? 'Renouvellement automatique activé' 
+        : 'Renouvellement automatique désactivé' 
+    })
   }
 
   async getStats({ params, response }: HttpContext) {
     const user = await this.getMerchantById(params.userId, response)
     if (!user) return
 
-    const activeSubscriptions: any[] = await Subscription.query().where('userId', user.id).where('status', 'active').where('endDate', '>', DateTime.now().toSQL())
+    const activeSubscriptions: any[] = await Subscription.query()
+      .where('userId', user.id)
+      .where('status', 'active')
+      .where('endDate', '>', DateTime.now().toSQL())
 
     const globalSub = activeSubscriptions.find((sub: any) => sub.subscriptionType === 'all_products')
     const productSubs = activeSubscriptions.filter((sub: any) => sub.subscriptionType === 'single_product')
@@ -264,9 +454,27 @@ export default class SubscriptionController {
       success: true,
       data: {
         activeSubscriptionsCount: activeSubscriptions.length,
-        globalSubscription: globalSub ? { id: globalSub.id, plan: globalSub.planName, remainingDays: globalSub.remainingDays, boostedProductsCount: globalSub.boostedProductsCount, totalViews: globalSub.totalViews, totalClicks: globalSub.totalClicks } : null,
-        productSubscriptions: productSubs.map((sub: any) => ({ id: sub.id, plan: sub.planName, productName: sub.product?.name, remainingDays: sub.remainingDays, totalViews: sub.totalViews, totalClicks: sub.totalClicks })),
-        totals: { views: totalViews, clicks: totalClicks, conversionRate: totalViews > 0 ? Math.round((totalClicks / totalViews) * 100) : 0 },
+        globalSubscription: globalSub ? { 
+          id: globalSub.id, 
+          plan: globalSub.planName, 
+          remainingDays: globalSub.remainingDays, 
+          boostedProductsCount: globalSub.boostedProductsCount, 
+          totalViews: globalSub.totalViews, 
+          totalClicks: globalSub.totalClicks 
+        } : null,
+        productSubscriptions: productSubs.map((sub: any) => ({ 
+          id: sub.id, 
+          plan: sub.planName, 
+          productName: sub.product?.name, 
+          remainingDays: sub.remainingDays, 
+          totalViews: sub.totalViews, 
+          totalClicks: sub.totalClicks 
+        })),
+        totals: { 
+          views: totalViews, 
+          clicks: totalClicks, 
+          conversionRate: totalViews > 0 ? Math.round((totalClicks / totalViews) * 100) : 0 
+        },
       },
     })
   }
