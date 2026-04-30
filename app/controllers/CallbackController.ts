@@ -8,7 +8,6 @@ import Product from '#models/Product'
 import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
 
-const CALLBACK_URL_CODE = '9ZOXW'
 
 export default class CallbackController {
 
