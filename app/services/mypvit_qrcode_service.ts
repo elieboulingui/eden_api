@@ -95,7 +95,7 @@ export class MypvitQRCodeService {
     console.log('📤 Query params envoyés:', JSON.stringify(queryParams, null, 2))
     
     // URL complète pour debug
-    const fullUrl = `${this.BASE_URL}/${codeUrl}/generate-qr-code`
+    const fullUrl = `${this.BASE_URL}/4XWLIAKA5UFSIIYZ/generate-qr-code`
     console.log(`🌐 URL complète: ${fullUrl}`)
     
     try {
