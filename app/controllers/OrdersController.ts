@@ -203,7 +203,6 @@ export default class OrdersController {
 
     try {
       await this.renewSecretIfNeeded()
-      // CORRECTION ERREUR 2 : Ajout du paramètre operatorCode
       const operatorCode = fallbackOperatorCode || fallbackOperatorName || 'MOOV_MONEY'
       const kycData = await MypvitKYCService.getKYCInfo(phoneNumber, operatorCode)
 
@@ -259,8 +258,6 @@ export default class OrdersController {
     return { operator, fullName, accountNumber: phoneNumber }
   }
 
-  // CORRECTION ERREURS 3, 5, 6 : Ajout de la méthode checkTransactionStatus
-
   private async checkTransactionStatus(referenceId: string): Promise<any> {
     try {
       await this.renewSecretIfNeeded()
@@ -288,7 +285,6 @@ export default class OrdersController {
 
       try {
         await this.renewSecretIfNeeded()
-        // CORRECTION : Utilise la méthode privée
         const statusData = await this.checkTransactionStatus(referenceId)
         console.log(`✅ Statut tentative ${attempt}:`, statusData.status)
 
@@ -402,17 +398,21 @@ export default class OrdersController {
   }
 
   private async payWithQRCode(
-    amount: number
+    amount: number,
+    orderNumber?: string
   ): Promise<{ success: boolean; qrData?: any; error?: string }> {
     console.log('🔵 Génération QR Code MyPVit...')
 
     try {
       await this.renewSecretIfNeeded()
 
-      const qrResult = await MypvitQRCodeService.generateStaticQRCode({
+      // ✅ CORRECTION: Utiliser generateQRCode au lieu de generateStaticQRCode
+      const qrResult = await MypvitQRCodeService.generateQRCode({
         accountOperationCode: ACCOUNT_OPERATION_CODE,
         terminalId: TERMINAL_ID,
         callbackUrlCode: CALLBACK_URL_CODE,
+        amount: amount,
+        reference: orderNumber || `REF${Date.now()}`,
       })
 
       console.log('✅ QR Code généré')
@@ -816,7 +816,6 @@ export default class OrdersController {
           )
           if (paymentResult.success && paymentResult.paymentInfo) {
             paymentInfo = paymentResult.paymentInfo
-            // CORRECTION ERREUR 4 : Vérification null
             if (!paymentInfo) {
               paymentStatus = 'failed'
               await OrderTracking.create({
@@ -845,7 +844,8 @@ export default class OrdersController {
           break
 
         case 'qr_code':
-          paymentResult = await this.payWithQRCode(total)
+          // ✅ CORRECTION: Passer orderNumber
+          paymentResult = await this.payWithQRCode(total, order.order_number)
           if (paymentResult.success) {
             qrCodeData = paymentResult.qrData
             paymentStatus = 'pending'
