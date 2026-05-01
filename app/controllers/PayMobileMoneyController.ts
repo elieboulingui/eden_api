@@ -35,7 +35,6 @@ export default class PayMobileMoneyController {
     }
   }
 
-  // ✅ CORRECTION : Mapping correct des opérateurs Gabon
   private detectOperatorGabon(phoneNumber: string): { name: string; code: string; accountCode: string } {
     console.log('🔍 Détection opérateur pour:', phoneNumber)
     
@@ -50,7 +49,6 @@ export default class PayMobileMoneyController {
     console.log('📱 Numéro nettoyé:', local)
     console.log('🔢 Premier chiffre:', local.charAt(0))
 
-    // Gabon: 06 = MOOV, 07 = AIRTEL, autres = MOOV par défaut
     if (local.startsWith('7')) {
       console.log('✅ AIRTEL_MONEY détecté')
       return {
@@ -60,7 +58,6 @@ export default class PayMobileMoneyController {
       }
     }
     
-    // 06, 02, 04, etc. → MOOV_MONEY
     console.log('✅ MOOV_MONEY détecté')
     return {
       name: 'MOOV_MONEY',
@@ -121,7 +118,6 @@ export default class PayMobileMoneyController {
       console.log('🟡 KYC fallback:', error.message)
     }
 
-    // Sauvegarder KYC en base
     try {
       const existingKYC = await KYC.findBy('numeroTelephone', phoneNumber)
       if (existingKYC) {
@@ -175,26 +171,28 @@ export default class PayMobileMoneyController {
     return { ok: errors.length === 0, errors }
   }
 
-  private async decrementStock(productId: string, qty: number): Promise<void> {
-    const p = await Product.findBy('id', productId)
-    if (p) {
-      p.stock = Math.max(0, p.stock - qty)
-      if (p.stock === 0) p.isArchived = true
-      await p.save()
-    }
-  }
+  // ❌ SUPPRIMER - Cette méthode ne doit plus être utilisée ici
+  // private async decrementStock(productId: string, qty: number): Promise<void> {
+  //   const p = await Product.findBy('id', productId)
+  //   if (p) {
+  //     p.stock = Math.max(0, p.stock - qty)
+  //     if (p.stock === 0) p.isArchived = true
+  //     await p.save()
+  //   }
+  // }
 
-  private async restoreStock(orderId: string): Promise<void> {
-    const items = await OrderItem.query().where('order_id', orderId)
-    for (const item of items) {
-      const p = await Product.findBy('id', item.product_id)
-      if (p) {
-        p.stock += item.quantity
-        if (p.isArchived && p.stock > 0) p.isArchived = false
-        await p.save()
-      }
-    }
-  }
+  // ❌ SUPPRIMER - Cette méthode ne doit plus être utilisée ici
+  // private async restoreStock(orderId: string): Promise<void> {
+  //   const items = await OrderItem.query().where('order_id', orderId)
+  //   for (const item of items) {
+  //     const p = await Product.findBy('id', item.product_id)
+  //     if (p) {
+  //       p.stock += item.quantity
+  //       if (p.isArchived && p.stock > 0) p.isArchived = false
+  //       await p.save()
+  //     }
+  //   }
+  // }
 
   private async buildItems(order: Order, items: any[], fromCart: boolean, userId?: string): Promise<{ subtotal: number; count: number }> {
     let subtotal = 0
@@ -223,7 +221,9 @@ export default class PayMobileMoneyController {
         subtotal: itemTotal
       })
 
-      await this.decrementStock(p.id, item.quantity || 1)
+      // ✅ STOCK N'EST PLUS DÉCRÉMENTÉ ICI
+      // Le stock sera décrémenté par le CallbackController après confirmation du paiement
+      
       count++
     }
 
@@ -248,7 +248,7 @@ export default class PayMobileMoneyController {
         })
       }
 
-      // 1. Vérification stock
+      // 1. Vérification stock (sans décrémenter)
       const useCart = !!payload.userId && (!payload.items || payload.items.length === 0)
       const stock = await this.checkStock(payload.items || [], useCart, payload.userId)
       if (!stock.ok) {
@@ -277,7 +277,7 @@ export default class PayMobileMoneyController {
         userId = newUser.id
       }
 
-      // 5. Création commande
+      // 5. Création commande (stock non touché)
       const order = await Order.create({
         user_id: userId,
         order_number: generateOrderNumber(),
@@ -294,7 +294,7 @@ export default class PayMobileMoneyController {
         payment_operator_simple: kyc.operator
       })
 
-      // 6. Items
+      // 6. Items (stock non décrémenté)
       const { subtotal, count } = await this.buildItems(order, payload.items || [], useCart, payload.userId)
       const total = subtotal + (payload.deliveryPrice || 1)
       order.subtotal = subtotal
@@ -366,7 +366,7 @@ export default class PayMobileMoneyController {
           },
         })
       } else {
-        await this.restoreStock(order.id)
+        // ✅ Paiement échoué → Pas besoin de restaurer le stock (jamais décrémenté)
         order.status = 'payment_failed'
         order.payment_error_message = payment.message || 'Erreur inconnue'
         await order.save()
@@ -388,7 +388,6 @@ export default class PayMobileMoneyController {
     } catch (error: any) {
       console.error('🔴 Erreur paiement:', error.message)
       
-      // Si l'erreur vient de Mypvit, logguer plus de détails
       if (error.response) {
         console.error('🔴 Status:', error.response.status)
         console.error('🔴 Data:', JSON.stringify(error.response.data))
