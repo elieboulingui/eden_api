@@ -1,4 +1,4 @@
-// app/controllers/CallbackController.ts - CORRIGÉ FINAL AVEC EMAILS
+// app/controllers/CallbackController.ts - EMAIL CLIENT UNIQUEMENT (pas vendeur)
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -49,7 +49,6 @@ export default class CallbackController {
 
       console.log('🔍 Status reçu:', rawStatus, '→ mappé en:', status)
 
-      // ==================== RECHERCHE ====================
       let order: Order | null = null
 
       if (refId) {
@@ -73,12 +72,10 @@ export default class CallbackController {
         }
       }
 
-      // ==================== TRAITEMENT ====================
       if (order) {
 
         console.log(`📦 Commande: ${order.order_number}`)
 
-        // 🔒 éviter double traitement
         if (order.payment_status === 'paid') {
           console.log('⚠️ Déjà payé → skip')
           return response.ok({ message: 'Déjà traité' })
@@ -92,7 +89,6 @@ export default class CallbackController {
         if (status === 'paid') {
           order.status = 'paid'
           order.payment_completed_at = DateTime.now()
-
           await order.save()
 
           await OrderTracking.create({
@@ -102,45 +98,21 @@ export default class CallbackController {
             tracked_at: DateTime.now(),
           })
 
-          // ✅ Décrémenter le stock SEULEMENT quand le paiement est confirmé
           await this.updateProductStock(order.id)
-          
-          // ✅ Créditer les vendeurs et l'admin
           await this.creditAdmin(order.total)
           await this.creditSellers(order.id)
 
-          // ==================== ENVOI DES EMAILS ====================
-          
-          // ✅ 1. Email de confirmation au CLIENT
+          // ✅ Email au CLIENT UNIQUEMENT
           try {
-            const emailResult = await OrderEmailService.sendOrderConfirmation(order.id)
-            if (emailResult.success) {
-              console.log('📧 Email client envoyé avec succès')
-              await OrderTracking.create({
-                order_id: order.id,
-                status: 'email_sent',
-                description: `📧 Email de confirmation envoyé à ${order.customer_email || order.user?.email}`,
-                tracked_at: DateTime.now(),
-              })
-            } else {
-              console.warn('⚠️ Échec envoi email client:', emailResult.message)
-            }
+            await OrderEmailService.sendOrderConfirmation(order.id)
+            console.log('📧 Email de confirmation envoyé au client')
           } catch (emailError: any) {
-            console.error('❌ Erreur envoi email client:', emailError.message)
-          }
-
-          // ✅ 2. Notification à chaque VENDEUR
-          try {
-            await OrderEmailService.notifyVendorsForOrder(order.id)
-            console.log('📧 Emails vendeurs envoyés avec succès')
-          } catch (vendorEmailError: any) {
-            console.error('❌ Erreur notification vendeurs:', vendorEmailError.message)
+            console.error('❌ Erreur email client:', emailError.message)
           }
 
         } else if (status === 'failed') {
           order.status = 'payment_failed'
           order.payment_error_message = `${code} - ${message}`
-
           await order.save()
 
           await OrderTracking.create({
@@ -150,24 +122,7 @@ export default class CallbackController {
             tracked_at: DateTime.now(),
           })
 
-          // ✅ Envoyer email d'échec au CLIENT
-          try {
-            const failEmailResult = await OrderEmailService.sendPaymentFailed(order.id)
-            if (failEmailResult.success) {
-              console.log('📧 Email échec envoyé au client')
-              await OrderTracking.create({
-                order_id: order.id,
-                status: 'email_sent',
-                description: `📧 Email d'échec envoyé à ${order.customer_email || order.user?.email}`,
-                tracked_at: DateTime.now(),
-              })
-            }
-          } catch (emailError: any) {
-            console.error('❌ Erreur envoi email échec:', emailError.message)
-          }
-
         } else {
-          // pending
           await OrderTracking.create({
             order_id: order.id,
             status: 'pending_payment',
@@ -187,17 +142,12 @@ export default class CallbackController {
 
     } catch (error: any) {
       console.error('❌ Erreur:', error.message)
-
-      return response.ok({
-        responseCode: 200
-      })
+      return response.ok({ responseCode: 200 })
     }
   }
 
-  // ==================== STOCK (appelé UNIQUEMENT par le callback) ====================
   private async updateProductStock(orderId: string) {
     const items = await OrderItem.query().where('order_id', orderId)
-
     for (const item of items) {
       const product = await Product.find(item.product_id)
       if (product) {
@@ -208,24 +158,16 @@ export default class CallbackController {
     }
   }
 
-  // ==================== WALLET ====================
   private async creditAdmin(total: number) {
     const admins = await User.query().whereIn('role', ['admin', 'superadmin'])
-
     for (const admin of admins) {
       let wallet = await Wallet.findBy('user_id', admin.id)
       const fee = total * 0.005
-
       if (wallet) {
         wallet.balance += fee
         await wallet.save()
       } else {
-        await Wallet.create({
-          user_id: admin.id,
-          balance: fee,
-          currency: 'XAF',
-          status: 'active'
-        })
+        await Wallet.create({ user_id: admin.id, balance: fee, currency: 'XAF', status: 'active' })
       }
     }
   }
@@ -237,26 +179,17 @@ export default class CallbackController {
     for (const item of items) {
       const product = await Product.find(item.product_id)
       if (product?.user_id) {
-        map.set(
-          product.user_id,
-          (map.get(product.user_id) || 0) + Number(item.subtotal)
-        )
+        map.set(product.user_id, (map.get(product.user_id) || 0) + Number(item.subtotal))
       }
-    } 
+    }
 
     for (const [sellerId, amount] of map.entries()) {
       let wallet = await Wallet.findBy('user_id', sellerId)
-
       if (wallet) {
         wallet.balance += amount
         await wallet.save()
       } else {
-        await Wallet.create({
-          user_id: sellerId,
-          balance: amount,
-          currency: 'XAF',
-          status: 'active'
-        })
+        await Wallet.create({ user_id: sellerId, balance: amount, currency: 'XAF', status: 'active' })
       }
     }
   }
