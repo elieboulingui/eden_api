@@ -450,12 +450,26 @@ export default class PayQRCodeController {
       console.log(`🔑 Compte utilisé: ${operatorInfo.accountCode}`)
       console.log(`🏷️ Terminal ID: ${terminalId}`)
       console.log(`💰 Montant: ${total}`)
+      console.log(`📱 Téléphone pour secret: ${phoneNumber || 'non fourni'}`)
 
       try {
+        // 🔐 FORCER LE RENOUVELLEMENT DU SECRET AVANT LA GÉNÉRATION DU QR
+        console.log('🔐 Renouvellement forcé du secret avant QR Code...')
+        try {
+          const freshSecret = await MypvitSecretService.forceRenewal(phoneNumber)
+          console.log('✅ Secret frais obtenu:', freshSecret.key.substring(0, 20) + '...')
+          // Petit délai pour que le secret soit propagé sur les serveurs Mypvit
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        } catch (secretError: any) {
+          console.error('⚠️ Erreur renouvellement secret:', secretError.message)
+          // On continue, peut-être que l'ancien secret fonctionne encore
+        }
+
         const qrResult = await MypvitQRCodeService.generateStaticQRCode({
           accountOperationCode: operatorInfo.accountCode,
           terminalId: terminalId,
           callbackUrlCode: CALLBACK_URL_CODE,
+          phoneNumber: phoneNumber  // Passer le téléphone pour le secret
         })
 
         console.log('✅ QR Code généré avec succès')
