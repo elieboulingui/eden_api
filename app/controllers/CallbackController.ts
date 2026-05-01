@@ -1,3 +1,4 @@
+// app/controllers/CallbackController.ts - CORRIGÉ FINAL
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -9,18 +10,13 @@ import { DateTime } from 'luxon'
 
 export default class CallbackController {
 
-  // 🔥 Mapping PRO (évite 100% des erreurs SQL)
   private mapPaymentStatus(status: string): string {
     switch (status?.toUpperCase()) {
-      case 'SUCCESS':
-        return 'paid'
+      case 'SUCCESS': return 'paid'
       case 'FAILED':
-      case 'CANCELLED':
-        return 'failed'
-      case 'PENDING':
-        return 'pending'
-      default:
-        return 'pending'
+      case 'CANCELLED': return 'failed'
+      case 'PENDING': return 'pending'
+      default: return 'pending'
     }
   }
 
@@ -87,7 +83,6 @@ export default class CallbackController {
           return response.ok({ message: 'Déjà traité' })
         }
 
-        // 🔥 update safe
         order.payment_status = status
         order.payment_transaction_id = txId || refId
         order.payment_operator_simple = operator
@@ -106,7 +101,10 @@ export default class CallbackController {
             tracked_at: DateTime.now(),
           })
 
+          // ✅ Décrémenter le stock SEULEMENT quand le paiement est confirmé
           await this.updateProductStock(order.id)
+          
+          // ✅ Créditer les vendeurs et l'admin
           await this.creditAdmin(order.total)
           await this.creditSellers(order.id)
 
@@ -123,7 +121,8 @@ export default class CallbackController {
             tracked_at: DateTime.now(),
           })
 
-          await this.restoreProductStock(order.id)
+          // ✅ Pas besoin de restaurer le stock (jamais décrémenté avant)
+          // await this.restoreProductStock(order.id) ← SUPPRIMÉ
 
         } else {
           // pending
@@ -153,7 +152,7 @@ export default class CallbackController {
     }
   }
 
-  // ==================== STOCK ====================
+  // ==================== STOCK (appelé UNIQUEMENT par le callback) ====================
   private async updateProductStock(orderId: string) {
     const items = await OrderItem.query().where('order_id', orderId)
 
@@ -167,18 +166,18 @@ export default class CallbackController {
     }
   }
 
-  private async restoreProductStock(orderId: string) {
-    const items = await OrderItem.query().where('order_id', orderId)
-
-    for (const item of items) {
-      const product = await Product.find(item.product_id)
-      if (product) {
-        product.stock += item.quantity
-        product.isArchived = false
-        await product.save()
-      }
-    }
-  }
+  // ❌ SUPPRIMER - Plus nécessaire car le stock n'est jamais décrémenté avant le callback
+  // private async restoreProductStock(orderId: string) {
+  //   const items = await OrderItem.query().where('order_id', orderId)
+  //   for (const item of items) {
+  //     const product = await Product.find(item.product_id)
+  //     if (product) {
+  //       product.stock += item.quantity
+  //       product.isArchived = false
+  //       await product.save()
+  //     }
+  //   }
+  // }
 
   // ==================== WALLET ====================
   private async creditAdmin(total: number) {
