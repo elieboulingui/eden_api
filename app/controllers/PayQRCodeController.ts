@@ -1,4 +1,4 @@
-// app/controllers/PayQRCodeController.ts - CORRIGÉ ET COMPLET
+// app/controllers/PayQRCodeController.ts - COMPLET, CORRIGÉ ET FONCTIONNEL
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -61,10 +61,7 @@ export default class PayQRCodeController {
     console.log('📱 Numéro nettoyé:', local)
     console.log('🔢 Premier chiffre:', local.charAt(0))
 
-    // CORRECTION : Détection basée sur le premier chiffre APRÈS nettoyage
-    // 06 = MOOV_MONEY, 07 = AIRTEL_MONEY (correction pour le Gabon)
-    // LIBERTIS n'est pas géré en QR Code ici
-    
+    // Détection basée sur le premier chiffre APRÈS nettoyage
     if (local.startsWith('6')) {
       console.log('✅ MOOV_MONEY détecté')
       return {
@@ -452,10 +449,11 @@ export default class PayQRCodeController {
       console.log(`📡 Opérateur: ${operatorInfo.name}`)
       console.log(`🔑 Compte utilisé: ${operatorInfo.accountCode}`)
       console.log(`🏷️ Terminal ID: ${terminalId}`)
+      console.log(`💰 Montant: ${total}`)
 
       try {
         const qrResult = await MypvitQRCodeService.generateStaticQRCode({
-          accountOperationCode: operatorInfo.accountCode, // Utilise le compte de l'opérateur détecté
+          accountOperationCode: operatorInfo.accountCode,
           terminalId: terminalId,
           callbackUrlCode: CALLBACK_URL_CODE,
         })
@@ -526,13 +524,19 @@ export default class PayQRCodeController {
         // Restaurer le stock en cas d'erreur
         await this.restoreProductStock(order.id)
         order.status = 'payment_failed'
-        order.payment_error_message = qrError.message || 'Erreur génération QR'
+        
+        // Stocker les détails d'erreur dans le message
+        const errorMessage = qrError.message || 'Erreur génération QR'
+        const errorDetails = qrError.response?.data 
+          ? ` | Détails: ${JSON.stringify(qrError.response.data)}` 
+          : ''
+        order.payment_error_message = errorMessage + errorDetails
         await order.save()
 
         await OrderTracking.create({
           order_id: order.id,
           status: 'payment_failed',
-          description: `❌ Échec QR ${operatorInfo.name}: ${qrError.message}`,
+          description: `❌ Échec QR ${operatorInfo.name}: ${errorMessage}`,
           tracked_at: DateTime.now(),
         })
 
