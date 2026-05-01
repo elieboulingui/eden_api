@@ -1,4 +1,4 @@
-// app/controllers/PayQRCodeController.ts - COMPLET, CORRIGÉ ET FONCTIONNEL
+// app/controllers/PayQRCodeController.ts - CORRIGÉ FINAL
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -31,7 +31,6 @@ export default class PayQRCodeController {
       console.log('✅ Clé QR renouvelée avec succès')
     } catch (error: any) {
       console.error('⚠️ Erreur renouvellement secret QR:', error.message)
-      // On ne bloque pas le processus si le renouvellement échoue
     }
   }
 
@@ -47,21 +46,17 @@ export default class PayQRCodeController {
 
     console.log('🔍 Détection opérateur QR pour:', phoneNumber)
     
-    // Nettoyage complet du numéro
     const clean = phoneNumber.replace(/[\s\+\.\-]/g, '')
     let local = clean
     
-    // Enlever le préfixe international
     if (clean.startsWith('+241')) local = clean.substring(4)
     else if (clean.startsWith('241')) local = clean.substring(3)
     
-    // Enlever le 0 initial si présent
     if (local.startsWith('0')) local = local.substring(1)
     
     console.log('📱 Numéro nettoyé:', local)
     console.log('🔢 Premier chiffre:', local.charAt(0))
 
-    // Détection basée sur le premier chiffre APRÈS nettoyage
     if (local.startsWith('6')) {
       console.log('✅ MOOV_MONEY détecté')
       return {
@@ -80,7 +75,6 @@ export default class PayQRCodeController {
       }
     }
     
-    // Autres préfixes ou non reconnu
     console.log('⚠️ Opérateur non reconnu, utilisation MOOV par défaut')
     return {
       name: 'MOOV_MONEY',
@@ -89,7 +83,6 @@ export default class PayQRCodeController {
     }
   }
 
-  // ==================== CRÉER UN USER SI PAS D'ID ====================
   private async getOrCreateUser(payload: {
     customerName: string
     customerEmail: string
@@ -124,7 +117,6 @@ export default class PayQRCodeController {
     return user
   }
 
-  // ==================== VÉRIFICATION DU STOCK ====================
   private async checkStockAvailability(items: any[], isCart: boolean = false, userId?: string): Promise<{
     available: boolean
     outOfStockProducts: string[]
@@ -191,29 +183,28 @@ export default class PayQRCodeController {
     }
   }
 
-  private async updateProductStock(productId: string, quantity: number): Promise<void> {
-    const product = await Product.findBy('id', productId)
-    if (product) {
-      product.stock = Math.max(0, product.stock - quantity)
-      if (product.stock === 0) product.isArchived = true
-      await product.save()
-      console.log(`📉 Stock QR décrémenté: ${product.name} -${quantity} (reste: ${product.stock})`)
-    }
-  }
+  // ❌ SUPPRIMER - Le stock est géré uniquement par le CallbackController
+  // private async updateProductStock(productId: string, quantity: number): Promise<void> {
+  //   const product = await Product.findBy('id', productId)
+  //   if (product) {
+  //     product.stock = Math.max(0, product.stock - quantity)
+  //     if (product.stock === 0) product.isArchived = true
+  //     await product.save()
+  //   }
+  // }
 
-  private async restoreProductStock(orderId: string): Promise<void> {
-    console.log('🔄 Restauration stock QR pour commande:', orderId)
-    const orderItems = await OrderItem.query().where('order_id', orderId)
-    for (const item of orderItems) {
-      const product = await Product.findBy('id', item.product_id)
-      if (product) {
-        product.stock += item.quantity
-        if (product.isArchived && product.stock > 0) product.isArchived = false
-        await product.save()
-        console.log(`📈 Stock QR restauré: ${product.name} +${item.quantity} (total: ${product.stock})`)
-      }
-    }
-  }
+  // ❌ SUPPRIMER - Le stock est géré uniquement par le CallbackController
+  // private async restoreProductStock(orderId: string): Promise<void> {
+  //   const orderItems = await OrderItem.query().where('order_id', orderId)
+  //   for (const item of orderItems) {
+  //     const product = await Product.findBy('id', item.product_id)
+  //     if (product) {
+  //       product.stock += item.quantity
+  //       if (product.isArchived && product.stock > 0) product.isArchived = false
+  //       await product.save()
+  //     }
+  //   }
+  // }
 
   private async createOrderItems(order: Order, items: any[]): Promise<{ subtotal: number; itemsCount: number }> {
     console.log('🏗️ Création items QR directs')
@@ -247,7 +238,8 @@ export default class PayQRCodeController {
       })
 
       console.log(`➕ ${product.name} x${qty} = ${itemTotal} FCFA`)
-      await this.updateProductStock(product.id, qty)
+      // ✅ STOCK N'EST PLUS DÉCRÉMENTÉ ICI
+      // Le stock sera décrémenté par le CallbackController après confirmation du paiement
       itemsCount++
     }
 
@@ -286,7 +278,7 @@ export default class PayQRCodeController {
       })
 
       console.log(`➕ ${product.name} x${qty} = ${itemTotal} FCFA`)
-      await this.updateProductStock(product.id, qty)
+      // ✅ STOCK N'EST PLUS DÉCRÉMENTÉ ICI
       itemsCount++
     }
 
@@ -315,14 +307,12 @@ export default class PayQRCodeController {
       console.log(`📱 Téléphone: ${phoneNumber || 'N/A'}`)
       console.log(`📦 Items: ${payload.items?.length || 0}`)
 
-      // ✅ Détection de l'opérateur selon le numéro (06=MOOV, 07=AIRTEL)
       const operatorInfo = this.detectOperatorGabon(phoneNumber)
       console.log('📡 Opérateur QR détecté:')
       console.log(`   Nom: ${operatorInfo.name}`)
       console.log(`   Code: ${operatorInfo.code}`)
       console.log(`   Compte: ${operatorInfo.accountCode}`)
 
-      // Vérification stock
       const useCart = !isGuest && payload.userId && (!payload.items || payload.items.length === 0)
       console.log('🛒 Mode panier:', useCart)
       
@@ -343,10 +333,8 @@ export default class PayQRCodeController {
 
       console.log('✅ Stock QR disponible')
 
-      // Renouveler le secret avec le bon opérateur
       await this.renewSecretIfNeeded(phoneNumber)
 
-      // ==================== USER ID ====================
       let userId = payload.userId
 
       if (!userId) {
@@ -374,7 +362,6 @@ export default class PayQRCodeController {
       const deliveryPrice = payload.deliveryPrice || 1
       const orderNumber = generateOrderNumber()
 
-      // ✅ Création commande SANS guestOrderId
       console.log('📝 Création commande QR...')
       const order = await Order.create({
         user_id: userId,
@@ -414,7 +401,9 @@ export default class PayQRCodeController {
           console.log('🛒 Panier utilisé et vidé')
         } else {
           console.log('❌ Panier vide')
-          await this.restoreProductStock(order.id)
+          // ✅ Pas besoin de restoreStock car stock jamais touché
+          order.status = 'cancelled'
+          await order.save()
           return response.status(400).json({
             success: false,
             message: 'Panier vide'
@@ -442,7 +431,6 @@ export default class PayQRCodeController {
         tracked_at: DateTime.now(),
       })
 
-      // ✅ QR Code - Génération avec le compte approprié
       const terminalId = `T${Date.now().toString(36).toUpperCase()}${operatorInfo.code.substring(0, 3)}`
 
       console.log('🔑 ========== GÉNÉRATION QR CODE ==========')
@@ -453,25 +441,21 @@ export default class PayQRCodeController {
       console.log(`📱 Téléphone pour secret: ${phoneNumber || 'non fourni'}`)
 
       try {
-        // 🔐 FORCER LE RENOUVELLEMENT DU SECRET AVANT LA GÉNÉRATION DU QR
         console.log('🔐 Renouvellement forcé du secret avant QR Code...')
         try {
           const freshSecret = await MypvitSecretService.forceRenewal(phoneNumber)
           console.log('✅ Secret frais obtenu:', freshSecret.key.substring(0, 20) + '...')
-          // Petit délai pour que le secret soit propagé sur les serveurs Mypvit
           await new Promise(resolve => setTimeout(resolve, 1000))
         } catch (secretError: any) {
           console.error('⚠️ Erreur renouvellement secret:', secretError.message)
-          // On continue, peut-être que l'ancien secret fonctionne encore
         }
 
-        // ✅ CORRECTION: Utiliser generateQRCode au lieu de generateStaticQRCode
         const qrResult = await MypvitQRCodeService.generateQRCode({
           accountOperationCode: operatorInfo.accountCode,
           terminalId: terminalId,
           callbackUrlCode: CALLBACK_URL_CODE,
-          amount: total,  // QR dynamique avec montant
-          reference: order.order_number,  // référence unique
+          amount: total,
+          reference: order.order_number,
           phoneNumber: phoneNumber
         })
 
@@ -538,11 +522,9 @@ export default class PayQRCodeController {
           console.error('❌ Données erreur:', JSON.stringify(qrError.response.data, null, 2))
         }
 
-        // Restaurer le stock en cas d'erreur
-        await this.restoreProductStock(order.id)
+        // ✅ Pas besoin de restoreStock car stock jamais touché
         order.status = 'payment_failed'
         
-        // Stocker les détails d'erreur dans le message
         const errorMessage = qrError.message || 'Erreur génération QR'
         const errorDetails = qrError.response?.data 
           ? ` | Détails: ${JSON.stringify(qrError.response.data)}` 
