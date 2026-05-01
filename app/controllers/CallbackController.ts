@@ -214,7 +214,7 @@ export default class CallbackController {
           (map.get(product.user_id) || 0) + Number(item.subtotal)
         )
       }
-    }
+    } 
 
     for (const [sellerId, amount] of map.entries()) {
       let wallet = await Wallet.findBy('user_id', sellerId)
