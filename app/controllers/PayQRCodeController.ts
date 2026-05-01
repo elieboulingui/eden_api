@@ -465,11 +465,14 @@ export default class PayQRCodeController {
           // On continue, peut-être que l'ancien secret fonctionne encore
         }
 
-        const qrResult = await MypvitQRCodeService.generateStaticQRCode({
+        // ✅ CORRECTION: Utiliser generateQRCode au lieu de generateStaticQRCode
+        const qrResult = await MypvitQRCodeService.generateQRCode({
           accountOperationCode: operatorInfo.accountCode,
           terminalId: terminalId,
           callbackUrlCode: CALLBACK_URL_CODE,
-          phoneNumber: phoneNumber  // Passer le téléphone pour le secret
+          amount: total,  // QR dynamique avec montant
+          reference: order.order_number,  // référence unique
+          phoneNumber: phoneNumber
         })
 
         console.log('✅ QR Code généré avec succès')
