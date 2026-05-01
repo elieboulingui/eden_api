@@ -1,31 +1,41 @@
+// app/services/mypvit_qrcode_service.ts
 import axios from 'axios'
 import MypvitSecretService from './mypvit_secret_service.js'
 
-const MYPVIT_CODE_URL = 'MTX1MTKQQCULKA3W'
-
 interface QRCodeResponse {
   status: string
-  data: string  // Base64 du QR code
-  reference_id: string
+  data: string  // Chaîne du QR code
+  reference_id?: string
+  merchant_reference_id?: string
   message?: string
 }
 
 export class MypvitQRCodeService {
-  private readonly BASE_URL = 'https://api.mypvit.pro'
+  private readonly BASE_URL = 'https://api.mypvit.pro/v2'
   
   async generateStaticQRCode(params: {
     accountOperationCode: string
     terminalId: string
     callbackUrlCode: string
-    phoneNumber?: string  // Ajouté pour le secret
+    amount?: number
+    reference?: string
+    phoneNumber?: string
   }): Promise<QRCodeResponse> {
     
     console.log('📷 [QRCodeService] Génération QR Code...')
     console.log('   accountOperationCode:', params.accountOperationCode)
     console.log('   terminalId:', params.terminalId)
     console.log('   callbackUrlCode:', params.callbackUrlCode)
+    console.log('   amount:', params.amount)
+    console.log('   reference:', params.reference)
     
-    // 🔐 OBTENIR LE SECRET FRAIS
+    // Récupérer le CODE_URL spécifique à l'opérateur
+    const operatorInfo = MypvitSecretService.getOperatorInfo(params.phoneNumber || '')
+    const codeUrl = operatorInfo.codeUrl
+    
+    console.log(`🔗 CODE_URL pour cet opérateur: ${codeUrl}`)
+    
+    // 🔐 OBTENIR LE SECRET
     const secret = await MypvitSecretService.getSecret(params.phoneNumber)
     
     if (!secret) {
@@ -34,31 +44,41 @@ export class MypvitQRCodeService {
     
     console.log('🔐 Secret obtenu (premiers caractères):', secret.substring(0, 20) + '...')
     
-    const payload = {
-      account_operation_code: params.accountOperationCode,
-      terminal_id: params.terminalId,
-      callback_url_code: params.callbackUrlCode
+    // ✅ Construction des paramètres query (pour GET)
+    const queryParams: Record<string, string> = {
+      accountOperationCode: params.accountOperationCode,
+      terminalId: params.terminalId,
+      callbackUrlCode: params.callbackUrlCode
     }
     
-    console.log('📤 Payload QR:', JSON.stringify(payload, null, 2))
+    // Ajouter amount et reference si fournis (QR dynamique)
+    if (params.amount) {
+      queryParams.amount = params.amount.toString()
+    }
+    if (params.reference) {
+      queryParams.reference = params.reference
+    }
+    
+    console.log('📤 Query params:', JSON.stringify(queryParams, null, 2))
     
     try {
-      const response = await axios.post(
-        `${this.BASE_URL}/${MYPVIT_CODE_URL}/static-qr`,
-        payload,
+      // ✅ METHODE GET - URL CORRECTE : /v2/{codeUrl}/generate-qr-code
+      const response = await axios.get(
+        `${this.BASE_URL}/${codeUrl}/generate-qr-code`,
         {
           headers: {
-            'Content-Type': 'application/json',
-            'X-Secret': secret,
-            'X-Callback-MediaType': 'application/json'
-          }
+            'Accept': 'application/json',
+            'X-Secret': secret
+          },
+          params: queryParams
         }
       )
       
       console.log('✅ [QRCodeService] Réponse reçue:', {
         status: response.data?.status,
         hasData: !!response.data?.data,
-        referenceId: response.data?.reference_id
+        referenceId: response.data?.reference_id,
+        merchantReferenceId: response.data?.merchant_reference_id
       })
       
       return response.data
@@ -72,21 +92,18 @@ export class MypvitQRCodeService {
       })
       
       if (error.response?.status === 401) {
-        // Forcer le renouvellement du secret
         console.log('🔄 401 détecté, renouvellement forcé du secret...')
         await MypvitSecretService.forceRenewal(params.phoneNumber)
         
-        // Réessayer une fois avec le nouveau secret
         const newSecret = await MypvitSecretService.getSecret(params.phoneNumber)
-        const retryResponse = await axios.post(
-          `${this.BASE_URL}/${MYPVIT_CODE_URL}/static-qr`,
-          payload,
+        const retryResponse = await axios.get(
+          `${this.BASE_URL}/${codeUrl}/generate-qr-code`,
           {
             headers: {
-              'Content-Type': 'application/json',
-              'X-Secret': newSecret,
-              'X-Callback-MediaType': 'application/json'
-            }
+              'Accept': 'application/json',
+              'X-Secret': newSecret
+            },
+            params: queryParams
           }
         )
         return retryResponse.data
@@ -94,6 +111,22 @@ export class MypvitQRCodeService {
       
       throw new Error(error.response?.data?.message || error.message)
     }
+  }
+  
+  // QR Code dynamique avec montant et référence
+  async generateDynamicQRCode(params: {
+    accountOperationCode: string
+    terminalId: string
+    callbackUrlCode: string
+    amount: number
+    reference: string
+    phoneNumber?: string
+  }): Promise<QRCodeResponse> {
+    return this.generateStaticQRCode({
+      ...params,
+      amount: params.amount,
+      reference: params.reference
+    })
   }
 }
 
