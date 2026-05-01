@@ -236,7 +236,7 @@ export default class PayLinkController {
         merchant_operation_account_code: operatorInfo.accountCode,
         transaction_type: 'PAYMENT',
         owner_charge: 'MERCHANT',
-        success_redirection_url_code: 'YTJEI',
+        success_redirection_url_code: 'W0L8C',
         failed_redirection_url_code: 'YTJEI',
       }
 
