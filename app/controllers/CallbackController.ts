@@ -1,4 +1,4 @@
-// app/controllers/CallbackController.ts - CORRIGÉ FINAL
+// app/controllers/CallbackController.ts - CORRIGÉ FINAL AVEC EMAILS
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -7,6 +7,7 @@ import User from '#models/user'
 import Product from '#models/Product'
 import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
+import OrderEmailService from '../services/OrderEmailService.js'
 
 export default class CallbackController {
 
@@ -108,6 +109,34 @@ export default class CallbackController {
           await this.creditAdmin(order.total)
           await this.creditSellers(order.id)
 
+          // ==================== ENVOI DES EMAILS ====================
+          
+          // ✅ 1. Email de confirmation au CLIENT
+          try {
+            const emailResult = await OrderEmailService.sendOrderConfirmation(order.id)
+            if (emailResult.success) {
+              console.log('📧 Email client envoyé avec succès')
+              await OrderTracking.create({
+                order_id: order.id,
+                status: 'email_sent',
+                description: `📧 Email de confirmation envoyé à ${order.customer_email || order.user?.email}`,
+                tracked_at: DateTime.now(),
+              })
+            } else {
+              console.warn('⚠️ Échec envoi email client:', emailResult.message)
+            }
+          } catch (emailError: any) {
+            console.error('❌ Erreur envoi email client:', emailError.message)
+          }
+
+          // ✅ 2. Notification à chaque VENDEUR
+          try {
+            await OrderEmailService.notifyVendorsForOrder(order.id)
+            console.log('📧 Emails vendeurs envoyés avec succès')
+          } catch (vendorEmailError: any) {
+            console.error('❌ Erreur notification vendeurs:', vendorEmailError.message)
+          }
+
         } else if (status === 'failed') {
           order.status = 'payment_failed'
           order.payment_error_message = `${code} - ${message}`
@@ -121,8 +150,21 @@ export default class CallbackController {
             tracked_at: DateTime.now(),
           })
 
-          // ✅ Pas besoin de restaurer le stock (jamais décrémenté avant)
-          // await this.restoreProductStock(order.id) ← SUPPRIMÉ
+          // ✅ Envoyer email d'échec au CLIENT
+          try {
+            const failEmailResult = await OrderEmailService.sendPaymentFailed(order.id)
+            if (failEmailResult.success) {
+              console.log('📧 Email échec envoyé au client')
+              await OrderTracking.create({
+                order_id: order.id,
+                status: 'email_sent',
+                description: `📧 Email d'échec envoyé à ${order.customer_email || order.user?.email}`,
+                tracked_at: DateTime.now(),
+              })
+            }
+          } catch (emailError: any) {
+            console.error('❌ Erreur envoi email échec:', emailError.message)
+          }
 
         } else {
           // pending
@@ -165,19 +207,6 @@ export default class CallbackController {
       }
     }
   }
-
-  // ❌ SUPPRIMER - Plus nécessaire car le stock n'est jamais décrémenté avant le callback
-  // private async restoreProductStock(orderId: string) {
-  //   const items = await OrderItem.query().where('order_id', orderId)
-  //   for (const item of items) {
-  //     const product = await Product.find(item.product_id)
-  //     if (product) {
-  //       product.stock += item.quantity
-  //       product.isArchived = false
-  //       await product.save()
-  //     }
-  //   }
-  // }
 
   // ==================== WALLET ====================
   private async creditAdmin(total: number) {
