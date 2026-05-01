@@ -1,4 +1,4 @@
-// app/controllers/PayMobileMoneyController.ts - CORRIGÉ ET COMPLET
+// app/controllers/PayMobileMoneyController.ts - COMPLET, CORRIGÉ ET FONCTIONNEL
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -136,7 +136,6 @@ export default class PayMobileMoneyController {
     
     const detected = this.detectOperatorGabon(phoneNumber)
     let fullName = 'Client'
-    let kycSuccess = false
 
     try {
       console.log('🔄 Tentative KYC avec opérateur:', detected.code)
@@ -145,7 +144,6 @@ export default class PayMobileMoneyController {
       console.log('📊 Données KYC reçues:', JSON.stringify(kycData, null, 2))
       
       fullName = kycData.firstname || kycData.full_name || 'Client'
-      kycSuccess = true
       console.log('✅ KYC réussi, nom:', fullName)
     } catch (error: any) {
       console.log('🟡 KYC échoué, utilisation du fallback')
@@ -474,14 +472,19 @@ export default class PayMobileMoneyController {
         // Restaurer le stock
         await this.restoreStock(order.id)
         order.status = 'payment_failed'
-        order.payment_error_message = paymentError.message || 'Erreur de paiement'
-        order.payment_error_details = JSON.stringify(paymentError.response?.data || {})
+        
+        // Stocker les détails d'erreur dans le message
+        const errorMessage = paymentError.message || 'Erreur de paiement'
+        const errorDetails = paymentError.response?.data 
+          ? ` | Détails: ${JSON.stringify(paymentError.response.data)}` 
+          : ''
+        order.payment_error_message = errorMessage + errorDetails
         await order.save()
 
         await OrderTracking.create({
           order_id: order.id,
           status: 'payment_failed',
-          description: `❌ Échec paiement ${kyc.operator}: ${paymentError.message}`,
+          description: `❌ Échec paiement ${kyc.operator}: ${errorMessage}`,
           tracked_at: DateTime.now(),
         })
 
