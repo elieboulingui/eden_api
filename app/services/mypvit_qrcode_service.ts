@@ -12,6 +12,7 @@ interface QRCodeResponse {
 
 export class MypvitQRCodeService {
   private readonly BASE_URL = 'https://api.mypvit.pro/v2'
+  private readonly MAX_REFERENCE_LENGTH = 20
   
   /**
    * Génère un QR Code (statique ou dynamique)
@@ -39,7 +40,27 @@ export class MypvitQRCodeService {
     console.log(`🏷️ terminalId: ${params.terminalId}`)
     console.log(`🔗 callbackUrlCode: ${params.callbackUrlCode}`)
     console.log(`💰 amount: ${params.amount || 'non fourni (QR statique)'}`)
-    console.log(`📝 reference: ${params.reference || 'non fournie'}`)
+    
+    // ========== VALIDATION ET TRONCATURE DE LA RÉFÉRENCE ==========
+    if (params.reference) {
+      const originalLength = params.reference.length
+      console.log(`📝 reference originale (longueur: ${originalLength}): "${params.reference}"`)
+      
+      if (originalLength > this.MAX_REFERENCE_LENGTH) {
+        // Tronquer à 20 caractères
+        const originalRef = params.reference
+        params.reference = params.reference.substring(0, this.MAX_REFERENCE_LENGTH)
+        
+        console.warn(`⚠️ RÉFÉRENCE TRONQUÉE CAR DÉPASSE LA LIMITE DE ${this.MAX_REFERENCE_LENGTH} CARACTÈRES:`)
+        console.warn(`   Longueur originale: ${originalLength}`)
+        console.warn(`   Avant: "${originalRef}"`)
+        console.warn(`   Après: "${params.reference}"`)
+      } else {
+        console.log(`✅ Référence valide (${originalLength} caractères)`)
+      }
+    } else {
+      console.log('📝 reference: non fournie')
+    }
     
     // Obtenir le secret
     const secret = await MypvitSecretService.getSecret(params.phoneNumber)
@@ -65,10 +86,10 @@ export class MypvitQRCodeService {
       console.log('📷 QR statique (sans montant)')
     }
     
-    // Ajouter reference si fournie
+    // Ajouter reference si fournie (déjà tronquée si nécessaire)
     if (params.reference) {
       queryParams.reference = params.reference
-      console.log(`📝 Référence: ${params.reference}`)
+      console.log(`📝 Référence envoyée (longueur: ${params.reference.length}): "${params.reference}"`)
     }
     
     console.log('📤 Query params envoyés:', JSON.stringify(queryParams, null, 2))
@@ -154,7 +175,7 @@ export class MypvitQRCodeService {
         console.error('   - terminalId: doit être un identifiant valide')
         console.error('   - callbackUrlCode: doit exister et être actif')
         console.error('   - amount: doit être un nombre positif (si fourni)')
-        console.error('   - reference: doit être unique (si fournie)')
+        console.error('   - reference: doit être unique et ≤ 20 caractères (si fournie)')
         
         const errorData = error.response?.data
         throw new Error(`CONSTRAINT_VIOLATION: ${JSON.stringify(errorData)}`)
@@ -202,7 +223,12 @@ export class MypvitQRCodeService {
   }): Promise<QRCodeResponse> {
     console.log('📷 Génération QR Code dynamique...')
     console.log(`💰 Montant: ${params.amount} FCFA`)
-    console.log(`📝 Référence: ${params.reference}`)
+    console.log(`📝 Référence originale: "${params.reference}" (longueur: ${params.reference.length})`)
+    
+    // Tronquer la référence si nécessaire AVANT d'appeler generateQRCode
+    if (params.reference.length > this.MAX_REFERENCE_LENGTH) {
+      console.warn(`⚠️ Référence sera tronquée à ${this.MAX_REFERENCE_LENGTH} caractères dans generateQRCode`)
+    }
     
     return this.generateQRCode({
       accountOperationCode: params.accountOperationCode,
