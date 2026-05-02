@@ -1,10 +1,11 @@
-﻿import { DateTime } from 'luxon'
+import { DateTime } from 'luxon'
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import Category from '#models/categories'
 import Coupon from '#models/coupon'
 import Product from '#models/Product'
 import User from '#models/user'
+import Subscription from '#models/Subscription'
 import env from '#start/env'
 
 const STATUS_META: Record<
@@ -19,6 +20,13 @@ const STATUS_META: Record<
   pending_payment: { label: 'Paiement en attente', barClass: 'bg-amber-700', toneClass: 'text-amber-700' },
   paid: { label: 'Paiement validé', barClass: 'bg-lime-500', toneClass: 'text-lime-600' },
   payment_failed: { label: 'Paiement refusé', barClass: 'bg-rose-600', toneClass: 'text-rose-600' },
+}
+
+const SUBSCRIPTION_PLANS: Record<string, { name: string; price: number; duration: number; boostMultiplier: number }> = {
+  daily: { name: 'Journalier', price: 4000, duration: 1, boostMultiplier: 2 },
+  weekly: { name: 'Hebdomadaire', price: 15000, duration: 7, boostMultiplier: 3 },
+  biweekly: { name: '2 Semaines', price: 50000, duration: 14, boostMultiplier: 4 },
+  monthly: { name: 'Mensuel', price: 100000, duration: 30, boostMultiplier: 5 },
 }
 
 const DEFAULT_STATUS_META = { label: 'Statut', barClass: 'bg-slate-500', toneClass: 'text-slate-500' }
@@ -77,6 +85,40 @@ function getStatusIcon(status: string): string {
   return icons[status] || '📦'
 }
 
+// Fonction pour le statut d'abonnement
+function getSubscriptionStatusIcon(status: string): string {
+  const icons: Record<string, string> = {
+    active: '✅',
+    pending: '⏳',
+    cancelled: '❌',
+    expired: '⌛',
+    payment_failed: '⚠️',
+  }
+  return icons[status] || '📋'
+}
+
+function getSubscriptionStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    active: 'Actif',
+    pending: 'En attente',
+    cancelled: 'Annulé',
+    expired: 'Expiré',
+    payment_failed: 'Paiement échoué',
+  }
+  return labels[status] || status
+}
+
+function getSubscriptionStatusColor(status: string): string {
+  const colors: Record<string, string> = {
+    active: '#10b981',
+    pending: '#f59e0b',
+    cancelled: '#ef4444',
+    expired: '#6b7280',
+    payment_failed: '#dc2626',
+  }
+  return colors[status] || '#6b7280'
+}
+
 export default class DashboardViewController {
 
   // ==================== ADMIN DASHBOARD ====================
@@ -87,11 +129,31 @@ export default class DashboardViewController {
     const merchantsCount = await User.query().whereIn('role', ['marchant', 'merchant', 'marchand']).count('* as total')
     const totalProductsCount = await Product.query().count('* as total')
 
+    // Récupérer les statistiques des abonnements
+    const activeSubscriptionsCount = await Subscription.query()
+      .where('status', 'active')
+      .where('endDate', '>', DateTime.now().toSQL())
+      .count('* as total')
+    
+    const totalSubscriptionsCount = await Subscription.query().count('* as total')
+    const pendingSubscriptionsCount = await Subscription.query()
+      .where('status', 'pending')
+      .count('* as total')
+    
+    const totalRevenueSubscriptions = await Subscription.query()
+      .where('status', 'active')
+      .sum('price as total')
+
     // Extraire les valeurs utilisateurs
     const totalUsers = toNumber(totalUsersCount[0]?.$extras?.total)
     const totalClients = toNumber(clientsCount[0]?.$extras?.total)
     const activeMerchants = toNumber(merchantsCount[0]?.$extras?.total)
     const totalProducts = toNumber(totalProductsCount[0]?.$extras?.total)
+    
+    const activeSubs = toNumber(activeSubscriptionsCount[0]?.$extras?.total)
+    const totalSubs = toNumber(totalSubscriptionsCount[0]?.$extras?.total)
+    const pendingSubs = toNumber(pendingSubscriptionsCount[0]?.$extras?.total)
+    const subsRevenue = toNumber(totalRevenueSubscriptions[0]?.$extras?.total)
 
     // Récupérer TOUTES les commandes pour calculer le total et les statuts
     const allOrders = await Order.query().select('status', 'total', 'id', 'order_number', 'customer_name', 'customer_email', 'created_at', 'estimated_delivery')
@@ -139,15 +201,6 @@ export default class DashboardViewController {
     // Trier les statuts par ordre décroissant de valeur
     statusBreakdown.sort((a, b) => b.value - a.value)
 
-    console.log('=== DEBUG ADMIN DASHBOARD ===')
-    console.log('totalUsers:', totalUsers)
-    console.log('totalClients:', totalClients)
-    console.log('activeMerchants:', activeMerchants)
-    console.log('totalOrders:', totalOrders)
-    console.log('totalProducts:', totalProducts)
-    console.log('totalRevenue:', totalRevenue)
-    console.log('totalPaidRevenue:', totalPaidRevenue)
-
     const adminStats = [
       { title: 'Utilisateurs inscrits', display: formatNumber(totalUsers), detail: 'Tous les rôles confondus', icon: '👥' },
       { title: 'Clients', display: formatNumber(totalClients), detail: 'Comptes clients', icon: '👤' },
@@ -155,6 +208,8 @@ export default class DashboardViewController {
       { title: 'Commandes', display: formatNumber(totalOrders), detail: 'Commandes passées', icon: '📦' },
       { title: 'Chiffre d’affaires', display: formatMoney(totalPaidRevenue > 0 ? totalPaidRevenue : totalRevenue), detail: 'Commandes payées uniquement', icon: '💰' },
       { title: 'Produits', display: formatNumber(totalProducts), detail: 'Catalogue', icon: '📚' },
+      { title: 'Abonnements actifs', display: formatNumber(activeSubs), detail: `${formatNumber(totalSubs)} au total`, icon: '👑' },
+      { title: 'Revenus abonnements', display: formatMoney(subsRevenue), detail: `${formatNumber(pendingSubs)} en attente`, icon: '💳' },
     ]
 
     // Dernières commandes (10 dernières)
@@ -174,6 +229,27 @@ export default class DashboardViewController {
         eta: order.estimated_delivery?.toFormat('dd LLL yyyy') ?? 'À planifier',
       }
     })
+
+    // Derniers abonnements (10 derniers)
+    const recentSubscriptions = await Subscription.query()
+      .orderBy('createdAt', 'desc')
+      .limit(10)
+      .preload('user')
+
+    const recentSubsList = recentSubscriptions.map((sub) => ({
+      id: sub.id,
+      merchantName: sub.user?.full_name || sub.user?.email || 'Marchand inconnu',
+      plan: SUBSCRIPTION_PLANS[sub.plan]?.name || sub.plan,
+      price: formatMoney(sub.price),
+      status: sub.status,
+      statusLabel: getSubscriptionStatusLabel(sub.status),
+      statusColor: getSubscriptionStatusColor(sub.status),
+      statusIcon: getSubscriptionStatusIcon(sub.status),
+      startDate: sub.startDate ? sub.startDate.toFormat('dd LLL yyyy') : 'Non démarré',
+      endDate: sub.endDate ? sub.endDate.toFormat('dd LLL yyyy') : 'N/A',
+      createdAt: sub.createdAt?.toFormat('dd LLL yyyy') ?? 'Date inconnue',
+      subscriptionType: sub.subscriptionType === 'all_products' ? 'Global' : 'Produit unique',
+    }))
 
     // Catégories populaires
     const categoryCounts = (await Product.query()
@@ -218,9 +294,267 @@ export default class DashboardViewController {
       adminStats,
       statusBreakdown,
       recentOrders,
+      recentSubscriptions: recentSubsList,
       topCategories,
       totalOrders,
       latestUsers: latestUserRows,
+    })
+  }
+
+  // ==================== GESTION DES ABONNEMENTS (ADMIN) ====================
+  
+  /**
+   * Page de gestion des abonnements pour l'admin
+   */
+  public async subscriptions({ view }: HttpContext) {
+    // Récupérer tous les abonnements avec les utilisateurs
+    const allSubscriptions = await Subscription.query()
+      .orderBy('createdAt', 'desc')
+      .preload('user')
+
+    // Statistiques globales
+    const totalSubscriptions = allSubscriptions.length
+    const activeSubscriptions = allSubscriptions.filter(s => s.status === 'active' && s.endDate && s.endDate > DateTime.now())
+    const pendingSubscriptions = allSubscriptions.filter(s => s.status === 'pending')
+    const cancelledSubscriptions = allSubscriptions.filter(s => s.status === 'cancelled')
+    const expiredSubscriptions = allSubscriptions.filter(s => s.status === 'expired' || (s.endDate && s.endDate <= DateTime.now()))
+
+    // Chiffre d'affaires des abonnements
+    const totalRevenue = allSubscriptions.reduce((sum, sub) => sum + (sub.price || 0), 0)
+    const activeRevenue = activeSubscriptions.reduce((sum, sub) => sum + (sub.price || 0), 0)
+
+    // Répartition par plan
+    const planStats: Record<string, { count: number; revenue: number }> = {}
+    for (const sub of allSubscriptions) {
+      if (!planStats[sub.plan]) {
+        planStats[sub.plan] = { count: 0, revenue: 0 }
+      }
+      planStats[sub.plan].count++
+      planStats[sub.plan].revenue += sub.price || 0
+    }
+
+    const planBreakdown = Object.entries(planStats).map(([plan, stats]) => ({
+      name: SUBSCRIPTION_PLANS[plan]?.name || plan,
+      count: stats.count,
+      revenue: formatMoney(stats.revenue),
+      percent: totalSubscriptions > 0 ? Math.round((stats.count / totalSubscriptions) * 100) : 0,
+    }))
+
+    // Répartition par type d'abonnement
+    const globalSubscriptions = allSubscriptions.filter(s => s.subscriptionType === 'all_products')
+    const productSubscriptions = allSubscriptions.filter(s => s.subscriptionType === 'single_product')
+
+    // Construction de la liste des abonnements
+    const subscriptionsList = allSubscriptions.map((sub) => ({
+      id: sub.id,
+      merchantId: sub.userId,
+      merchantName: sub.user?.full_name || sub.user?.email || 'Marchand inconnu',
+      merchantEmail: sub.user?.email || 'Email inconnu',
+      plan: SUBSCRIPTION_PLANS[sub.plan]?.name || sub.plan,
+      planKey: sub.plan,
+      price: formatMoney(sub.price),
+      status: sub.status,
+      statusLabel: getSubscriptionStatusLabel(sub.status),
+      statusColor: getSubscriptionStatusColor(sub.status),
+      statusIcon: getSubscriptionStatusIcon(sub.status),
+      subscriptionType: sub.subscriptionType === 'all_products' ? '🌍 Global (tous les produits)' : '📦 Produit unique',
+      startDate: sub.startDate ? sub.startDate.toFormat('dd LLL yyyy') : 'Non démarré',
+      endDate: sub.endDate ? sub.endDate.toFormat('dd LLL yyyy') : 'N/A',
+      createdAt: sub.createdAt?.toFormat('dd LLL yyyy HH:mm') ?? 'Date inconnue',
+      autoRenew: sub.autoRenew ? '✅ Oui' : '❌ Non',
+      boostedProductsCount: sub.boostedProductsCount || 0,
+      maxProducts: sub.maxProducts || 0,
+      daysRemaining: sub.endDate ? Math.max(0, Math.ceil(sub.endDate.diff(DateTime.now(), 'days').days)) : 0,
+    }))
+
+    const statsCards = [
+      { title: 'Total abonnements', value: formatNumber(totalSubscriptions), detail: 'Tous statuts confondus', icon: '📋', color: '#3b82f6' },
+      { title: 'Abonnements actifs', value: formatNumber(activeSubscriptions.length), detail: `${formatNumber(expiredSubscriptions.length)} expirés`, icon: '✅', color: '#10b981' },
+      { title: 'En attente', value: formatNumber(pendingSubscriptions.length), detail: `${formatNumber(cancelledSubscriptions.length)} annulés`, icon: '⏳', color: '#f59e0b' },
+      { title: 'Chiffre d\'affaires', value: formatMoney(totalRevenue), detail: `${formatMoney(activeRevenue)} actifs`, icon: '💰', color: '#8b5cf6' },
+      { title: 'Abonnements globaux', value: formatNumber(globalSubscriptions.length), detail: 'Tous les produits', icon: '🌍', color: '#06b6d4' },
+      { title: 'Abonnements produits', value: formatNumber(productSubscriptions.length), detail: 'Produit spécifique', icon: '📦', color: '#ef4444' },
+    ]
+
+    return view.render('pages/dashboards/subscriptions', {
+      statsCards,
+      subscriptions: subscriptionsList,
+      planBreakdown,
+      totalSubscriptions,
+      activeSubscriptionsCount: activeSubscriptions.length,
+      pendingSubscriptionsCount: pendingSubscriptions.length,
+    })
+  }
+
+  /**
+   * Détails d'un abonnement spécifique
+   */
+  public async subscriptionDetails({ params, view, response }: HttpContext) {
+    try {
+      const subscriptionId = params.id
+      
+      const subscription = await Subscription.query()
+        .where('id', subscriptionId)
+        .preload('user')
+        .first()
+
+      if (!subscription) {
+        return response.status(404).send('Abonnement non trouvé')
+      }
+
+      // Récupérer les produits boostés par cet abonnement (si single_product)
+      let boostedProduct = null
+      if (subscription.subscriptionType === 'single_product' && subscription.productId) {
+        boostedProduct = await Product.find(subscription.productId)
+      }
+
+      // Récupérer tous les produits boostés par ce marchand (si global)
+      let boostedProducts = []
+      if (subscription.subscriptionType === 'all_products' && subscription.userId) {
+        boostedProducts = await Product.query()
+          .where('user_id', subscription.userId)
+          .where('isBoosted', true)
+          .limit(20)
+      }
+
+      // Calcul des jours restants
+      let daysRemaining = 0
+      let isExpired = false
+      if (subscription.endDate) {
+        const now = DateTime.now()
+        daysRemaining = Math.max(0, Math.ceil(subscription.endDate.diff(now, 'days').days))
+        isExpired = subscription.endDate <= now
+      }
+
+      const subscriptionDetails = {
+        id: subscription.id,
+        merchant: {
+          id: subscription.user?.id,
+          name: subscription.user?.full_name || subscription.user?.email || 'Marchand inconnu',
+          email: subscription.user?.email,
+          phone: subscription.user?.phone,
+          shopName: subscription.user?.shop_name || subscription.user?.commercial_name,
+        },
+        plan: {
+          key: subscription.plan,
+          name: SUBSCRIPTION_PLANS[subscription.plan]?.name || subscription.plan,
+          price: formatMoney(subscription.price),
+          duration: SUBSCRIPTION_PLANS[subscription.plan]?.duration || 0,
+          boostMultiplier: SUBSCRIPTION_PLANS[subscription.plan]?.boostMultiplier || 1,
+        },
+        type: subscription.subscriptionType === 'all_products' ? 'Global (tous les produits)' : 'Produit unique',
+        status: subscription.status,
+        statusLabel: getSubscriptionStatusLabel(subscription.status),
+        statusColor: getSubscriptionStatusColor(subscription.status),
+        startDate: subscription.startDate?.toFormat('dd LLL yyyy HH:mm') ?? 'Non démarré',
+        endDate: subscription.endDate?.toFormat('dd LLL yyyy HH:mm') ?? 'N/A',
+        createdAt: subscription.createdAt?.toFormat('dd LLL yyyy HH:mm') ?? 'Date inconnue',
+        autoRenew: subscription.autoRenew,
+        boostedProductsCount: subscription.boostedProductsCount || 0,
+        maxProducts: subscription.maxProducts || 0,
+        daysRemaining,
+        isExpired,
+        paymentReferenceId: subscription.paymentReferenceId,
+        paymentStatus: subscription.paymentStatus,
+        metadata: subscription.metadata,
+        totalViews: subscription.totalViews || 0,
+        totalClicks: subscription.totalClicks || 0,
+      }
+
+      return view.render('pages/dashboards/subscription-details', {
+        subscription: subscriptionDetails,
+        boostedProduct,
+        boostedProducts,
+      })
+    } catch (error) {
+      console.error('Error loading subscription details:', error)
+      return response.status(500).send('Erreur lors du chargement des détails')
+    }
+  }
+
+  /**
+   * API: Récupérer tous les abonnements (format JSON)
+   */
+  public async apiGetAllSubscriptions({ response }: HttpContext) {
+    const subscriptions = await Subscription.query()
+      .orderBy('createdAt', 'desc')
+      .preload('user')
+
+    const data = subscriptions.map((sub) => ({
+      id: sub.id,
+      merchantName: sub.user?.full_name || sub.user?.email,
+      merchantEmail: sub.user?.email,
+      plan: sub.plan,
+      planName: SUBSCRIPTION_PLANS[sub.plan]?.name,
+      price: sub.price,
+      status: sub.status,
+      subscriptionType: sub.subscriptionType,
+      startDate: sub.startDate,
+      endDate: sub.endDate,
+      createdAt: sub.createdAt,
+      autoRenew: sub.autoRenew,
+    }))
+
+    return response.json({ success: true, data })
+  }
+
+  /**
+   * API: Récupérer les abonnements d'un marchand spécifique
+   */
+  public async apiGetMerchantSubscriptions({ params, response }: HttpContext) {
+    const subscriptions = await Subscription.query()
+      .where('userId', params.userId)
+      .orderBy('createdAt', 'desc')
+      .preload('user')
+
+    const data = subscriptions.map((sub) => ({
+      id: sub.id,
+      plan: sub.plan,
+      planName: SUBSCRIPTION_PLANS[sub.plan]?.name,
+      price: sub.price,
+      status: sub.status,
+      subscriptionType: sub.subscriptionType,
+      startDate: sub.startDate,
+      endDate: sub.endDate,
+      createdAt: sub.createdAt,
+      autoRenew: sub.autoRenew,
+    }))
+
+    return response.json({ success: true, data })
+  }
+
+  /**
+   * API: Statistiques globales des abonnements
+   */
+  public async apiGetSubscriptionStats({ response }: HttpContext) {
+    const allSubscriptions = await Subscription.query()
+    
+    const total = allSubscriptions.length
+    const active = allSubscriptions.filter(s => s.status === 'active' && s.endDate && s.endDate > DateTime.now()).length
+    const pending = allSubscriptions.filter(s => s.status === 'pending').length
+    const cancelled = allSubscriptions.filter(s => s.status === 'cancelled').length
+    const expired = allSubscriptions.filter(s => s.status === 'expired' || (s.endDate && s.endDate <= DateTime.now())).length
+    
+    const totalRevenue = allSubscriptions.reduce((sum, sub) => sum + (sub.price || 0), 0)
+    const activeRevenue = allSubscriptions.filter(s => s.status === 'active').reduce((sum, sub) => sum + (sub.price || 0), 0)
+
+    const planStats: Record<string, number> = {}
+    for (const sub of allSubscriptions) {
+      planStats[sub.plan] = (planStats[sub.plan] || 0) + 1
+    }
+
+    return response.json({
+      success: true,
+      data: {
+        total,
+        active,
+        pending,
+        cancelled,
+        expired,
+        totalRevenue,
+        activeRevenue,
+        planDistribution: planStats,
+      }
     })
   }
 
@@ -335,33 +669,16 @@ export default class DashboardViewController {
   // ==================== SHOPS DASHBOARD ====================
   public async shops({ view }: HttpContext) {
     try {
-      // Test 1 : Récupérer TOUS les utilisateurs
-      const allUsers = await User.all()
-      console.log('Tous les utilisateurs:', allUsers.length)
-
-      // Test 2 : Récupérer les marchands
       const merchants = await User.query()
         .where('role', 'marchant')
         .orWhere('role', 'merchant')
         .orWhere('role', 'marchand')
 
-      console.log('Marchands trouvés:', merchants.length)
-      console.log('Rôles trouvés:', merchants.map(m => m.role))
-
-      // Test 3 : Récupérer un marchand avec ses produits
-      if (merchants.length > 0) {
-        const firstMerchant = merchants[0]
-        await firstMerchant.load('products')
-        console.log('Produits du premier marchand:', firstMerchant.products.length)
-      }
-
-      // Test 4 : Compter tous les produits
-      const allProducts = await Product.query().where('is_archived', false)
-      console.log('Tous les produits non archivés:', allProducts.length)
-
       const totalMerchants = merchants.length
       const verifiedMerchants = merchants.filter(m => m.is_verified === true).length
       const pendingMerchants = merchants.filter(m => m.is_verified !== true).length
+      
+      const allProducts = await Product.query().where('is_archived', false)
       const totalProducts = allProducts.length
 
       const formattedMerchants = merchants.map((merchant) => ({
@@ -377,7 +694,7 @@ export default class DashboardViewController {
         created_at: merchant.created_at?.toFormat('dd/MM/yyyy') || 'Date inconnue',
       }))
 
-      return view.render('pages/dashboards/secretary', {
+      return view.render('pages/dashboards/shops', {
         merchants: formattedMerchants,
         totalMerchants,
         verifiedMerchants,
@@ -386,7 +703,7 @@ export default class DashboardViewController {
       })
     } catch (error) {
       console.error('❌ ERREUR COMPLÈTE:', error)
-      return view.render('pages/dashboards/secretary', {
+      return view.render('pages/dashboards/shops', {
         merchants: [],
         totalMerchants: 0,
         verifiedMerchants: 0,
@@ -624,7 +941,6 @@ export default class DashboardViewController {
         actual_delivery: (order as any).actual_delivery?.toFormat('dd LLL yyyy HH:mm') || 'Non livrée'
       }
 
-      const statusHistory = (order as any).status_history || []
       const refundEligibility = this.checkRefundEligibility(order)
 
       return view.render('pages/dashboards/refund-details', {
@@ -656,7 +972,6 @@ export default class DashboardViewController {
         delivery: deliveryDetails,
         refund: refundInfo,
         eligibility: refundEligibility,
-        statusHistory: statusHistory
       })
     } catch (error) {
       console.error('Error loading refund details:', error)
@@ -667,7 +982,6 @@ export default class DashboardViewController {
   // ==================== PAYPAL DASHBOARD ====================
   public async paypal({ view }: HttpContext) {
     try {
-      // Récupérer les transactions PayPal récentes
       const paypalOrders = await Order.query()
         .where('payment_method', 'paypal')
         .orderBy('created_at', 'desc')
