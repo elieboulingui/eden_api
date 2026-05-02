@@ -4,8 +4,6 @@ import User from '#models/user'
 import Wallet from '#models/wallet'
 import type { HttpContext } from '@adonisjs/core/http'
 import jwt from 'jsonwebtoken'
-// ❌ SUPPRIMER CET IMPORT - Le modèle User gère déjà le hashage
-// import hash from '@adonisjs/core/services/hash'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'linemarket'
 
@@ -27,63 +25,72 @@ export default class NewAccountController {
         })
       }
 
-      // ❌ NE PAS HASHER ICI - Le modèle User le fera automatiquement
-      // const hashedPassword = await hash.make(rawData.password)
-      // console.log('🔐 [NewAccountController] Mot de passe hashé')
+      // Déterminer le rôle
+      const isMerchant = rawData.role === 'merchant' || rawData.role === 'marchant'
+      const role = isMerchant ? 'merchant' : (rawData.role || 'client')
 
-      // ✅ Utiliser le mot de passe EN CLAIR - le modèle va le hasher
+      // ============================================================
+      // CONSTRUCTION DES DONNÉES UTILISATEUR
+      // ============================================================
       const userData: any = {
-        // Champs de base
+        // ========================================================
+        // CHAMPS DE BASE
+        // ========================================================
         full_name: rawData.full_name,
         email: rawData.email,
-        password: rawData.password, // ⚠️ MOT DE PASSE EN CLAIR
-        role: rawData.role || 'client',
-
-        // Localisation
+        password: rawData.password,
+        role: role,
+        phone: rawData.phone || rawData.personal_phone || null,
+        address: rawData.address || rawData.residence_address || null,
         country: rawData.country || null,
         neighborhood: rawData.neighborhood || null,
+        avatar: rawData.avatar || rawData.selfie_url || null,
 
-        // Étape 1
+        // ========================================================
+        // INFORMATIONS PERSONNELLES (RESPONSABLE)
+        // ========================================================
         birth_date: rawData.birth_date || null,
         id_number: rawData.id_number || null,
         id_front_url: rawData.id_front_url || null,
         id_back_url: rawData.id_back_url || null,
         selfie_url: rawData.selfie_url || null,
-        personal_phone: rawData.personal_phone || null,
-        residence_address: rawData.residence_address || null,
+        personal_phone: rawData.personal_phone || rawData.phone || null,
+        residence_address: rawData.residence_address || rawData.address || null,
+        is_phone_verified: rawData.is_phone_verified || false,
+        is_email_verified: rawData.is_email_verified || false,
 
-        // Étape 2
-        vendor_type: rawData.vendor_type || null,
-        nif_number: rawData.nif_number || null,
-        rccm_number: rawData.rccm_number || null,
-        rccm_document_url: rawData.rccm_document_url || null,
-        commercial_name: rawData.commercial_name || null,
-        shop_name: rawData.commercial_name || rawData.shop_name || null,
-        whatsapp_phone: rawData.whatsapp_phone || null,
-        shop_description: rawData.shop_description || null,
-        logo_url: rawData.logo_url || null,
-        shop_image: rawData.logo_url || rawData.shop_image || null,
-        cover_photo_url: rawData.cover_photo_url || null,
+        // ========================================================
+        // 🏢 INFORMATIONS DE L'ENTREPRISE (MARCHAND)
+        // ========================================================
+        
+        // Nom de l'entreprise
+        company_name: rawData.company_name || null,
+        
+        // Secteur d'activité (ex: "Distribution alimentaire", "Tech", "Mode", etc.)
+        business_sector: rawData.business_sector || null,
+        
+        // Description des produits vendus
+        products_sold: rawData.products_sold || null,
+        
+        // Type d'activité: 'formel' (entreprise enregistrée) ou 'informel'
+        business_type: rawData.business_type || null,
+        
+        // Téléphone de l'entreprise
+        company_phone: rawData.company_phone || null,
+        
+        // Email professionnel de l'entreprise
+        company_email: rawData.company_email || null,
+        
+        // Adresse physique de l'entreprise
+        business_address: rawData.business_address || null,
+        
+        // 📄 Photo de la fiche d'identification (extrait RCCM, patente, licence)
+        // Uniquement pour les entreprises formelles
+        business_document_url: rawData.business_document_url || null,
 
-        // Bloc 4 - Boutique physique
-        shop_address: rawData.shop_address || null,
-        shop_latitude: rawData.shop_latitude || null,
-        shop_longitude: rawData.shop_longitude || null,
-        facade_photo_1_url: rawData.facade_photo1_url || rawData.facadePhoto1Url || rawData.facade_photo_1_url || null,
-        facade_photo_2_url: rawData.facade_photo2_url || rawData.facadePhoto2Url || rawData.facade_photo_2_url || null,
-        interior_photo_1_url: rawData.interior_photo1_url || rawData.interiorPhoto1Url || rawData.interior_photo_1_url || null,
-        interior_photo_2_url: rawData.interior_photo2_url || rawData.interiorPhoto2Url || rawData.interior_photo_2_url || null,
-        seeg_or_lease_url: rawData.seeg_or_lease_url || rawData.seegOrLeaseUrl || null,
-
-        // Bloc 5 - Vendeur en ligne
-        stock_address: rawData.stock_address || null,
-        address_proof_url: rawData.address_proof_url || null,
-        facebook_url: rawData.facebook_url || null,
-        instagram_url: rawData.instagram_url || null,
-        tiktok_url: rawData.tiktok_url || null,
-        stock_video_url: rawData.stock_video_url || null,
-
-        // Étape 3 - Paiement
+        // ========================================================
+        // INFORMATIONS BANCAIRES (PAIEMENT)
+        // ========================================================
         payment_method: rawData.payment_method || null,
         airtel_number: rawData.airtel_number || null,
         moov_number: rawData.moov_number || null,
@@ -91,27 +98,32 @@ export default class NewAccountController {
         bank_name: rawData.bank_name || null,
         rib_document_url: rawData.rib_document_url || null,
 
-        // Validation
+        // ========================================================
+        // VALIDATION ET ENGAGEMENT
+        // ========================================================
         signature: rawData.signature || null,
-        certify_truth: true,
-        accept_escrow: true,
+        certify_truth: rawData.certify_truth !== undefined ? rawData.certify_truth : true,
+        accept_escrow: rawData.accept_escrow !== undefined ? rawData.accept_escrow : true,
       }
 
-      // ✅ Références
-      if (rawData.reference1) {
-        userData.reference_1_name = rawData.reference1.name || null
-        userData.reference_1_phone = rawData.reference1.phone || null
-        console.log('✅ [NewAccountController] Référence 1:', userData.reference_1_name)
-      }
-
-      if (rawData.reference2) {
-        userData.reference_2_name = rawData.reference2.name || null
-        userData.reference_2_phone = rawData.reference2.phone || null
-        console.log('✅ [NewAccountController] Référence 2:', userData.reference_2_name)
+      // Log des informations de l'entreprise
+      if (isMerchant) {
+        console.log('🏢 [NewAccountController] ===== INFORMATIONS ENTREPRISE =====')
+        console.log('  - Nom entreprise:', userData.company_name)
+        console.log('  - Secteur d\'activité:', userData.business_sector)
+        console.log('  - Produits vendus:', userData.products_sold?.substring(0, 100))
+        console.log('  - Type:', userData.business_type === 'formel' ? '📋 Formel (entreprise enregistrée)' : '🏠 Informel')
+        console.log('  - Téléphone:', userData.company_phone)
+        console.log('  - Email pro:', userData.company_email)
+        console.log('  - Adresse:', userData.business_address)
+        if (userData.business_type === 'formel') {
+          console.log('  - 📄 Document fiche:', userData.business_document_url)
+        }
+        console.log('=============================================')
       }
 
       // ✅ Statut marchand
-      if (userData.role === 'merchant' || userData.role === 'marchant') {
+      if (isMerchant) {
         userData.verification_status = 'pending'
         userData.is_verified = false
         userData.is_email_verified = false
@@ -128,9 +140,8 @@ export default class NewAccountController {
       })
 
       console.log('💾 [NewAccountController] Création utilisateur avec', Object.keys(userData).length, 'champs')
-      console.log('🔑 Password avant création:', userData.password ? '******' : 'MANQUANT')
 
-      // ✅ Créer l'utilisateur - le hook @beforeSave va hasher le mot de passe
+      // ✅ Créer l'utilisateur
       const user = await User.create(userData)
 
       console.log('✅ [NewAccountController] Utilisateur créé avec succès!')
@@ -141,7 +152,7 @@ export default class NewAccountController {
 
       // Créer wallet si marchand
       let wallet = null
-      if (user.role === 'merchant' || user.role === 'marchant') {
+      if (isMerchant) {
         wallet = await Wallet.create({
           user_id: user.id,
           balance: 0,
@@ -168,6 +179,16 @@ export default class NewAccountController {
           full_name: user.full_name,
           email: user.email,
           role: user.role,
+          // Informations entreprise
+          company_name: user.company_name,
+          business_sector: user.business_sector,
+          products_sold: user.products_sold,
+          business_type: user.business_type,
+          company_phone: user.company_phone,
+          company_email: user.company_email,
+          business_address: user.business_address,
+          business_document_url: user.business_document_url,
+          verification_status: user.verification_status,
         },
         token,
         ...(wallet && { wallet }),
