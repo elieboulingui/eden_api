@@ -2,6 +2,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+const ProductController = () => import('#controllers/product_controller')
 import RenduMoneyCallbackController from '#controllers/RenduMoneyCallbackController'
 const RenduMoneyCallback = new RenduMoneyCallbackController()
 import SubscriptionController from '#controllers/SubscriptionController'
@@ -533,4 +534,7 @@ router.group(() => {
   router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check'])
     .as('check_payment_status.check_by_reference')
 
+  router.get('/products/on-sale', [ProductController, 'onSale'])
+router.get('/products/biggest-discounts', [ProductController, 'biggestDiscounts'])
+router.get('/products/black-friday', [ProductController, 'blackFriday'])
 }).prefix('/api')
