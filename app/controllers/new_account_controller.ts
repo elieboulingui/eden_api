@@ -45,9 +45,8 @@ export default class NewAccountController {
 
       // ============================================================
       // CONSTRUCTION DES DONNÉES UTILISATEUR
-      // On accepte TOUS les champs possibles
       // ============================================================
-      const userData: any = {
+      const userData: Record<string, any> = {
         // ========================================================
         // CHAMPS DE BASE
         // ========================================================
@@ -77,38 +76,25 @@ export default class NewAccountController {
         // ========================================================
         // INFORMATIONS ENTREPRISE (MARCHAND)
         // ========================================================
-        // Nom commercial
         commercial_name: rawData.commercial_name || rawData.company_name || rawData.business_name || 
                          rawData.nom_commercial || rawData.nom_entreprise || null,
-        
-        // Nom de la boutique
         shop_name: rawData.shop_name || rawData.boutique_name || rawData.store_name || 
                    rawData.company_name || rawData.nom_boutique || null,
-        
-        // Description
         shop_description: rawData.shop_description || rawData.products_sold || rawData.description || 
                           rawData.produits_vendus || null,
-        
-        // Type de vendeur
         vendor_type: rawData.vendor_type || rawData.business_type || rawData.type_vendeur || 
                      rawData.seller_type || null,
-        
-        // WhatsApp
         whatsapp_phone: rawData.whatsapp_phone || rawData.company_phone || rawData.whatsapp || 
                         rawData.phone_whatsapp || null,
         is_whatsapp_verified: rawData.is_whatsapp_verified || false,
-        
-        // Adresse boutique
         shop_address: rawData.shop_address || rawData.business_address || rawData.adresse_boutique || null,
-        
-        // Documents entreprise
         rccm_number: rawData.rccm_number || rawData.rccm || rawData.registre_commerce || null,
         rccm_document_url: rawData.rccm_document_url || rawData.business_document_url || 
                            rawData.document_rccm || null,
         nif_number: rawData.nif_number || rawData.nif || rawData.numero_fiscal || null,
 
         // ========================================================
-        // INFORMATIONS BANCAIRES (PAIEMENT)
+        // INFORMATIONS BANCAIRES
         // ========================================================
         payment_method: rawData.payment_method || rawData.methode_paiement || null,
         airtel_number: rawData.airtel_number || rawData.airtel || rawData.numero_airtel || null,
@@ -146,14 +132,10 @@ export default class NewAccountController {
         reference2: rawData.reference2 || null,
 
         // ========================================================
-        // AUTRES CHAMPS POSSIBLES
+        // AUTRES
         // ========================================================
         logo_url: rawData.logo_url || rawData.logo || null,
         cover_photo_url: rawData.cover_photo_url || rawData.cover || rawData.banniere || null,
-
-        // ========================================================
-        // VALIDATION ET ENGAGEMENT
-        // ========================================================
         signature: rawData.signature || null,
         certify_truth: rawData.certify_truth !== undefined ? rawData.certify_truth : true,
         accept_escrow: rawData.accept_escrow !== undefined ? rawData.accept_escrow : true,
@@ -187,7 +169,7 @@ export default class NewAccountController {
 
       // S'assurer que les champs requis ne sont pas vides
       if (!userData.full_name) {
-        userData.full_name = 'Utilisateur' // Valeur par défaut
+        userData.full_name = 'Utilisateur'
         console.log('⚠️ [NewAccountController] full_name manquant, valeur par défaut utilisée')
       }
       if (!userData.email) {
@@ -197,7 +179,7 @@ export default class NewAccountController {
         })
       }
       if (!userData.password) {
-        userData.password = Math.random().toString(36).slice(-8) // Mot de passe aléatoire
+        userData.password = Math.random().toString(36).slice(-8)
         console.log('⚠️ [NewAccountController] password manquant, mot de passe aléatoire généré')
       }
 
@@ -225,8 +207,10 @@ export default class NewAccountController {
             status: 'active',
           })
           console.log('💰 [NewAccountController] Wallet créé pour le marchand')
-        } catch (walletError) {
-          console.error('⚠️ [NewAccountController] Erreur création wallet:', walletError.message)
+        } catch (walletError: unknown) {
+          // Correction: Typage explicite de l'erreur
+          const error = walletError as Error
+          console.error('⚠️ [NewAccountController] Erreur création wallet:', error.message)
           // Continuer même si le wallet échoue
         }
       }
@@ -241,7 +225,7 @@ export default class NewAccountController {
       console.log('🟢 [NewAccountController] ===== FIN INSCRIPTION =====')
 
       // Construction de la réponse complète
-      const userResponse: any = {
+      const userResponse: Record<string, any> = {
         id: user.id,
         full_name: user.full_name,
         email: user.email,
@@ -252,6 +236,8 @@ export default class NewAccountController {
       }
 
       // Ajouter tous les champs non vides de l'utilisateur
+      // Correction: Utilisation de (user as any) pour l'accès dynamique
+      const userAny = user as any
       const userFields = [
         'phone', 'address', 'country', 'neighborhood', 'avatar',
         'birth_date', 'id_number', 'personal_phone', 'residence_address',
@@ -263,12 +249,12 @@ export default class NewAccountController {
       ]
 
       userFields.forEach(field => {
-        if (user[field]) {
-          userResponse[field] = user[field]
+        if (userAny[field]) {
+          userResponse[field] = userAny[field]
         }
       })
 
-      const responseData: any = {
+      const responseData: Record<string, any> = {
         success: true,
         message: 'Inscription réussie',
         user: userResponse,
@@ -285,23 +271,25 @@ export default class NewAccountController {
 
       return response.status(201).json(responseData)
 
-    } catch (error: any) {
-      console.error('💥 [NewAccountController] ERREUR:', error.message)
-      console.error('💥 Stack:', error.stack)
+    } catch (error: unknown) {
+      // Correction: Typage explicite de l'erreur
+      const err = error as any
+      console.error('💥 [NewAccountController] ERREUR:', err.message)
+      console.error('💥 Stack:', err.stack)
 
-      if (error.sql) {
-        console.error('🗄️ SQL Error:', error.sqlMessage)
-        console.error('🗄️ SQL Query:', error.sql)
+      if (err.sql) {
+        console.error('🗄️ SQL Error:', err.sqlMessage)
+        console.error('🗄️ SQL Query:', err.sql)
       }
 
       // Déterminer le code d'erreur approprié
       let statusCode = 400
       let errorMessage = 'Erreur lors de l\'inscription'
 
-      if (error.code === 'ER_DUP_ENTRY') {
+      if (err.code === 'ER_DUP_ENTRY') {
         errorMessage = 'Cet email ou numéro de téléphone existe déjà'
         statusCode = 409
-      } else if (error.code === 'ER_BAD_FIELD_ERROR') {
+      } else if (err.code === 'ER_BAD_FIELD_ERROR') {
         errorMessage = 'Champ de base de données invalide'
         console.error('🗄️ Champ invalide détecté - vérifiez les colonnes de la table users')
       }
@@ -309,8 +297,8 @@ export default class NewAccountController {
       return response.status(statusCode).json({
         success: false,
         message: errorMessage,
-        error: process.env.NODE_ENV === 'development' ? error.message : 'Erreur serveur',
-        ...(process.env.NODE_ENV === 'development' && { stack: error.stack }),
+        error: process.env.NODE_ENV === 'development' ? err.message : 'Erreur serveur',
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
       })
     }
   }
