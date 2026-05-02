@@ -1,10 +1,10 @@
 // app/validators/user.ts
 import vine from '@vinejs/vine'
 
-// Validateur qui accepte TOUT
+// Validateur qui accepte TOUT - Version corrigée
 export const signupValidator = vine.compile(
   vine.object({
-    // Tout est optionnel, tout type de données accepté
+    // Champs de base
     full_name: vine.any().optional(),
     email: vine.any().optional(),
     password: vine.any().optional(),
@@ -70,10 +70,7 @@ export const signupValidator = vine.compile(
     signature: vine.any().optional(),
     certify_truth: vine.any().optional(),
     accept_escrow: vine.any().optional(),
-    
-    // Accepter tout autre champ non défini
-    ...vine.any().optional(),
-  })
+  }).allowUnknownProperties() // Permet les propriétés non définies
 )
 
 // Login validator permissif
@@ -81,5 +78,5 @@ export const loginValidator = vine.compile(
   vine.object({
     email: vine.any().optional(),
     password: vine.any().optional(),
-  })
+  }).allowUnknownProperties()
 )
