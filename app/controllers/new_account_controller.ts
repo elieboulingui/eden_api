@@ -11,95 +11,145 @@ export default class NewAccountController {
     console.log('🟢 [NewAccountController] ===== DÉBUT INSCRIPTION =====')
 
     try {
+      // Accepter TOUTES les données sans validation
       const rawData = request.body()
-      console.log('📥 [NewAccountController] Payload reçu:', Object.keys(rawData).length, 'champs')
+      
+      // Log complet de tout ce qui est reçu
+      console.log('📥 [NewAccountController] Données brutes reçues:')
+      console.log(JSON.stringify(rawData, null, 2))
 
-      // Vérifier email existant
-      const existingUser = await User.findBy('email', rawData.email)
-      if (existingUser) {
-        console.log('❌ [NewAccountController] Email déjà utilisé')
-        return response.status(400).json({
-          success: false,
-          message: 'Cet email est déjà utilisé',
-        })
+      // Vérifier email si présent
+      if (rawData.email) {
+        const existingUser = await User.findBy('email', rawData.email)
+        if (existingUser) {
+          console.log('❌ [NewAccountController] Email déjà utilisé')
+          return response.status(400).json({
+            success: false,
+            message: 'Cet email est déjà utilisé',
+          })
+        }
       }
 
-      // Déterminer le rôle
-      const isMerchant = rawData.role === 'merchant' || rawData.role === 'marchant'
-      const role = isMerchant ? 'merchant' : (rawData.role || 'client')
+      // Déterminer le rôle (accepter toutes les variantes)
+      let role = 'client' // Par défaut
+      if (rawData.role) {
+        const lowerRole = rawData.role.toLowerCase()
+        if (lowerRole === 'merchant' || lowerRole === 'marchant' || lowerRole === 'marchand') {
+          role = 'merchant'
+        } else if (lowerRole === 'admin') {
+          role = 'admin'
+        }
+      }
+
+      const isMerchant = role === 'merchant'
 
       // ============================================================
       // CONSTRUCTION DES DONNÉES UTILISATEUR
+      // On accepte TOUS les champs possibles
       // ============================================================
       const userData: any = {
         // ========================================================
         // CHAMPS DE BASE
         // ========================================================
-        full_name: rawData.full_name,
-        email: rawData.email,
-        password: rawData.password,
+        full_name: rawData.full_name || rawData.name || rawData.username || '',
+        email: rawData.email || '',
+        password: rawData.password || '',
         role: role,
-        phone: rawData.phone || rawData.personal_phone || null,
-        address: rawData.address || rawData.residence_address || null,
-        country: rawData.country || null,
-        neighborhood: rawData.neighborhood || null,
-        avatar: rawData.avatar || rawData.selfie_url || null,
+        phone: rawData.phone || rawData.personal_phone || rawData.telephone || rawData.tel || null,
+        address: rawData.address || rawData.residence_address || rawData.adresse || null,
+        country: rawData.country || rawData.pays || null,
+        neighborhood: rawData.neighborhood || rawData.quartier || null,
+        avatar: rawData.avatar || rawData.selfie_url || rawData.profile_picture || rawData.photo || null,
 
         // ========================================================
-        // INFORMATIONS PERSONNELLES (RESPONSABLE)
+        // INFORMATIONS PERSONNELLES
         // ========================================================
-        birth_date: rawData.birth_date || null,
-        id_number: rawData.id_number || null,
-        id_front_url: rawData.id_front_url || null,
-        id_back_url: rawData.id_back_url || null,
-        selfie_url: rawData.selfie_url || null,
-        personal_phone: rawData.personal_phone || rawData.phone || null,
-        residence_address: rawData.residence_address || rawData.address || null,
+        birth_date: rawData.birth_date || rawData.date_naissance || rawData.birthdate || rawData.date_of_birth || null,
+        id_number: rawData.id_number || rawData.numero_piece || rawData.id_card_number || null,
+        id_front_url: rawData.id_front_url || rawData.id_front || rawData.cni_recto || null,
+        id_back_url: rawData.id_back_url || rawData.id_back || rawData.cni_verso || null,
+        selfie_url: rawData.selfie_url || rawData.selfie || rawData.photo_selfie || null,
+        personal_phone: rawData.personal_phone || rawData.phone || rawData.telephone || null,
+        residence_address: rawData.residence_address || rawData.address || rawData.adresse || null,
         is_phone_verified: rawData.is_phone_verified || false,
         is_email_verified: rawData.is_email_verified || false,
 
         // ========================================================
-        // 🏢 INFORMATIONS DE L'ENTREPRISE (MARCHAND)
+        // INFORMATIONS ENTREPRISE (MARCHAND)
         // ========================================================
-        // ✅ Utilisation des colonnes EXISTANTES du modèle User
-        
-        // Nom commercial de l'entreprise
-        commercial_name: rawData.company_name || rawData.commercial_name || null,
+        // Nom commercial
+        commercial_name: rawData.commercial_name || rawData.company_name || rawData.business_name || 
+                         rawData.nom_commercial || rawData.nom_entreprise || null,
         
         // Nom de la boutique
-        shop_name: rawData.shop_name || rawData.company_name || null,
+        shop_name: rawData.shop_name || rawData.boutique_name || rawData.store_name || 
+                   rawData.company_name || rawData.nom_boutique || null,
         
-        // Description de la boutique / produits vendus
-        shop_description: rawData.products_sold || rawData.shop_description || null,
+        // Description
+        shop_description: rawData.shop_description || rawData.products_sold || rawData.description || 
+                          rawData.produits_vendus || null,
         
-        // Type de vendeur (converti depuis business_type)
-        // business_type 'formel' -> 'boutique_physique'
-        // business_type 'informel' -> 'vendeur_ligne'
-        vendor_type: rawData.business_type === 'formel' 
-          ? 'boutique_physique' 
-          : (rawData.business_type === 'informel' ? 'vendeur_ligne' : rawData.vendor_type || null),
+        // Type de vendeur
+        vendor_type: rawData.vendor_type || rawData.business_type || rawData.type_vendeur || 
+                     rawData.seller_type || null,
         
-        // Téléphone WhatsApp pour l'entreprise
-        whatsapp_phone: rawData.company_phone || rawData.whatsapp_phone || null,
+        // WhatsApp
+        whatsapp_phone: rawData.whatsapp_phone || rawData.company_phone || rawData.whatsapp || 
+                        rawData.phone_whatsapp || null,
         is_whatsapp_verified: rawData.is_whatsapp_verified || false,
         
-        // Adresse de la boutique
-        shop_address: rawData.business_address || rawData.shop_address || null,
+        // Adresse boutique
+        shop_address: rawData.shop_address || rawData.business_address || rawData.adresse_boutique || null,
         
-        // Documents d'identification de l'entreprise
-        rccm_number: rawData.rccm_number || null,
-        rccm_document_url: rawData.business_document_url || rawData.rccm_document_url || null,
-        nif_number: rawData.nif_number || null,
+        // Documents entreprise
+        rccm_number: rawData.rccm_number || rawData.rccm || rawData.registre_commerce || null,
+        rccm_document_url: rawData.rccm_document_url || rawData.business_document_url || 
+                           rawData.document_rccm || null,
+        nif_number: rawData.nif_number || rawData.nif || rawData.numero_fiscal || null,
 
         // ========================================================
         // INFORMATIONS BANCAIRES (PAIEMENT)
         // ========================================================
-        payment_method: rawData.payment_method || null,
-        airtel_number: rawData.airtel_number || null,
-        moov_number: rawData.moov_number || null,
-        account_holder_name: rawData.account_holder_name || null,
-        bank_name: rawData.bank_name || null,
-        rib_document_url: rawData.rib_document_url || null,
+        payment_method: rawData.payment_method || rawData.methode_paiement || null,
+        airtel_number: rawData.airtel_number || rawData.airtel || rawData.numero_airtel || null,
+        moov_number: rawData.moov_number || rawData.moov || rawData.numero_moov || null,
+        account_holder_name: rawData.account_holder_name || rawData.titulaire_compte || 
+                             rawData.nom_titulaire || null,
+        bank_name: rawData.bank_name || rawData.banque || rawData.nom_banque || null,
+        rib_document_url: rawData.rib_document_url || rawData.rib || rawData.releve_bancaire || null,
+
+        // ========================================================
+        // BOUTIQUE PHYSIQUE
+        // ========================================================
+        shop_latitude: rawData.shop_latitude || rawData.latitude || null,
+        shop_longitude: rawData.shop_longitude || rawData.longitude || null,
+        facade_photo1_url: rawData.facade_photo1_url || rawData.facade_photo1 || null,
+        facade_photo2_url: rawData.facade_photo2_url || rawData.facade_photo2 || null,
+        interior_photo1_url: rawData.interior_photo1_url || rawData.interior_photo1 || null,
+        interior_photo2_url: rawData.interior_photo2_url || rawData.interior_photo2 || null,
+        seeg_or_lease_url: rawData.seeg_or_lease_url || rawData.seeg_lease || null,
+
+        // ========================================================
+        // VENDEUR EN LIGNE
+        // ========================================================
+        stock_address: rawData.stock_address || rawData.adresse_stock || null,
+        address_proof_url: rawData.address_proof_url || rawData.preuve_adresse || null,
+        facebook_url: rawData.facebook_url || rawData.facebook || null,
+        instagram_url: rawData.instagram_url || rawData.instagram || null,
+        tiktok_url: rawData.tiktok_url || rawData.tiktok || null,
+        stock_video_url: rawData.stock_video_url || rawData.video_stock || null,
+
+        // ========================================================
+        // RÉFÉRENCES
+        // ========================================================
+        reference1: rawData.reference1 || null,
+        reference2: rawData.reference2 || null,
+
+        // ========================================================
+        // AUTRES CHAMPS POSSIBLES
+        // ========================================================
+        logo_url: rawData.logo_url || rawData.logo || null,
+        cover_photo_url: rawData.cover_photo_url || rawData.cover || rawData.banniere || null,
 
         // ========================================================
         // VALIDATION ET ENGAGEMENT
@@ -109,47 +159,52 @@ export default class NewAccountController {
         accept_escrow: rawData.accept_escrow !== undefined ? rawData.accept_escrow : true,
       }
 
-      // Log des informations de l'entreprise
-      if (isMerchant) {
-        console.log('🏢 [NewAccountController] ===== INFORMATIONS ENTREPRISE =====')
-        console.log('  - Nom commercial:', userData.commercial_name)
-        console.log('  - Nom boutique:', userData.shop_name)
-        console.log('  - Description:', userData.shop_description?.substring(0, 100))
-        console.log('  - Type vendeur:', userData.vendor_type)
-        console.log('  - WhatsApp:', userData.whatsapp_phone)
-        console.log('  - Adresse boutique:', userData.shop_address)
-        if (userData.rccm_document_url) {
-          console.log('  - 📄 Document RCCM:', userData.rccm_document_url)
+      // Ajouter TOUS les autres champs qui pourraient exister
+      const knownFields = Object.keys(userData)
+      for (const key in rawData) {
+        if (!knownFields.includes(key)) {
+          userData[key] = rawData[key]
+          console.log(`➕ [NewAccountController] Champ supplémentaire ajouté: ${key} = ${rawData[key]}`)
         }
-        if (userData.rccm_number) {
-          console.log('  - Numéro RCCM:', userData.rccm_number)
-        }
-        if (userData.nif_number) {
-          console.log('  - NIF:', userData.nif_number)
-        }
-        console.log('=============================================')
       }
 
-      // ✅ Statut marchand
+      // Statut marchand
       if (isMerchant) {
-        userData.verification_status = 'pending'
-        userData.is_verified = false
-        userData.is_email_verified = false
-        userData.is_phone_verified = false
-        userData.is_whatsapp_verified = false
-        console.log('🏪 [NewAccountController] Compte marchand - statut pending')
+        userData.verification_status = userData.verification_status || 'pending'
+        userData.is_verified = userData.is_verified !== undefined ? userData.is_verified : false
+        console.log('🏪 [NewAccountController] Compte marchand - statut:', userData.verification_status)
+      } else {
+        userData.verification_status = userData.verification_status || 'approved'
+        userData.is_verified = userData.is_verified !== undefined ? userData.is_verified : true
       }
 
-      // Nettoyer les champs undefined
+      // Nettoyer les champs undefined et null
       Object.keys(userData).forEach(key => {
-        if (userData[key] === undefined) {
+        if (userData[key] === undefined || userData[key] === '') {
           delete userData[key]
         }
       })
 
-      console.log('💾 [NewAccountController] Création utilisateur avec', Object.keys(userData).length, 'champs')
+      // S'assurer que les champs requis ne sont pas vides
+      if (!userData.full_name) {
+        userData.full_name = 'Utilisateur' // Valeur par défaut
+        console.log('⚠️ [NewAccountController] full_name manquant, valeur par défaut utilisée')
+      }
+      if (!userData.email) {
+        return response.status(400).json({
+          success: false,
+          message: 'Email requis',
+        })
+      }
+      if (!userData.password) {
+        userData.password = Math.random().toString(36).slice(-8) // Mot de passe aléatoire
+        console.log('⚠️ [NewAccountController] password manquant, mot de passe aléatoire généré')
+      }
 
-      // ✅ Créer l'utilisateur
+      console.log('💾 [NewAccountController] Création utilisateur avec', Object.keys(userData).length, 'champs')
+      console.log('📋 Champs:', Object.keys(userData).join(', '))
+
+      // Créer l'utilisateur
       const user = await User.create(userData)
 
       console.log('✅ [NewAccountController] Utilisateur créé avec succès!')
@@ -157,17 +212,23 @@ export default class NewAccountController {
       console.log('  - Nom:', user.full_name)
       console.log('  - Email:', user.email)
       console.log('  - Rôle:', user.role)
+      console.log('  - Statut vérification:', user.verification_status)
 
       // Créer wallet si marchand
       let wallet = null
       if (isMerchant) {
-        wallet = await Wallet.create({
-          user_id: user.id,
-          balance: 0,
-          currency: 'XAF',
-          status: 'active',
-        })
-        console.log('💰 [NewAccountController] Wallet créé pour le marchand')
+        try {
+          wallet = await Wallet.create({
+            user_id: user.id,
+            balance: 0,
+            currency: 'XAF',
+            status: 'active',
+          })
+          console.log('💰 [NewAccountController] Wallet créé pour le marchand')
+        } catch (walletError) {
+          console.error('⚠️ [NewAccountController] Erreur création wallet:', walletError.message)
+          // Continuer même si le wallet échoue
+        }
       }
 
       // Générer JWT
@@ -179,44 +240,77 @@ export default class NewAccountController {
 
       console.log('🟢 [NewAccountController] ===== FIN INSCRIPTION =====')
 
-      // Construction de la réponse avec les champs existants
+      // Construction de la réponse complète
       const userResponse: any = {
         id: user.id,
         full_name: user.full_name,
         email: user.email,
         role: user.role,
         verification_status: user.verification_status,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
       }
 
-      // Ajouter les champs entreprise s'ils existent (utilisant les colonnes du modèle)
-      if (user.commercial_name) userResponse.commercial_name = user.commercial_name
-      if (user.shop_name) userResponse.shop_name = user.shop_name
-      if (user.shop_description) userResponse.shop_description = user.shop_description
-      if (user.vendor_type) userResponse.vendor_type = user.vendor_type
-      if (user.whatsapp_phone) userResponse.whatsapp_phone = user.whatsapp_phone
-      if (user.shop_address) userResponse.shop_address = user.shop_address
-      if (user.rccm_number) userResponse.rccm_number = user.rccm_number
-      if (user.nif_number) userResponse.nif_number = user.nif_number
+      // Ajouter tous les champs non vides de l'utilisateur
+      const userFields = [
+        'phone', 'address', 'country', 'neighborhood', 'avatar',
+        'birth_date', 'id_number', 'personal_phone', 'residence_address',
+        'commercial_name', 'shop_name', 'shop_description', 'vendor_type',
+        'whatsapp_phone', 'shop_address', 'rccm_number', 'nif_number',
+        'payment_method', 'airtel_number', 'moov_number', 'account_holder_name',
+        'bank_name', 'shop_latitude', 'shop_longitude', 'facebook_url',
+        'instagram_url', 'tiktok_url', 'logo_url', 'cover_photo_url'
+      ]
 
-      return response.status(201).json({
+      userFields.forEach(field => {
+        if (user[field]) {
+          userResponse[field] = user[field]
+        }
+      })
+
+      const responseData: any = {
         success: true,
         message: 'Inscription réussie',
         user: userResponse,
         token,
-        ...(wallet && { wallet: { id: wallet.id, balance: wallet.balance, currency: wallet.currency } }),
-      })
+      }
+
+      if (wallet) {
+        responseData.wallet = {
+          id: wallet.id,
+          balance: wallet.balance,
+          currency: wallet.currency,
+        }
+      }
+
+      return response.status(201).json(responseData)
 
     } catch (error: any) {
       console.error('💥 [NewAccountController] ERREUR:', error.message)
+      console.error('💥 Stack:', error.stack)
 
       if (error.sql) {
-        console.error('🗄️ SQL:', error.sqlMessage)
+        console.error('🗄️ SQL Error:', error.sqlMessage)
+        console.error('🗄️ SQL Query:', error.sql)
       }
 
-      return response.status(400).json({
+      // Déterminer le code d'erreur approprié
+      let statusCode = 400
+      let errorMessage = 'Erreur lors de l\'inscription'
+
+      if (error.code === 'ER_DUP_ENTRY') {
+        errorMessage = 'Cet email ou numéro de téléphone existe déjà'
+        statusCode = 409
+      } else if (error.code === 'ER_BAD_FIELD_ERROR') {
+        errorMessage = 'Champ de base de données invalide'
+        console.error('🗄️ Champ invalide détecté - vérifiez les colonnes de la table users')
+      }
+
+      return response.status(statusCode).json({
         success: false,
-        message: 'Erreur lors de l\'inscription',
-        error: error.message,
+        message: errorMessage,
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Erreur serveur',
+        ...(process.env.NODE_ENV === 'development' && { stack: error.stack }),
       })
     }
   }
