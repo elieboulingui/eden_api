@@ -1,7 +1,7 @@
 // app/controllers/products_controller.ts
 
 import type { HttpContext } from '@adonisjs/core/http'
-import Product from '#models/product'
+import Product from '#models/product'  // ✅ Vérifiez que le chemin est correct
 
 export default class ProductsController {
   
@@ -33,11 +33,13 @@ export default class ProductsController {
         success: true,
         data: products,
       })
-    } catch (error) {
+    } catch (error: unknown) {  // ✅ Typage explicite
+      const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue'
+      
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des produits en promotion',
-        error: error.message,
+        error: errorMessage,
       })
     }
   }
@@ -64,12 +66,15 @@ export default class ProductsController {
       return response.json({
         success: true,
         data: products,
+        total: products.length,
       })
-    } catch (error) {
+    } catch (error: unknown) {  // ✅ Typage explicite
+      const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue'
+      
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des meilleures réductions',
-        error: error.message,
+        error: errorMessage,
       })
     }
   }
@@ -88,7 +93,7 @@ export default class ProductsController {
         .whereRaw('old_price > price')
         .where('is_archived', false)
         .where('status', 'active')
-        .where('is_on_sale', true) // Si vous avez un flag spécial Black Friday
+        .where('is_on_sale', true) // Flag spécial Black Friday
         .preload('user')
         .orderByRaw('((old_price - price) / old_price) DESC')
         .paginate(page, limit)
@@ -97,11 +102,13 @@ export default class ProductsController {
         success: true,
         data: products,
       })
-    } catch (error) {
+    } catch (error: unknown) {  // ✅ Typage explicite
+      const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue'
+      
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des produits Black Friday',
-        error: error.message,
+        error: errorMessage,
       })
     }
   }
