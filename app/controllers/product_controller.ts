@@ -1,7 +1,7 @@
 // app/controllers/products_controller.ts
 
 import type { HttpContext } from '@adonisjs/core/http'
-import Product from '#models/product'  // ✅ Vérifiez que le chemin est correct
+import Product from '#models/Product'  // ✅ Vérifiez que le chemin est correct
 
 export default class ProductsController {
   
