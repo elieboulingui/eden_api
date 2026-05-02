@@ -1,4 +1,5 @@
 @layout()
+
 <section class="hero" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%); border-radius: 24px; margin: 20px 30px; padding: 60px 50px;">
   <p class="text-sm uppercase tracking-[0.3em]" style="color: rgba(255,255,255,0.7); letter-spacing: 0.2em;">AdminMarket · back office</p>
   <h1 style="color: white; font-size: 48px; margin: 16px 0; font-weight: 700;">Tableau de bord administrateur</h1>
@@ -28,17 +29,6 @@
       <h3 class="promo-title" style="color: white; font-size: 24px; margin: 12px 0;">Campagnes & codes promo</h3>
       <p class="promo-desc" style="color: rgba(255,255,255,0.9);">Pilote les réductions et l'impact marketing.</p>
       <span class="promo-cta" style="background: white; color: #f5576c; display: inline-block; padding: 10px 20px; border-radius: 30px; margin-top: 16px;">Accéder →</span>
-    </div>
-  </a>
-  <a href="{{ route('dashboard.subscriptions') }}" class="tile tile-promo" style="background: linear-gradient(135deg, #8b5cf6, #ec4899); text-decoration: none; border-radius: 20px; overflow: hidden;">
-    <div class="promo-bg" style="background: transparent;">
-      <div class="promo-overlay" style="background: transparent;"></div>
-    </div>
-    <div class="promo-body" style="padding: 30px;">
-      <span class="promo-pill" style="background: rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 20px; font-size: 12px;">Abonnements</span>
-      <h3 class="promo-title" style="color: white; font-size: 24px; margin: 12px 0;">Gestion des boosts</h3>
-      <p class="promo-desc" style="color: rgba(255,255,255,0.9);">Suivez les abonnements et produits boostés.</p>
-      <span class="promo-cta" style="background: white; color: #8b5cf6; display: inline-block; padding: 10px 20px; border-radius: 30px; margin-top: 16px;">Accéder →</span>
     </div>
   </a>
 </section>
@@ -95,16 +85,16 @@
   </div>
 </section>
 
-<!-- Section Abonnements récents -->
+<!-- Section Abonnements -->
 <section class="home-section" style="padding: 0 30px 40px;">
   <header class="home-section-head" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px;">
     <h2 style="font-size: 24px; font-weight: 700;">👑 Abonnements récents</h2>
-    <a href="{{ route('dashboard.subscriptions') }}" style="color: #8b5cf6; text-decoration: none; font-size: 14px;">Voir tout →</a>
+    <p style="color: #64748b;">{{ totalSubscriptions ?? '0' }} abonnements</p>
   </header>
 
-  <div class="home-grid home-grid-products" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px;">
+  <div class="home-grid home-grid-products" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 24px;">
     @each(sub in recentSubscriptions)
-      <div class="tile tile-product" style="background: white; border-radius: 16px; padding: 16px; border-left: 4px solid {{ sub.statusColor }}; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+      <div class="tile tile-product subscription-card" style="background: white; border-radius: 16px; padding: 16px; border-left: 4px solid {{ sub.statusColor }}; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); cursor: pointer;" onclick="openSubscriptionModal('{{ sub.id }}')">
         <div class="tile-body">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
             <div>
@@ -139,7 +129,7 @@
             @if(sub.daysRemaining > 0)
               <div style="margin-top: 6px;">
                 <div style="background: #e2e8f0; border-radius: 10px; overflow: hidden; height: 4px;">
-                  <div style="width: {{ (sub.daysRemaining / 30) * 100 }}%; height: 4px; background: linear-gradient(90deg, #8b5cf6, #ec4899); border-radius: 10px;"></div>
+                  <div style="width: {{ ((sub.daysRemaining / 30) * 100) }}%; height: 4px; background: linear-gradient(90deg, #8b5cf6, #ec4899); border-radius: 10px;"></div>
                 </div>
                 <p style="font-size: 0.65rem; color: #8b5cf6; margin-top: 4px;">{{ sub.daysRemaining }} jours restants</p>
               </div>
@@ -161,9 +151,11 @@
             </div>
           </div>
           
-          <a href="/dashboards/subscriptions/{{ sub.id }}" style="display: block; text-align: center; margin-top: 12px; padding: 8px; background: #f3e8ff; color: #8b5cf6; border-radius: 10px; text-decoration: none; font-size: 0.75rem; font-weight: 500;">
-            🔍 Voir les détails
-          </a>
+          <div style="margin-top: 12px; text-align: center;">
+            <span style="display: inline-block; padding: 6px 12px; background: #f3e8ff; color: #8b5cf6; border-radius: 8px; font-size: 0.7rem; font-weight: 500;">
+              🔍 Cliquez pour voir les détails
+            </span>
+          </div>
         </div>
       </div>
     @else
@@ -198,9 +190,7 @@
             <span class="meta" style="background: #f1f5f9; padding: 4px 10px; border-radius: 20px; font-size: 12px;">💰 {{ order.total }}</span>
           </div>
 
-          <!-- Boutons d'action sur la commande -->
           <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-            <!-- Selecteur de statut (désactivé pour les commandes livrées ou annulées) -->
             <div style="flex: 1;">
               <select
                 data-order-id="{{ order.id }}"
@@ -215,7 +205,6 @@
               </select>
             </div>
 
-            <!-- Bouton Remboursement (désactivé pour les commandes livrées ou annulées) -->
             @if(isFinalized)
               <div style="background: #e2e8f0; color: #94a3b8; padding: 8px 12px; border-radius: 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; cursor: not-allowed;">
                 💰 Remboursement
@@ -227,7 +216,6 @@
             @endif
           </div>
 
-          <!-- Message d'information si la commande est finalisée -->
           @if(order.status === 'delivered')
             <p style="margin-top: 10px; font-size: 11px; color: #059669; background: #d1fae5; padding: 6px; border-radius: 8px; text-align: center;">
               ✅ Commande livrée - Statut verrouillé
@@ -303,6 +291,67 @@
   </div>
 </section>
 
+<!-- MODAL pour les détails de l'abonnement -->
+<div id="subscriptionModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; overflow-y: auto;">
+  <div style="background: white; border-radius: 24px; max-width: 800px; width: 90%; margin: 40px auto; max-height: 90vh; overflow-y: auto; position: relative;">
+    <div style="position: sticky; top: 0; background: white; padding: 20px 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+      <h2 style="margin: 0; font-size: 24px; font-weight: 700; color: #1e293b;">📋 Détails de l'abonnement</h2>
+      <button onclick="closeSubscriptionModal()" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #64748b;">&times;</button>
+    </div>
+    <div id="modalContent" style="padding: 24px;">
+      <div style="text-align: center; padding: 40px;">
+        <div class="loader" style="border: 3px solid #f3f3f3; border-top: 3px solid #8b5cf6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+        <p>Chargement des détails...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .subscription-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .subscription-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 20px -8px rgba(0,0,0,0.15);
+  }
+  
+  .tile-product:hover {
+    transform: translateY(-4px);
+    transition: all 0.2s ease;
+  }
+
+  select:hover:not([disabled]) {
+    border-color: #3b82f6;
+  }
+
+  select[disabled]:hover {
+    cursor: not-allowed;
+  }
+
+  @media (max-width: 768px) {
+    .hero {
+      padding: 40px 20px !important;
+      margin: 20px !important;
+    }
+    .hero h1 {
+      font-size: 32px !important;
+    }
+    .action-row {
+      padding: 0 20px 30px !important;
+    }
+    .home-section {
+      padding: 0 20px 30px !important;
+    }
+  }
+</style>
+
 <script>
 // Fonction pour mettre à jour le statut d'une commande
 async function updateOrderStatus(orderId, newStatus) {
@@ -348,61 +397,158 @@ async function updateOrderStatus(orderId, newStatus) {
   }
 }
 
+// Fonction pour ouvrir la modal avec les détails de l'abonnement
+async function openSubscriptionModal(subscriptionId) {
+  const modal = document.getElementById('subscriptionModal');
+  const modalContent = document.getElementById('modalContent');
+  
+  modal.style.display = 'flex';
+  modalContent.innerHTML = `
+    <div style="text-align: center; padding: 40px;">
+      <div class="loader" style="border: 3px solid #f3f3f3; border-top: 3px solid #8b5cf6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+      <p>Chargement des détails...</p>
+    </div>
+  `;
+  
+  try {
+    const response = await fetch(`/dashboards/api/subscriptions/${subscriptionId}`);
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      displaySubscriptionDetails(result.data);
+    } else {
+      modalContent.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;"><p>❌ Erreur lors du chargement des détails</p><button onclick="closeSubscriptionModal()" style="margin-top: 16px; padding: 8px 16px; background: #8b5cf6; color: white; border: none; border-radius: 8px; cursor: pointer;">Fermer</button></div>`;
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    modalContent.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;"><p>❌ Erreur réseau</p><button onclick="closeSubscriptionModal()" style="margin-top: 16px; padding: 8px 16px; background: #8b5cf6; color: white; border: none; border-radius: 8px; cursor: pointer;">Fermer</button></div>`;
+  }
+}
+
+// Fonction pour afficher les détails dans la modal
+function displaySubscriptionDetails(sub) {
+  const modalContent = document.getElementById('modalContent');
+  
+  const statusColor = sub.status === 'active' ? '#10b981' : sub.status === 'pending' ? '#f59e0b' : sub.status === 'cancelled' ? '#ef4444' : '#6b7280';
+  const statusIcon = sub.status === 'active' ? '✅' : sub.status === 'pending' ? '⏳' : sub.status === 'cancelled' ? '❌' : '📋';
+  const statusLabel = sub.status === 'active' ? 'Actif' : sub.status === 'pending' ? 'En attente' : sub.status === 'cancelled' ? 'Annulé' : sub.status === 'expired' ? 'Expiré' : sub.status;
+  
+  modalContent.innerHTML = `
+    <div style="margin-bottom: 24px;">
+      <div style="background: linear-gradient(135deg, #8b5cf6, #ec4899); border-radius: 16px; padding: 20px; color: white; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+          <div>
+            <p style="opacity: 0.8; margin: 0 0 4px;">Marchand</p>
+            <h3 style="margin: 0; font-size: 20px;">${escapeHtml(sub.merchantName)}</h3>
+            <p style="margin: 4px 0 0; opacity: 0.8;">${escapeHtml(sub.merchantEmail)}</p>
+          </div>
+          <span style="background: ${statusColor}20; color: ${statusColor}; padding: 6px 12px; border-radius: 20px; font-size: 14px;">
+            ${statusIcon} ${statusLabel}
+          </span>
+        </div>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-bottom: 20px;">
+        <div style="background: #f8fafc; border-radius: 12px; padding: 16px;">
+          <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Plan</p>
+          <p style="font-weight: 700; font-size: 18px; margin: 0;">${escapeHtml(sub.planName)}</p>
+        </div>
+        <div style="background: #f8fafc; border-radius: 12px; padding: 16px;">
+          <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Montant</p>
+          <p style="font-weight: 700; font-size: 18px; color: #8b5cf6; margin: 0;">${sub.price}</p>
+        </div>
+        <div style="background: #f8fafc; border-radius: 12px; padding: 16px;">
+          <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Durée</p>
+          <p style="font-weight: 700; font-size: 18px; margin: 0;">${sub.duration} jours</p>
+        </div>
+      </div>
+      
+      <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+          <div>
+            <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Type d'abonnement</p>
+            <p style="font-weight: 600; margin: 0;">${sub.subscriptionType === 'all_products' ? '🌍 Global (tous les produits)' : '📦 Produit unique'}</p>
+          </div>
+          <div>
+            <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Produits boostés</p>
+            <p style="font-weight: 600; margin: 0;">${sub.boostedProductsCount} / ${sub.maxProducts === 999999 ? '∞' : sub.maxProducts}</p>
+          </div>
+          <div>
+            <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Renouvellement auto</p>
+            <p style="font-weight: 600; margin: 0;">${sub.autoRenew ? '✅ Activé' : '❌ Désactivé'}</p>
+          </div>
+        </div>
+      </div>
+      
+      <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+          <div>
+            <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Date de début</p>
+            <p style="font-weight: 600; margin: 0;">${sub.startDate || 'Non démarré'}</p>
+          </div>
+          <div>
+            <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Date de fin</p>
+            <p style="font-weight: 600; margin: 0;">${sub.endDate || 'N/A'}</p>
+          </div>
+          <div>
+            <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Jours restants</p>
+            <p style="font-weight: 600; color: ${sub.daysRemaining > 0 ? '#10b981' : '#ef4444'}; margin: 0;">${sub.daysRemaining > 0 ? sub.daysRemaining + ' jours' : (sub.daysRemaining === 0 ? 'Expire aujourd\'hui' : 'Expiré')}</p>
+          </div>
+        </div>
+        ${sub.daysRemaining > 0 ? `
+          <div style="margin-top: 12px;">
+            <div style="background: #e2e8f0; border-radius: 10px; overflow: hidden; height: 6px;">
+              <div style="width: ${((sub.duration - sub.daysRemaining) / sub.duration * 100)}%; height: 6px; background: linear-gradient(90deg, #8b5cf6, #ec4899);"></div>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+      
+      <div style="display: flex; gap: 12px; justify-content: flex-end;">
+        <button onclick="closeSubscriptionModal()" style="padding: 10px 20px; background: #e2e8f0; border: none; border-radius: 10px; cursor: pointer;">Fermer</button>
+      </div>
+    </div>
+  `;
+}
+
+// Fonction pour fermer la modal
+function closeSubscriptionModal() {
+  document.getElementById('subscriptionModal').style.display = 'none';
+}
+
+// Fermer la modal en cliquant en dehors
+document.getElementById('subscriptionModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeSubscriptionModal();
+  }
+});
+
+// Fonction d'échappement pour éviter les injections XSS
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 // Attacher les événements aux selects après le chargement de la page
 document.addEventListener('DOMContentLoaded', function() {
   const selects = document.querySelectorAll('.status-select');
 
   selects.forEach((select) => {
-    // Vérifier si le select est désactivé (commandes livrées ou annulées)
     if (select.disabled) {
-      console.log('Select désactivé - commande finalisée');
       return;
     }
 
-    // Supprimer l'ancien écouteur s'il existe
     select.removeEventListener('change', select._listener);
-
-    // Créer le nouvel écouteur
     const listener = function() {
       const orderIdValue = this.getAttribute('data-order-id');
       const newStatus = this.value;
       updateOrderStatus(orderIdValue, newStatus);
     };
-
     select.addEventListener('change', listener);
     select._listener = listener;
   });
 });
 </script>
-
-<style>
-  .tile-product:hover {
-    transform: translateY(-4px);
-    transition: all 0.2s ease;
-  }
-
-  select:hover:not([disabled]) {
-    border-color: #3b82f6;
-  }
-
-  select[disabled]:hover {
-    cursor: not-allowed;
-  }
-
-  @media (max-width: 768px) {
-    .hero {
-      padding: 40px 20px !important;
-      margin: 20px !important;
-    }
-    .hero h1 {
-      font-size: 32px !important;
-    }
-    .action-row {
-      padding: 0 20px 30px !important;
-    }
-    .home-section {
-      padding: 0 20px 30px !important;
-    }
-  }
-</style>
 @end
