@@ -1128,4 +1128,63 @@ export default class DashboardViewController {
 
     return { eligible, reasons }
   }
+    /**
+   * API: Récupérer les détails d'un abonnement par ID (pour la modale)
+   */
+  public async apiGetSubscriptionById({ params, response }: HttpContext) {
+    try {
+      const subscription = await Subscription.query()
+        .where('id', params.id)
+        .preload('user')
+        .first()
+      
+      if (!subscription) {
+        return response.status(404).json({ 
+          success: false, 
+          message: 'Abonnement non trouvé' 
+        })
+      }
+      
+      // Calcul des jours restants
+      let daysRemaining = 0
+      if (subscription.endDate) {
+        daysRemaining = Math.max(0, Math.ceil(subscription.endDate.diff(DateTime.now(), 'days').days))
+      }
+      
+      return response.json({
+        success: true,
+        data: {
+          id: subscription.id,
+          merchantName: subscription.user?.full_name || subscription.user?.email || 'Marchand inconnu',
+          merchantEmail: subscription.user?.email || 'Email inconnu',
+          planName: SUBSCRIPTION_PLANS[subscription.plan]?.name || subscription.plan,
+          price: formatMoney(subscription.price),
+          duration: SUBSCRIPTION_PLANS[subscription.plan]?.duration || 0,
+          boostMultiplier: SUBSCRIPTION_PLANS[subscription.plan]?.boostMultiplier || 1,
+          status: subscription.status,
+          statusLabel: getSubscriptionStatusLabel(subscription.status),
+          statusColor: getSubscriptionStatusColor(subscription.status),
+          statusIcon: getSubscriptionStatusIcon(subscription.status),
+          subscriptionType: subscription.subscriptionType,
+          boostedProductsCount: subscription.boostedProductsCount || 0,
+          maxProducts: subscription.maxProducts || 0,
+          autoRenew: subscription.autoRenew,
+          startDate: subscription.startDate?.toFormat('dd LLL yyyy') || null,
+          endDate: subscription.endDate?.toFormat('dd LLL yyyy') || null,
+          daysRemaining: daysRemaining,
+          totalViews: subscription.totalViews || 0,
+          totalClicks: subscription.totalClicks || 0,
+          paymentReferenceId: subscription.paymentReferenceId,
+          paymentStatus: subscription.paymentStatus,
+          createdAt: subscription.createdAt?.toFormat('dd LLL yyyy HH:mm') || null,
+        }
+      })
+    } catch (error) {
+      console.error('❌ Erreur API subscription details:', error)
+      return response.status(500).json({ 
+        success: false, 
+        message: 'Erreur serveur' 
+      })
+    }
+  }
 }
