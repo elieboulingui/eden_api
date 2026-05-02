@@ -30,6 +30,17 @@
       <span class="promo-cta" style="background: white; color: #f5576c; display: inline-block; padding: 10px 20px; border-radius: 30px; margin-top: 16px;">Accéder →</span>
     </div>
   </a>
+  <a href="{{ route('dashboard.subscriptions') }}" class="tile tile-promo" style="background: linear-gradient(135deg, #8b5cf6, #ec4899); text-decoration: none; border-radius: 20px; overflow: hidden;">
+    <div class="promo-bg" style="background: transparent;">
+      <div class="promo-overlay" style="background: transparent;"></div>
+    </div>
+    <div class="promo-body" style="padding: 30px;">
+      <span class="promo-pill" style="background: rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 20px; font-size: 12px;">Abonnements</span>
+      <h3 class="promo-title" style="color: white; font-size: 24px; margin: 12px 0;">Gestion des boosts</h3>
+      <p class="promo-desc" style="color: rgba(255,255,255,0.9);">Suivez les abonnements et produits boostés.</p>
+      <span class="promo-cta" style="background: white; color: #8b5cf6; display: inline-block; padding: 10px 20px; border-radius: 30px; margin-top: 16px;">Accéder →</span>
+    </div>
+  </a>
 </section>
 
 <!-- Section Métriques -->
@@ -80,6 +91,83 @@
       </div>
     @else
       <p class="home-empty">Aucune commande enregistrée.</p>
+    @end
+  </div>
+</section>
+
+<!-- Section Abonnements récents -->
+<section class="home-section" style="padding: 0 30px 40px;">
+  <header class="home-section-head" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px;">
+    <h2 style="font-size: 24px; font-weight: 700;">👑 Abonnements récents</h2>
+    <a href="{{ route('dashboard.subscriptions') }}" style="color: #8b5cf6; text-decoration: none; font-size: 14px;">Voir tout →</a>
+  </header>
+
+  <div class="home-grid home-grid-products" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px;">
+    @each(sub in recentSubscriptions)
+      <div class="tile tile-product" style="background: white; border-radius: 16px; padding: 16px; border-left: 4px solid {{ sub.statusColor }}; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <div class="tile-body">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+            <div>
+              <h3 class="tile-title" style="font-size: 1rem; margin: 0; font-weight: 700;">{{ sub.merchantName }}</h3>
+              <p style="font-size: 0.7rem; color: #64748b; margin: 0;">{{ sub.merchantEmail }}</p>
+            </div>
+            <span class="status-pill" style="background: {{ sub.statusColor }}20; color: {{ sub.statusColor }}; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.7rem;">
+              {{ sub.statusIcon }} {{ sub.statusLabel }}
+            </span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin: 12px 0;">
+            <div>
+              <p style="font-size: 0.7rem; color: #64748b; margin: 0;">Plan</p>
+              <p style="font-weight: 600; font-size: 0.9rem; margin: 0;">{{ sub.plan }}</p>
+            </div>
+            <div>
+              <p style="font-size: 0.7rem; color: #64748b; margin: 0;">Montant</p>
+              <p style="font-weight: 700; color: #8b5cf6; margin: 0;">{{ sub.price }}</p>
+            </div>
+            <div>
+              <p style="font-size: 0.7rem; color: #64748b; margin: 0;">Type</p>
+              <p style="font-size: 0.8rem; margin: 0;">{{ sub.subscriptionType }}</p>
+            </div>
+          </div>
+          
+          <div style="background: #f8fafc; border-radius: 12px; padding: 8px; margin: 8px 0;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.7rem;">
+              <span>📅 Début: {{ sub.startDate }}</span>
+              <span>⏰ Fin: {{ sub.endDate }}</span>
+            </div>
+            @if(sub.daysRemaining > 0)
+              <div style="margin-top: 6px;">
+                <div style="background: #e2e8f0; border-radius: 10px; overflow: hidden; height: 4px;">
+                  <div style="width: {{ (sub.daysRemaining / 30) * 100 }}%; height: 4px; background: linear-gradient(90deg, #8b5cf6, #ec4899); border-radius: 10px;"></div>
+                </div>
+                <p style="font-size: 0.65rem; color: #8b5cf6; margin-top: 4px;">{{ sub.daysRemaining }} jours restants</p>
+              </div>
+            @elseif(sub.daysRemaining === 0)
+              <p style="font-size: 0.65rem; color: #f59e0b; margin-top: 4px;">⚠️ Expire aujourd'hui</p>
+            @else
+              <p style="font-size: 0.65rem; color: #ef4444; margin-top: 4px;">❌ Expiré</p>
+            @endif
+          </div>
+          
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <div style="flex: 1; background: #f1f5f9; border-radius: 8px; padding: 6px; text-align: center;">
+              <span style="font-size: 0.7rem; color: #64748b;">Produits boostés</span>
+              <p style="font-weight: 700; margin: 0;">{{ sub.boostedProductsCount }} / {{ sub.maxProducts === 999999 ? '∞' : sub.maxProducts }}</p>
+            </div>
+            <div style="flex: 1; background: #f1f5f9; border-radius: 8px; padding: 6px; text-align: center;">
+              <span style="font-size: 0.7rem; color: #64748b;">Renouvellement</span>
+              <p style="font-weight: 700; margin: 0;">{{ sub.autoRenew }}</p>
+            </div>
+          </div>
+          
+          <a href="/dashboards/subscriptions/{{ sub.id }}" style="display: block; text-align: center; margin-top: 12px; padding: 8px; background: #f3e8ff; color: #8b5cf6; border-radius: 10px; text-decoration: none; font-size: 0.75rem; font-weight: 500;">
+            🔍 Voir les détails
+          </a>
+        </div>
+      </div>
+    @else
+      <p class="home-empty">Aucun abonnement enregistré.</p>
     @end
   </div>
 </section>
