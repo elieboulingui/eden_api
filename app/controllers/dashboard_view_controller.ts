@@ -239,6 +239,7 @@ export default class DashboardViewController {
     const recentSubsList = recentSubscriptions.map((sub) => ({
       id: sub.id,
       merchantName: sub.user?.full_name || sub.user?.email || 'Marchand inconnu',
+      merchantEmail: sub.user?.email || 'Email inconnu',
       plan: SUBSCRIPTION_PLANS[sub.plan]?.name || sub.plan,
       price: formatMoney(sub.price),
       status: sub.status,
@@ -248,7 +249,11 @@ export default class DashboardViewController {
       startDate: sub.startDate ? sub.startDate.toFormat('dd LLL yyyy') : 'Non démarré',
       endDate: sub.endDate ? sub.endDate.toFormat('dd LLL yyyy') : 'N/A',
       createdAt: sub.createdAt?.toFormat('dd LLL yyyy') ?? 'Date inconnue',
-      subscriptionType: sub.subscriptionType === 'all_products' ? 'Global' : 'Produit unique',
+      subscriptionType: sub.subscriptionType === 'all_products' ? '🌍 Global' : '📦 Produit unique',
+      daysRemaining: sub.endDate ? Math.max(0, Math.ceil(sub.endDate.diff(DateTime.now(), 'days').days)) : 0,
+      boostedProductsCount: sub.boostedProductsCount || 0,
+      maxProducts: sub.maxProducts || 0,
+      autoRenew: sub.autoRenew ? '✅ Oui' : '❌ Non',
     }))
 
     // Catégories populaires
@@ -403,13 +408,13 @@ export default class DashboardViewController {
       }
 
       // Récupérer les produits boostés par cet abonnement (si single_product)
-      let boostedProduct = null
+      let boostedProduct: any = null
       if (subscription.subscriptionType === 'single_product' && subscription.productId) {
         boostedProduct = await Product.find(subscription.productId)
       }
 
       // Récupérer tous les produits boostés par ce marchand (si global)
-      let boostedProducts = []
+      let boostedProducts: any[] = []
       if (subscription.subscriptionType === 'all_products' && subscription.userId) {
         boostedProducts = await Product.query()
           .where('user_id', subscription.userId)
@@ -751,7 +756,7 @@ export default class DashboardViewController {
       expires_at: (coupon as any).expires_at?.toFormat('dd LLL yyyy') ?? 'Jamais',
     }))
 
-    const couponUsagesList = []
+    const couponUsagesList: any[] = []
     for (const order of couponUsages as any[]) {
       const coupon = couponMap.get(order.coupon_id)
       if (coupon) {
@@ -791,7 +796,7 @@ export default class DashboardViewController {
       }
     })
 
-    const topCouponUsers = []
+    const topCouponUsers: any[] = []
     for (const row of topUsers as any[]) {
       if (row.user) {
         topCouponUsers.push({
