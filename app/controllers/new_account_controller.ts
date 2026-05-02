@@ -1,5 +1,4 @@
 // app/controllers/new_account_controller.ts
-
 import User from '#models/user'
 import Wallet from '#models/wallet'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -62,31 +61,35 @@ export default class NewAccountController {
         // ========================================================
         // 🏢 INFORMATIONS DE L'ENTREPRISE (MARCHAND)
         // ========================================================
+        // ✅ Utilisation des colonnes EXISTANTES du modèle User
         
-        // Nom de l'entreprise
-        company_name: rawData.company_name || null,
+        // Nom commercial de l'entreprise
+        commercial_name: rawData.company_name || rawData.commercial_name || null,
         
-        // Secteur d'activité (ex: "Distribution alimentaire", "Tech", "Mode", etc.)
-        business_sector: rawData.business_sector || null,
+        // Nom de la boutique
+        shop_name: rawData.shop_name || rawData.company_name || null,
         
-        // Description des produits vendus
-        products_sold: rawData.products_sold || null,
+        // Description de la boutique / produits vendus
+        shop_description: rawData.products_sold || rawData.shop_description || null,
         
-        // Type d'activité: 'formel' (entreprise enregistrée) ou 'informel'
-        business_type: rawData.business_type || null,
+        // Type de vendeur (converti depuis business_type)
+        // business_type 'formel' -> 'boutique_physique'
+        // business_type 'informel' -> 'vendeur_ligne'
+        vendor_type: rawData.business_type === 'formel' 
+          ? 'boutique_physique' 
+          : (rawData.business_type === 'informel' ? 'vendeur_ligne' : rawData.vendor_type || null),
         
-        // Téléphone de l'entreprise
-        company_phone: rawData.company_phone || null,
+        // Téléphone WhatsApp pour l'entreprise
+        whatsapp_phone: rawData.company_phone || rawData.whatsapp_phone || null,
+        is_whatsapp_verified: rawData.is_whatsapp_verified || false,
         
-        // Email professionnel de l'entreprise
-        company_email: rawData.company_email || null,
+        // Adresse de la boutique
+        shop_address: rawData.business_address || rawData.shop_address || null,
         
-        // Adresse physique de l'entreprise
-        business_address: rawData.business_address || null,
-        
-        // 📄 Photo de la fiche d'identification (extrait RCCM, patente, licence)
-        // Uniquement pour les entreprises formelles
-        business_document_url: rawData.business_document_url || null,
+        // Documents d'identification de l'entreprise
+        rccm_number: rawData.rccm_number || null,
+        rccm_document_url: rawData.business_document_url || rawData.rccm_document_url || null,
+        nif_number: rawData.nif_number || null,
 
         // ========================================================
         // INFORMATIONS BANCAIRES (PAIEMENT)
@@ -109,15 +112,20 @@ export default class NewAccountController {
       // Log des informations de l'entreprise
       if (isMerchant) {
         console.log('🏢 [NewAccountController] ===== INFORMATIONS ENTREPRISE =====')
-        console.log('  - Nom entreprise:', userData.company_name)
-        console.log('  - Secteur d\'activité:', userData.business_sector)
-        console.log('  - Produits vendus:', userData.products_sold?.substring(0, 100))
-        console.log('  - Type:', userData.business_type === 'formel' ? '📋 Formel (entreprise enregistrée)' : '🏠 Informel')
-        console.log('  - Téléphone:', userData.company_phone)
-        console.log('  - Email pro:', userData.company_email)
-        console.log('  - Adresse:', userData.business_address)
-        if (userData.business_type === 'formel') {
-          console.log('  - 📄 Document fiche:', userData.business_document_url)
+        console.log('  - Nom commercial:', userData.commercial_name)
+        console.log('  - Nom boutique:', userData.shop_name)
+        console.log('  - Description:', userData.shop_description?.substring(0, 100))
+        console.log('  - Type vendeur:', userData.vendor_type)
+        console.log('  - WhatsApp:', userData.whatsapp_phone)
+        console.log('  - Adresse boutique:', userData.shop_address)
+        if (userData.rccm_document_url) {
+          console.log('  - 📄 Document RCCM:', userData.rccm_document_url)
+        }
+        if (userData.rccm_number) {
+          console.log('  - Numéro RCCM:', userData.rccm_number)
+        }
+        if (userData.nif_number) {
+          console.log('  - NIF:', userData.nif_number)
         }
         console.log('=============================================')
       }
@@ -171,27 +179,31 @@ export default class NewAccountController {
 
       console.log('🟢 [NewAccountController] ===== FIN INSCRIPTION =====')
 
+      // Construction de la réponse avec les champs existants
+      const userResponse: any = {
+        id: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        role: user.role,
+        verification_status: user.verification_status,
+      }
+
+      // Ajouter les champs entreprise s'ils existent (utilisant les colonnes du modèle)
+      if (user.commercial_name) userResponse.commercial_name = user.commercial_name
+      if (user.shop_name) userResponse.shop_name = user.shop_name
+      if (user.shop_description) userResponse.shop_description = user.shop_description
+      if (user.vendor_type) userResponse.vendor_type = user.vendor_type
+      if (user.whatsapp_phone) userResponse.whatsapp_phone = user.whatsapp_phone
+      if (user.shop_address) userResponse.shop_address = user.shop_address
+      if (user.rccm_number) userResponse.rccm_number = user.rccm_number
+      if (user.nif_number) userResponse.nif_number = user.nif_number
+
       return response.status(201).json({
         success: true,
         message: 'Inscription réussie',
-        user: {
-          id: user.id,
-          full_name: user.full_name,
-          email: user.email,
-          role: user.role,
-          // Informations entreprise
-          company_name: user.company_name,
-          business_sector: user.business_sector,
-          products_sold: user.products_sold,
-          business_type: user.business_type,
-          company_phone: user.company_phone,
-          company_email: user.company_email,
-          business_address: user.business_address,
-          business_document_url: user.business_document_url,
-          verification_status: user.verification_status,
-        },
+        user: userResponse,
         token,
-        ...(wallet && { wallet }),
+        ...(wallet && { wallet: { id: wallet.id, balance: wallet.balance, currency: wallet.currency } }),
       })
 
     } catch (error: any) {
