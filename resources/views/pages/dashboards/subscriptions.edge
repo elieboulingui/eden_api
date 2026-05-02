@@ -1,0 +1,219 @@
+@layout('layouts/admin')
+
+@section('content')
+<div class="min-h-screen bg-gray-50">
+  <!-- Header -->
+  <div class="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 text-white">
+    <div class="container mx-auto px-4 py-12">
+      <div class="flex items-center gap-3 mb-4">
+        <i class="fas fa-crown text-3xl"></i>
+        <div>
+          <h1 class="text-3xl font-bold">Gestion des Abonnements</h1>
+          <p class="text-white/80">Suivez et gérez tous les abonnements des marchands</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="container mx-auto px-4 -mt-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+      @each(stat in statsCards)
+      <div class="bg-white rounded-xl shadow-lg p-4 border-l-4" style="border-left-color: {{ stat.color }}">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-gray-500 text-sm">{{ stat.title }}</p>
+            <p class="text-2xl font-bold">{{ stat.value }}</p>
+            <p class="text-gray-400 text-xs mt-1">{{ stat.detail }}</p>
+          </div>
+          <div class="text-3xl">{{ stat.icon }}</div>
+        </div>
+      </div>
+      @end
+    </div>
+
+    <!-- Plan Breakdown -->
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+      <h2 class="text-xl font-bold mb-4">📊 Répartition par plan</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        @each(plan in planBreakdown)
+        <div class="bg-gray-50 rounded-lg p-4">
+          <div class="flex justify-between items-center mb-2">
+            <span class="font-semibold">{{ plan.name }}</span>
+            <span class="text-purple-600 font-bold">{{ plan.percent }}%</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+            <div class="bg-purple-600 h-2 rounded-full" style="width: {{ plan.percent }}%"></div>
+          </div>
+          <div class="flex justify-between text-sm">
+            <span>{{ plan.count }} abonnements</span>
+            <span class="text-green-600">{{ plan.revenue }}</span>
+          </div>
+        </div>
+        @end
+      </div>
+    </div>
+
+    <!-- Subscriptions Table -->
+    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center flex-wrap gap-4">
+        <h2 class="text-xl font-bold">📋 Liste des abonnements</h2>
+        <div class="flex gap-2 flex-wrap">
+          <input type="text" id="searchSub" placeholder="Rechercher..." class="px-3 py-1 border rounded-lg text-sm">
+          <select id="filterStatus" class="px-3 py-1 border rounded-lg text-sm">
+            <option value="">Tous les statuts</option>
+            <option value="active">Actifs</option>
+            <option value="pending">En attente</option>
+            <option value="cancelled">Annulés</option>
+            <option value="expired">Expirés</option>
+          </select>
+          <select id="filterPlan" class="px-3 py-1 border rounded-lg text-sm">
+            <option value="">Tous les plans</option>
+            <option value="daily">Journalier</option>
+            <option value="weekly">Hebdomadaire</option>
+            <option value="biweekly">2 Semaines</option>
+            <option value="monthly">Mensuel</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Marchand</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Montant</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Début</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fin</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Jours restants</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200">
+            @each(sub in subscriptions)
+            <tr class="hover:bg-gray-50 subscription-row" data-status="{{ sub.status }}" data-plan="{{ sub.planKey }}">
+              <td class="px-6 py-4">
+                <div>
+                  <p class="font-medium">{{ sub.merchantName }}</p>
+                  <p class="text-sm text-gray-500">{{ sub.merchantEmail }}</p>
+                </div>
+              </td>
+              <td class="px-6 py-4">
+                <span class="font-medium">{{ sub.plan }}</span>
+              </td>
+              <td class="px-6 py-4 text-sm">{{ sub.subscriptionType }}</td>
+              <td class="px-6 py-4 font-semibold text-purple-600">{{ sub.price }}</td>
+              <td class="px-6 py-4">
+                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: {{ sub.statusColor }}20; color: {{ sub.statusColor }}">
+                  {{ sub.statusIcon }} {{ sub.statusLabel }}
+                </span>
+              </td>
+              <td class="px-6 py-4 text-sm">{{ sub.startDate }}</td>
+              <td class="px-6 py-4 text-sm">{{ sub.endDate }}</td>
+              <td class="px-6 py-4">
+                @if(sub.daysRemaining > 0)
+                  <span class="text-green-600 font-medium">{{ sub.daysRemaining }} jours</span>
+                @elseif(sub.daysRemaining === 0)
+                  <span class="text-orange-500">Expire aujourd'hui</span>
+                @else
+                  <span class="text-red-500">Expiré</span>
+                @endif
+               </td>
+              <td class="px-6 py-4">
+                <a href="/dashboards/subscriptions/{{ sub.id }}" class="text-purple-600 hover:text-purple-800">
+                  <i class="fas fa-eye"></i> Détails
+                </a>
+               </td>
+             </tr>
+            @else
+            <tr>
+              <td colspan="9" class="px-6 py-8 text-center text-gray-500">
+                Aucun abonnement trouvé
+               </td>
+            </tr>
+            @end
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+        <p class="text-sm text-gray-500">Total: {{ subscriptions.length }} abonnements</p>
+        <div class="flex gap-2">
+          <button id="exportCSV" class="px-3 py-1 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600">
+            📥 Exporter CSV
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Filtrage des abonnements
+  const searchInput = document.getElementById('searchSub');
+  const statusFilter = document.getElementById('filterStatus');
+  const planFilter = document.getElementById('filterPlan');
+  const rows = document.querySelectorAll('.subscription-row');
+
+  function filterTable() {
+    const searchTerm = searchInput.value.toLowerCase();
+    const statusTerm = statusFilter.value;
+    const planTerm = planFilter.value;
+
+    rows.forEach(row => {
+      const merchantName = row.querySelector('td:first-child .font-medium')?.innerText.toLowerCase() || '';
+      const merchantEmail = row.querySelector('td:first-child .text-sm')?.innerText.toLowerCase() || '';
+      const rowStatus = row.dataset.status;
+      const rowPlan = row.dataset.plan;
+      
+      const matchesSearch = merchantName.includes(searchTerm) || merchantEmail.includes(searchTerm);
+      const matchesStatus = !statusTerm || rowStatus === statusTerm;
+      const matchesPlan = !planTerm || rowPlan === planTerm;
+      
+      row.style.display = matchesSearch && matchesStatus && matchesPlan ? '' : 'none';
+    });
+  }
+
+  searchInput.addEventListener('input', filterTable);
+  statusFilter.addEventListener('change', filterTable);
+  planFilter.addEventListener('change', filterTable);
+
+  // Export CSV
+  document.getElementById('exportCSV')?.addEventListener('click', function() {
+    const visibleRows = Array.from(rows).filter(row => row.style.display !== 'none');
+    
+    const headers = ['Marchand', 'Email', 'Plan', 'Type', 'Montant', 'Statut', 'Date début', 'Date fin', 'Jours restants'];
+    const csvData = [headers];
+    
+    visibleRows.forEach(row => {
+      const cells = row.querySelectorAll('td');
+      const rowData = [
+        cells[0]?.querySelector('.font-medium')?.innerText || '',
+        cells[0]?.querySelector('.text-sm')?.innerText || '',
+        cells[1]?.innerText || '',
+        cells[2]?.innerText || '',
+        cells[3]?.innerText || '',
+        cells[4]?.querySelector('span')?.innerText || '',
+        cells[5]?.innerText || '',
+        cells[6]?.innerText || '',
+        cells[7]?.innerText || ''
+      ];
+      csvData.push(rowData);
+    });
+    
+    const csvContent = csvData.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'abonnements.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  });
+</script>
+@endsection
