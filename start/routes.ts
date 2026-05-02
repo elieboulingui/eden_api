@@ -85,7 +85,7 @@ router.group(() => {
   router.get('promotions', [DashboardViewController, 'promotions']).as('dashboard.promotions')
     router.get('subscriptions', [DashboardViewController, 'subscriptions']).as('dashboard.subscriptions')
   router.get('subscriptions/:id', [DashboardViewController, 'subscriptionDetails']).as('dashboard.subscription.details')
-  
+  // Dans le groupe des routes dashboard, ajoutez :
   // Routes API pour les abonnements
   router.get('api/subscriptions/all', [DashboardViewController, 'apiGetAllSubscriptions']).as('api.subscriptions.all')
   router.get('api/subscriptions/merchant/:userId', [DashboardViewController, 'apiGetMerchantSubscriptions']).as('api.subscriptions.merchant')
