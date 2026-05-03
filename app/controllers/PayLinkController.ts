@@ -13,7 +13,6 @@ import axios from 'axios'
 const CALLBACK_URL_CODE = '9ZOXW'
 const MYPVIT_CODE_URL = 'MTX1MTKQQCULKA3W'
 
-// Types de lien disponibles
 const LINK_TYPES: Record<string, string> = {
   'web': 'WEB',
   'visa': 'VISA_MASTERCARD',
@@ -71,14 +70,10 @@ export default class PayLinkController {
     return user
   }
 
-  // ✅ MODIFIÉ : checkStock retourne maintenant les items valides + les warnings
-  private async checkStock(items: any[], useCart: boolean, userId?: string): Promise<{ 
-    ok: boolean
-    errors: string[]
-    warnings: string[]
+  private async checkStock(items: any[], useCart: boolean, userId?: string): Promise<{
     validItems: any[]
+    warnings: string[]
   }> {
-    const errors: string[] = []
     const warnings: string[] = []
     const validItems: any[] = []
     let toCheck: any[] = []
@@ -98,30 +93,26 @@ export default class PayLinkController {
       
       const p = await Product.findBy('id', item.id)
       
-      // ✅ Si le produit n'existe pas → WARNING, pas d'erreur bloquante
       if (!p) {
-        warnings.push(`Produit ${item.id} introuvable - ignoré`)
+        warnings.push(`Produit ${item.id.substring(0, 8)}... introuvable - ignoré`)
         continue
       }
       
-      // ✅ Si le produit est archivé → WARNING
       if (p.isArchived) {
         warnings.push(`${p.name} - Archivé - ignoré`)
         continue
       }
       
-      // ✅ Si le stock est insuffisant → ERROR bloquant
       if (p.stock <= 0) {
-        errors.push(`${p.name} - Rupture de stock`)
+        warnings.push(`${p.name} - Rupture de stock - ignoré`)
         continue
       }
       
       if (p.stock < item.qty) {
-        errors.push(`${p.name}: stock disponible ${p.stock} < ${item.qty} demandé`)
+        warnings.push(`${p.name}: stock ${p.stock} < ${item.qty} - ignoré`)
         continue
       }
       
-      // ✅ Produit valide
       validItems.push({
         productId: p.id,
         quantity: item.qty || 1,
@@ -130,12 +121,7 @@ export default class PayLinkController {
       })
     }
 
-    return { 
-      ok: errors.length === 0 && validItems.length > 0, 
-      errors,
-      warnings,
-      validItems
-    }
+    return { validItems, warnings }
   }
 
   private async decrementStock(productId: string, qty: number): Promise<void> {
@@ -147,7 +133,6 @@ export default class PayLinkController {
     }
   }
 
-  // ✅ MODIFIÉ : buildItems reçoit directement les validItems
   private async buildItems(order: Order, validItems: any[]): Promise<{ subtotal: number; count: number }> {
     let subtotal = 0
     let count = 0
@@ -186,40 +171,30 @@ export default class PayLinkController {
         'customerEmail', 'customerPhone', 'items', 'linkType', 'notes'
       ])
 
-      if (!payload.customerAccountNumber) {
-        return response.status(400).json({
-          success: false,
-          message: 'Numéro de téléphone requis'
-        })
-      }
+      // ✅ Si pas de numéro, on met un fallback pour que ça passe
+      const phone = payload.customerAccountNumber || payload.customerPhone || '060000000'
+      
+      console.log(`📱 Phone reçu: ${phone}`)
 
-      const operatorInfo = this.detectOperatorGabon(payload.customerAccountNumber)
+      const operatorInfo = this.detectOperatorGabon(phone)
       const linkType = payload.linkType || 'web'
       const linkTypeCode = LINK_TYPES[linkType] || 'WEB'
 
       console.log(`📱 Opérateur: ${operatorInfo.name} | Compte: ${operatorInfo.accountCode}`)
       console.log(`🔗 Type de lien: ${linkTypeCode}`)
 
-      // ✅ Vérification stock
+      // ✅ Vérification stock - on garde juste les valides
       const useCart = !!payload.userId && (!payload.items || payload.items.length === 0)
-      const stock = await this.checkStock(payload.items || [], useCart, payload.userId)
+      const { validItems, warnings } = await this.checkStock(payload.items || [], useCart, payload.userId)
       
-      // ✅ Si aucun produit valide → erreur
-      if (!stock.ok) {
-        return response.status(400).json({
-          success: false,
-          message: stock.errors.length > 0 
-            ? stock.errors.join(', ') 
-            : 'Aucun produit valide dans la commande',
-          errors: stock.errors,
-          warnings: stock.warnings
-        })
+      if (warnings.length > 0) {
+        console.log('⚠️ Produits ignorés:', warnings)
       }
 
-      // ✅ Log des warnings
-      if (stock.warnings.length > 0) {
-        console.log('⚠️ Produits ignorés:', stock.warnings)
-      }
+      // ✅ Si vraiment 0 produit valide ET 0 items envoyés → on crée une commande vide avec frais de livraison
+      // Sinon on continue avec ce qu'on a
+      const hasItems = validItems.length > 0
+      const deliveryPrice = payload.deliveryPrice || 0
 
       // Créer ou récupérer l'utilisateur
       let userId = payload.userId
@@ -227,12 +202,11 @@ export default class PayLinkController {
         const newUser = await this.getOrCreateUser({
           customerName: payload.customerName || 'Client',
           customerEmail: payload.customerEmail || '',
-          customerPhone: payload.customerPhone || payload.customerAccountNumber,
+          customerPhone: payload.customerPhone || phone,
         })
         userId = newUser.id
       }
 
-      const deliveryPrice = payload.deliveryPrice || 1
       const orderNumber = generateOrderNumber()
 
       // Créer la commande
@@ -240,20 +214,28 @@ export default class PayLinkController {
         user_id: userId,
         order_number: orderNumber,
         status: 'pending',
-        total: 0,
+        total: deliveryPrice,
         subtotal: 0,
         shipping_cost: deliveryPrice,
         delivery_method: payload.deliveryMethod || 'standard',
         customer_name: payload.customerName || 'Client',
-        customer_phone: payload.customerAccountNumber,
+        customer_phone: phone,
         payment_method: `link_${linkType}_${operatorInfo.name.toLowerCase()}`,
         customer_email: payload.customerEmail || 'invite@email.com',
         shipping_address: payload.shippingAddress || 'non renseigné',
         notes: payload.notes || null,
       })
 
-      // ✅ Ajouter SEULEMENT les articles valides
-      const { subtotal, count } = await this.buildItems(order, stock.validItems)
+      let subtotal = 0
+      let count = 0
+
+      // ✅ Ajouter les articles valides SEULEMENT s'il y en a
+      if (hasItems) {
+        const result = await this.buildItems(order, validItems)
+        subtotal = result.subtotal
+        count = result.count
+      }
+
       const total = subtotal + deliveryPrice
       order.subtotal = subtotal
       order.total = total
@@ -262,14 +244,14 @@ export default class PayLinkController {
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
-        description: `🔗 Lien ${linkTypeCode} - ${operatorInfo.name} - ${count} articles${stock.warnings.length > 0 ? ` (${stock.warnings.length} ignorés)` : ''}`,
+        description: `🔗 Lien ${linkTypeCode} - ${operatorInfo.name} - ${count} articles${warnings.length > 0 ? ` (${warnings.length} ignorés)` : ''}`,
         tracked_at: DateTime.now(),
       })
 
       // Renouveler le secret si nécessaire
-      const secret = await MypvitSecretService.getSecret(payload.customerAccountNumber)
+      const secret = await MypvitSecretService.getSecret(phone)
       if (!secret) {
-        await MypvitSecretService.renewSecret(payload.customerAccountNumber)
+        await MypvitSecretService.renewSecret(phone)
       }
 
       // Générer le lien de paiement
@@ -288,11 +270,10 @@ export default class PayLinkController {
         failed_redirection_url_code: 'YTJEI',
       }
 
-      // customer_account_number : obligatoire pour VISA_MASTERCARD et RESTLINK, optionnel pour WEB
       if (linkTypeCode === 'VISA_MASTERCARD' || linkTypeCode === 'RESTLINK') {
-        linkPayload.customer_account_number = payload.customerAccountNumber
-      } else if (linkTypeCode === 'WEB' && payload.customerAccountNumber) {
-        linkPayload.customer_account_number = payload.customerAccountNumber
+        linkPayload.customer_account_number = phone
+      } else if (linkTypeCode === 'WEB' && phone) {
+        linkPayload.customer_account_number = phone
       }
 
       console.log('📤 Payload Mypvit:', JSON.stringify(linkPayload, null, 2))
@@ -303,7 +284,7 @@ export default class PayLinkController {
         {
           headers: {
             'Content-Type': 'application/json',
-            'X-Secret': await MypvitSecretService.getSecret(payload.customerAccountNumber),
+            'X-Secret': await MypvitSecretService.getSecret(phone),
             'X-Callback-MediaType': 'application/json',
           }
         }
@@ -358,8 +339,6 @@ export default class PayLinkController {
             type: linkTypeCode,
             amount: total,
           },
-          // ✅ Ajouter les warnings pour informer le frontend
-          warnings: stock.warnings.length > 0 ? stock.warnings : undefined
         },
       })
 
