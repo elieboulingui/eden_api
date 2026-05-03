@@ -553,7 +553,7 @@ router.group(() => {
   // ----------------------------------------------------------
   // CALLBACK MYPVIT (ROUTE ADDITIONNELLE)
   // ----------------------------------------------------------
-  router.post('/callbacks/mypvit', [CallbackController, 'handle'])
+  router.post('/callbacks/mypvit', [CallbacksController, 'handle'])
 
   // ----------------------------------------------------------
   // PAIEMENT MOBILE MONEY (ROUTE ADDITIONNELLE)
