@@ -1,9 +1,9 @@
+// start/routes.ts
 import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
 const RetraitController = () => import('#controllers/retraitController')
-const PayvitController = () => import('#controllers/ayvitController'
 const ProductController = () => import('#controllers/product_controller')
 import RenduMoneyCallbackController from '#controllers/RenduMoneyCallbackController'
 const RenduMoneyCallback = new RenduMoneyCallbackController()
