@@ -13,7 +13,6 @@ import axios from 'axios'
 const CALLBACK_URL_CODE = '9ZOXW'
 const MYPVIT_CODE_URL = 'MTX1MTKQQCULKA3W'
 
-// Types de lien disponibles
 const LINK_TYPES: Record<string, string> = {
   'web': 'WEB',
   'visa': 'VISA_MASTERCARD',
@@ -71,7 +70,7 @@ export default class PayLinkController {
     return user
   }
 
-  // ✅ Vérification stock SANS décrémenter (le callback s'en chargera)
+  // ✅ Vérification stock SANS décrémenter
   private async checkStock(items: any[], useCart: boolean, userId?: string): Promise<{ 
     ok: boolean
     errors: string[]
@@ -98,19 +97,16 @@ export default class PayLinkController {
       
       const p = await Product.findBy('id', item.id)
       
-      // Si le produit n'existe pas → WARNING
       if (!p) {
         warnings.push(`Produit ${item.id} introuvable - ignoré`)
         continue
       }
       
-      // Si le produit est archivé → WARNING
       if (p.isArchived) {
         warnings.push(`${p.name} - Archivé - ignoré`)
         continue
       }
       
-      // Si le stock est insuffisant → ERROR bloquant (on vérifie juste, on ne décrémente pas)
       if (p.stock <= 0) {
         errors.push(`${p.name} - Rupture de stock`)
         continue
@@ -121,7 +117,6 @@ export default class PayLinkController {
         continue
       }
       
-      // Produit valide (on ne décrémente PAS le stock ici)
       validItems.push({
         productId: p.id,
         quantity: item.qty || 1,
@@ -138,7 +133,7 @@ export default class PayLinkController {
     }
   }
 
-  // ✅ Ajout des items SANS décrémenter le stock
+  // ✅ Ajout items SANS décrémenter le stock
   private async buildItems(order: Order, validItems: any[]): Promise<{ subtotal: number; count: number }> {
     let subtotal = 0
     let count = 0
@@ -159,9 +154,7 @@ export default class PayLinkController {
         subtotal: itemTotal
       })
       
-      // ❌ NE PAS DÉCRÉMENTER LE STOCK ICI
-      // Le callback Mypvit s'en chargera après confirmation du paiement
-      
+      // ❌ PAS DE DÉCRÉMENT ICI - Le callback s'en charge
       count++
     }
 
@@ -197,7 +190,6 @@ export default class PayLinkController {
       const useCart = !!payload.userId && (!payload.items || payload.items.length === 0)
       const stock = await this.checkStock(payload.items || [], useCart, payload.userId)
       
-      // Si aucun produit valide → erreur
       if (!stock.ok) {
         return response.status(400).json({
           success: false,
@@ -209,7 +201,6 @@ export default class PayLinkController {
         })
       }
 
-      // Log des warnings
       if (stock.warnings.length > 0) {
         console.log('⚠️ Produits ignorés:', stock.warnings)
       }
@@ -228,12 +219,12 @@ export default class PayLinkController {
       const deliveryPrice = payload.deliveryPrice || 0
       const orderNumber = generateOrderNumber()
 
-      // Créer la commande avec statut "pending_payment"
+      // ✅ Créer la commande - PAS de stock_reserved
       const order = await Order.create({
         user_id: userId,
         order_number: orderNumber,
-        status: 'pending_payment', // ✅ Statut initial = en attente de paiement
-        total: 0, // Sera mis à jour après ajout des items
+        status: 'pending_payment',
+        total: 0,
         subtotal: 0,
         shipping_cost: deliveryPrice,
         delivery_method: payload.deliveryMethod || 'standard',
@@ -243,8 +234,6 @@ export default class PayLinkController {
         customer_email: payload.customerEmail || 'invite@email.com',
         shipping_address: payload.shippingAddress || 'non renseigné',
         notes: payload.notes || null,
-        // ✅ Marquer que le stock n'a PAS encore été décrémenté
-        stock_reserved: false, // Le callback passera à true après décrément
       })
 
       // Ajouter les items (sans décrémenter le stock)
@@ -276,7 +265,7 @@ export default class PayLinkController {
         product: orderNumber.substring(0, 15),
         reference: `REF${Date.now()}`.substring(0, 15),
         service: linkTypeCode,
-        callback_url_code: CALLBACK_URL_CODE, // ✅ Code pour le callback
+        callback_url_code: CALLBACK_URL_CODE,
         merchant_operation_account_code: operatorInfo.accountCode,
         transaction_type: 'PAYMENT',
         owner_charge: 'MERCHANT',
@@ -284,7 +273,6 @@ export default class PayLinkController {
         failed_redirection_url_code: 'YTJEI',
       }
 
-      // customer_account_number : obligatoire pour VISA_MASTERCARD et RESTLINK, optionnel pour WEB
       if (linkTypeCode === 'VISA_MASTERCARD' || linkTypeCode === 'RESTLINK') {
         linkPayload.customer_account_number = payload.customerAccountNumber
       } else if (linkTypeCode === 'WEB' && payload.customerAccountNumber) {
@@ -314,13 +302,11 @@ export default class PayLinkController {
         url: linkResult.url
       })
 
-      // Mettre à jour la commande avec la référence de paiement
       if (linkResult.merchant_reference_id) {
         order.payment_reference_id = linkResult.merchant_reference_id
         order.payment_operator_simple = operatorInfo.name
         order.payment_amount = total
         order.payment_initiated_at = DateTime.now()
-        // ✅ Le statut reste "pending_payment" jusqu'au callback
         await order.save()
       }
 
@@ -356,10 +342,7 @@ export default class PayLinkController {
             type: linkTypeCode,
             amount: total,
           },
-          // Informer le frontend des warnings
           warnings: stock.warnings.length > 0 ? stock.warnings : undefined,
-          // ✅ Indiquer que le stock sera décrémenté par le callback
-          stockDecrementInfo: 'Le stock sera décrémenté après confirmation du paiement par Mypvit'
         },
       })
 
@@ -379,7 +362,7 @@ export default class PayLinkController {
   }
 
   // ==================== CALLBACK MYPVIT ====================
-  // ✅ C'est ICI que le stock sera décrémenté
+  // ✅ C'est ici que le stock sera décrémenté
   async callback({ request, response }: HttpContext) {
     console.log('📥 ========== CALLBACK MYPVIT ==========')
     
@@ -414,8 +397,8 @@ export default class PayLinkController {
       if (isSuccess) {
         console.log('✅ Paiement réussi !')
         
-        // ✅ C'EST ICI QU'ON DÉCRÉMENTE LE STOCK
-        if (!order.stock_reserved) {
+        // ✅ DÉCRÉMENTER LE STOCK ICI
+        if (order.status === 'pending_payment') {
           console.log('📦 Décrémentation du stock...')
           
           for (const item of order.items) {
@@ -426,24 +409,22 @@ export default class PayLinkController {
                 product.isArchived = true
               }
               await product.save()
-              console.log(`✅ Stock ${product.name}: ${product.stock + item.quantity} → ${product.stock}`)
+              console.log(`✅ Stock ${product.name}: décrémenté de ${item.quantity}`)
             }
           }
-          
-          order.stock_reserved = true
         }
 
-        // Mettre à jour la commande
-        order.status = 'confirmed'
+        // ✅ Mettre à jour la commande - utiliser les champs EXISTANTS
+        order.status = 'paid' // ✅ Utiliser 'paid' au lieu de 'confirmed'
         order.payment_status = 'paid'
-        order.payment_confirmed_at = DateTime.now()
+        order.payment_completed_at = DateTime.now() // ✅ payment_completed_at existe déjà
         order.payment_transaction_id = callbackData.transaction_id || callbackData.reference_id
         await order.save()
 
         // Tracking
         await OrderTracking.create({
           order_id: order.id,
-          status: 'confirmed',
+          status: 'paid',
           description: '✅ Paiement confirmé par callback Mypvit - Stock décrémenté',
           tracked_at: DateTime.now(),
         })
@@ -457,7 +438,7 @@ export default class PayLinkController {
       } else if (isFailed) {
         console.log('❌ Paiement échoué')
         
-        // ✅ PAS de décrément de stock, la commande reste en attente ou est annulée
+        // ✅ PAS de décrément de stock
         order.status = 'payment_failed'
         order.payment_status = 'failed'
         await order.save()
