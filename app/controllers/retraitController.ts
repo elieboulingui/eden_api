@@ -1,11 +1,11 @@
-// app/controllers/give_change_controller.ts
+// app/controllers/retraitController.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import MypvitSecretService from '../services/mypvit_secret_service.js'
 import MypvitTransactionService from '../services/mypvit_transaction_service.js'
 
 const MIN_WITHDRAWAL_AMOUNT = 150
 
-export default class GiveChangeController {
+export default class RetraitController {
 
   private getOperatorInfo(phone: string): { 
     operator: string; operatorCode: string; accountCode: string 
@@ -15,14 +15,14 @@ export default class GiveChangeController {
     if (clean.startsWith('241')) local = clean.substring(3)
     if (local.startsWith('0')) local = local.substring(1)
 
-    if (local.startsWith('6')) {
-      return { operator: 'MOOV_MONEY', operatorCode: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
+    if (local.startsWith('7')) {
+      return { operator: 'AIRTEL_MONEY', operatorCode: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
     }
-    return { operator: 'AIRTEL_MONEY', operatorCode: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
+    return { operator: 'MOOV_MONEY', operatorCode: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
   }
 
-  async giveChange({ request, response }: HttpContext) {
-    console.log('💰 ========== GIVE CHANGE DEMANDÉ ==========')
+  async retrait({ request, response }: HttpContext) {
+    console.log('🏧 ========== RETRAIT DEMANDÉ ==========')
     
     try {
       const { amount, customer_account_number } = request.body()
@@ -50,7 +50,7 @@ export default class GiveChangeController {
       await MypvitSecretService.renewSecret(customer_account_number)
       console.log('🔐 Secret MyPVit renouvelé')
 
-      const reference = `GCH${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 5)}`.substring(0, 20)
+      const reference = `RET${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 5)}`.substring(0, 20)
 
       const paymentResult = await (MypvitTransactionService as any).processGiveChange({
         amount: Number(amount),
@@ -90,7 +90,7 @@ export default class GiveChangeController {
       }
 
     } catch (error: any) {
-      console.error('🔴 Erreur give-change:', error.message)
+      console.error('🔴 Erreur retrait:', error.message)
       return response.status(500).json({ 
         success: false, 
         message: 'Erreur interne', 
