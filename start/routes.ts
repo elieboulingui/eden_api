@@ -543,11 +543,26 @@ router.group(() => {
   router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check'])
     .as('check_payment_status.check_by_reference')
 
+  // ----------------------------------------------------------
+  // PRODUITS SPÉCIAUX
+  // ----------------------------------------------------------
   router.get('/products/on-sale', [ProductController, 'onSale'])
-router.get('/products/biggest-discounts', [ProductController, 'biggestDiscounts'])
-router.get('/products/black-friday', [ProductController, 'blackFriday'])
-  router.post('/api/callbacks/mypvit', [CallbackController, 'handle'])
-router.post('/api/mobile-moneys/pay', [PayMobileMoneyController, 'pay'])
-router.post('/api/retrait', [RetraitController, 'retrait'])
+  router.get('/products/biggest-discounts', [ProductController, 'biggestDiscounts'])
+  router.get('/products/black-friday', [ProductController, 'blackFriday'])
+
+  // ----------------------------------------------------------
+  // CALLBACK MYPVIT (ROUTE ADDITIONNELLE)
+  // ----------------------------------------------------------
+  router.post('/callbacks/mypvit', [CallbackController, 'handle'])
+
+  // ----------------------------------------------------------
+  // PAIEMENT MOBILE MONEY (ROUTE ADDITIONNELLE)
+  // ----------------------------------------------------------
+  router.post('/mobile-moneys/pay', [PayMobileMoneyController, 'pay'])
+
+  // ----------------------------------------------------------
+  // RETRAIT (ROUTE ADDITIONNELLE)
+  // ----------------------------------------------------------
+  router.post('/retrait', [RetraitController, 'retrait'])
 
 }).prefix('/api')
