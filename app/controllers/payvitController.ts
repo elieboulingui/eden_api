@@ -4,7 +4,7 @@ import MypvitSecretService from '../services/mypvit_secret_service.js'
 import MypvitTransactionService from '../services/mypvit_transaction_service.js'
 import MypvitKYCService from '../services/mypvit_kyc_service.js'
 
-const CALLBACK_URL_CODE = '9ZOXW'
+const CALLBACK_URL_CODE = 'U0CYJ'
 
 export default class PayMobileMoneyController {
 
