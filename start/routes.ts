@@ -106,7 +106,7 @@ router.group(() => {
   // ----------------------------------------------------------
   router.post('/client/register', [NewAccountController, 'store']).as('api.register')
   router.post('/client/login', [SessionController, 'store']).as('api.login')
-  router.post('/login', [SessionController, 'store'])
+  router.post('/login', [SessionController, 'store']).as('api.login.simple')
   router.post('/client/logout', [SessionController, 'destroy']).as('api.logout')
   router.put('/profile/update', [SessionController, 'update']).as('api.profile.update')
   router.put('/profile/password', [SessionController, 'changePassword']).as('api.profile.password')
@@ -180,7 +180,7 @@ router.group(() => {
   // ----------------------------------------------------------
   // CATÉGORIES
   // ----------------------------------------------------------
-  router.post('/contact', [ContactsController, 'store'])
+  router.post('/contact', [ContactsController, 'store']).as('contact.store')
   router.get('/categories', [CategoriesController, 'index']).as('categories.index')
   router.get('/categories/:name', [CategoriesController, 'show']).as('categories.show')
   router.post('/categories', [CategoriesController, 'store']).as('categories.store')
@@ -377,17 +377,17 @@ router.group(() => {
   // ----------------------------------------------------------
   // AVIS (REVIEWS)
   // ----------------------------------------------------------
-  router.get('/reviews/product/:productId', [ReviewsController, 'getProductReviews'])
-  router.get('/reviews/merchant/:merchantId', [ReviewsController, 'getMerchantReviews'])
-  router.get('/reviews/user/:userId', [ReviewsController, 'myReviews'])
-  router.post('/reviews/:id/helpful', [ReviewsController, 'markHelpful'])
-  router.post('/reviews', [ReviewsController, 'store'])
-  router.put('/reviews/:id', [ReviewsController, 'update'])
-  router.delete('/reviews/:id', [ReviewsController, 'destroy'])
-  router.get('/reviews', [ReviewsController, 'index'])
-  router.get('/reviews/:id', [ReviewsController, 'show'])
-  router.patch('/reviews/:id/approve', [ReviewsController, 'approve'])
-  router.patch('/reviews/:id/reject', [ReviewsController, 'reject'])
+  router.get('/reviews/product/:productId', [ReviewsController, 'getProductReviews']).as('reviews.product')
+  router.get('/reviews/merchant/:merchantId', [ReviewsController, 'getMerchantReviews']).as('reviews.merchant')
+  router.get('/reviews/user/:userId', [ReviewsController, 'myReviews']).as('reviews.user')
+  router.post('/reviews/:id/helpful', [ReviewsController, 'markHelpful']).as('reviews.helpful')
+  router.post('/reviews', [ReviewsController, 'store']).as('reviews.store')
+  router.put('/reviews/:id', [ReviewsController, 'update']).as('reviews.update')
+  router.delete('/reviews/:id', [ReviewsController, 'destroy']).as('reviews.destroy')
+  router.get('/reviews', [ReviewsController, 'index']).as('reviews.index')
+  router.get('/reviews/:id', [ReviewsController, 'show']).as('reviews.show')
+  router.patch('/reviews/:id/approve', [ReviewsController, 'approve']).as('reviews.approve')
+  router.patch('/reviews/:id/reject', [ReviewsController, 'reject']).as('reviews.reject')
 
   // Routes API Shop
   router.get('/shop', [ShopController, 'apiIndex']).as('api.shop.index')
@@ -444,7 +444,7 @@ router.group(() => {
   router.get('/mypvit/all-balances', [MypvitController as any, 'getAllBalances']).as('mypvit.all-balances')
 
   // --- CALLBACK MYPVIT COMMANDES ---
-  router.post('/mypvit/callback', [CallbackController as any, 'handle'])
+  router.post('/mypvit/callback', [CallbackController as any, 'handle']).as('mypvit.callback.orders')
 
   // ✅ --- CALLBACK MYPVIT RENDU-MONEY (GIVE CHANGE) ---
   router.post('/mypvit/callback/rendu-money', (ctx) => RenduMoneyCallback.handle(ctx))
@@ -452,7 +452,9 @@ router.group(() => {
 
   // 🆕 --- CALLBACK MYPVIT ABONNEMENTS ---
   router.post('/mypvit/callback/subscription', (ctx) => SubscriptionCallback.handle(ctx))
+    .as('mypvit.callback.subscription')
   router.post('/mypvit/callback/subscription/test', (ctx) => SubscriptionCallback.test(ctx))
+    .as('mypvit.callback.subscription.test')
 
   // ============================================================
   // === ROUTES PAIEMENT MYPVIT =================================
@@ -471,34 +473,34 @@ router.group(() => {
   // ============================================================
 
   // Voir tous les plans d'abonnement disponibles
-  router.get('/subscriptions/plans', (ctx) => Subscription.getPlans(ctx))
+  router.get('/subscriptions/plans', (ctx) => Subscription.getPlans(ctx)).as('subscriptions.plans')
 
   // Voir l'abonnement actif d'un marchand
-  router.get('/subscriptions/active/:userId', (ctx) => Subscription.getActiveSubscription(ctx))
+  router.get('/subscriptions/active/:userId', (ctx) => Subscription.getActiveSubscription(ctx)).as('subscriptions.active')
 
   // Voir l'historique des abonnements d'un marchand
-  router.get('/subscriptions/history/:userId', (ctx) => Subscription.getHistory(ctx))
+  router.get('/subscriptions/history/:userId', (ctx) => Subscription.getHistory(ctx)).as('subscriptions.history')
 
   // Voir les statistiques de boost d'un marchand
-  router.get('/subscriptions/stats/:userId', (ctx) => Subscription.getStats(ctx))
+  router.get('/subscriptions/stats/:userId', (ctx) => Subscription.getStats(ctx)).as('subscriptions.stats')
 
   // Souscrire à un abonnement
-  router.post('/subscriptions/subscribe', (ctx) => Subscription.subscribe(ctx))
+  router.post('/subscriptions/subscribe', (ctx) => Subscription.subscribe(ctx)).as('subscriptions.subscribe')
 
   // Vérifier le statut de paiement d'un abonnement
-  router.get('/subscriptions/:id/payment-status', (ctx) => Subscription.checkPaymentStatus(ctx))
+  router.get('/subscriptions/:id/payment-status', (ctx) => Subscription.checkPaymentStatus(ctx)).as('subscriptions.payment-status')
 
   // Ajouter un produit au boost
-  router.post('/subscriptions/:id/add-product', (ctx) => Subscription.addProductToBoost(ctx))
+  router.post('/subscriptions/:id/add-product', (ctx) => Subscription.addProductToBoost(ctx)).as('subscriptions.add-product')
 
   // Retirer un produit du boost
-  router.post('/subscriptions/:id/remove-product', (ctx) => Subscription.removeProductFromBoost(ctx))
+  router.post('/subscriptions/:id/remove-product', (ctx) => Subscription.removeProductFromBoost(ctx)).as('subscriptions.remove-product')
 
   // Annuler un abonnement
-  router.post('/subscriptions/:id/cancel', (ctx) => Subscription.cancel(ctx))
+  router.post('/subscriptions/:id/cancel', (ctx) => Subscription.cancel(ctx)).as('subscriptions.cancel')
 
   // Activer/désactiver le renouvellement automatique
-  router.post('/subscriptions/:id/auto-renew', (ctx) => Subscription.toggleAutoRenew(ctx))
+  router.post('/subscriptions/:id/auto-renew', (ctx) => Subscription.toggleAutoRenew(ctx)).as('subscriptions.auto-renew')
 
   // ============================================================
   // ADMIN - GESTION DES BOUTIQUES (MARCHANDS)
@@ -531,9 +533,9 @@ router.group(() => {
   // ----------------------------------------------------------
   // PAYPAL
   // ----------------------------------------------------------
-  router.post('/paypal/create', [PayPalController, 'createPayment'])
-  router.get('/paypal/success/:token', [PayPalController, 'success'])
-  router.get('/paypal/cancel', [PayPalController, 'cancel'])
+  router.post('/paypal/create', [PayPalController, 'createPayment']).as('paypal.create')
+  router.get('/paypal/success/:token', [PayPalController, 'success']).as('paypal.success')
+  router.get('/paypal/cancel', [PayPalController, 'cancel']).as('paypal.cancel')
 
   // ✅ APRÈS (correction) :
   // ----------------------------------------------------------
@@ -547,23 +549,23 @@ router.group(() => {
   // ----------------------------------------------------------
   // PRODUITS SPÉCIAUX
   // ----------------------------------------------------------
-  router.get('/products/on-sale', [ProductController, 'onSale'])
-  router.get('/products/biggest-discounts', [ProductController, 'biggestDiscounts'])
-  router.get('/products/black-friday', [ProductController, 'blackFriday'])
+  router.get('/products/on-sale', [ProductController, 'onSale']).as('products.on-sale')
+  router.get('/products/biggest-discounts', [ProductController, 'biggestDiscounts']).as('products.biggest-discounts')
+  router.get('/products/black-friday', [ProductController, 'blackFriday']).as('products.black-friday')
 
   // ----------------------------------------------------------
   // CALLBACK MYPVIT (ROUTE ADDITIONNELLE)
   // ----------------------------------------------------------
-  router.post('/callbacks/mypvit', [CallbacksController, 'handle'])
+  router.post('/callbacks/mypvit', [CallbacksController, 'handle']).as('callbacks.mypvit')
 
   // ----------------------------------------------------------
   // PAIEMENT MOBILE MONEY (ROUTE ADDITIONNELLE)
   // ----------------------------------------------------------
-  router.post('/mobile-moneys/pay', [PayMobileMoneyController, 'pay'])
+  router.post('/mobile-moneys/pay', [PayMobileMoneyController, 'pay']).as('mobile-money.pay')
 
   // ----------------------------------------------------------
   // RETRAIT (ROUTE ADDITIONNELLE)
   // ----------------------------------------------------------
-  router.post('/retrait', [RetraitController, 'retrait'])
+  router.post('/retrait', [RetraitController, 'retrait']).as('retrait.process')
 
 }).prefix('/api')
