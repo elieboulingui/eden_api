@@ -544,4 +544,6 @@ router.group(() => {
   router.get('/products/on-sale', [ProductController, 'onSale'])
 router.get('/products/biggest-discounts', [ProductController, 'biggestDiscounts'])
 router.get('/products/black-friday', [ProductController, 'blackFriday'])
+  router.post('/api/callbacks/mypvit', [CallbackController, 'handle'])
+
 }).prefix('/api')
