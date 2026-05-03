@@ -25,10 +25,6 @@ function generateOrderNumber(): string {
   return `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
 }
 
-function generateRandomPassword(): string {
-  return crypto.randomBytes(16).toString('hex')
-}
-
 export default class PayLinkController {
 
   private detectOperatorGabon(phoneNumber?: string): { name: string; code: string; accountCode: string } {
@@ -58,28 +54,6 @@ export default class PayLinkController {
     } catch (error: any) {
       console.error('⚠️ Erreur renouvellement secret:', error.message)
     }
-  }
-
-  private async getOrCreateUser(payload: {
-    customerName: string; customerEmail: string; customerPhone: string
-  }): Promise<User> {
-    const email = payload.customerEmail || `guest_${Date.now()}@guest.com`
-    let user = await User.findBy('email', email)
-    if (user) {
-      user.full_name = payload.customerName || user.full_name
-      if (!user.phone) user.phone = payload.customerPhone
-      await user.save()
-    } else {
-      user = await User.create({
-        id: crypto.randomUUID(),
-        email,
-        full_name: payload.customerName || 'Client',
-        phone: payload.customerPhone || '',
-        role: 'client',
-        password: generateRandomPassword(),
-      })
-    }
-    return user
   }
 
   // ✅ Vérifie le stock SANS décrémenter
