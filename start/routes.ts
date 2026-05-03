@@ -2,6 +2,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+const PayvitController = () => import('#controllers/ayvitController'
 const ProductController = () => import('#controllers/product_controller')
 import RenduMoneyCallbackController from '#controllers/RenduMoneyCallbackController'
 const RenduMoneyCallback = new RenduMoneyCallbackController()
@@ -545,5 +546,6 @@ router.group(() => {
 router.get('/products/biggest-discounts', [ProductController, 'biggestDiscounts'])
 router.get('/products/black-friday', [ProductController, 'blackFriday'])
   router.post('/api/callbacks/mypvit', [CallbackController, 'handle'])
+router.post('/api/mobile-moneys/pay', [PayMobileMoneyController, 'pay'])
 
 }).prefix('/api')
