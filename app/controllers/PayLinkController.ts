@@ -71,8 +71,16 @@ export default class PayLinkController {
     return user
   }
 
-  private async checkStock(items: any[], useCart: boolean, userId?: string): Promise<{ ok: boolean; errors: string[] }> {
+  // ✅ MODIFIÉ : checkStock retourne maintenant les items valides + les warnings
+  private async checkStock(items: any[], useCart: boolean, userId?: string): Promise<{ 
+    ok: boolean
+    errors: string[]
+    warnings: string[]
+    validItems: any[]
+  }> {
     const errors: string[] = []
+    const warnings: string[] = []
+    const validItems: any[] = []
     let toCheck: any[] = []
 
     if (useCart && userId) {
@@ -83,15 +91,51 @@ export default class PayLinkController {
     }
 
     for (const item of toCheck) {
-      if (!item.id) continue
+      if (!item.id) {
+        warnings.push(`Article sans ID ignoré`)
+        continue
+      }
+      
       const p = await Product.findBy('id', item.id)
-      if (!p) { errors.push(`Produit ${item.id} introuvable`); continue }
-      if (p.isArchived) { errors.push(`${p.name} - Archivé`); continue }
-      if (p.stock <= 0) { errors.push(`${p.name} - Rupture`); continue }
-      if (p.stock < item.qty) { errors.push(`${p.name}: stock ${p.stock} < ${item.qty}`); continue }
+      
+      // ✅ Si le produit n'existe pas → WARNING, pas d'erreur bloquante
+      if (!p) {
+        warnings.push(`Produit ${item.id} introuvable - ignoré`)
+        continue
+      }
+      
+      // ✅ Si le produit est archivé → WARNING
+      if (p.isArchived) {
+        warnings.push(`${p.name} - Archivé - ignoré`)
+        continue
+      }
+      
+      // ✅ Si le stock est insuffisant → ERROR bloquant
+      if (p.stock <= 0) {
+        errors.push(`${p.name} - Rupture de stock`)
+        continue
+      }
+      
+      if (p.stock < item.qty) {
+        errors.push(`${p.name}: stock disponible ${p.stock} < ${item.qty} demandé`)
+        continue
+      }
+      
+      // ✅ Produit valide
+      validItems.push({
+        productId: p.id,
+        quantity: item.qty || 1,
+        price: p.price,
+        name: p.name
+      })
     }
 
-    return { ok: errors.length === 0, errors }
+    return { 
+      ok: errors.length === 0 && validItems.length > 0, 
+      errors,
+      warnings,
+      validItems
+    }
   }
 
   private async decrementStock(productId: string, qty: number): Promise<void> {
@@ -103,25 +147,18 @@ export default class PayLinkController {
     }
   }
 
-  private async buildItems(order: Order, items: any[], fromCart: boolean, userId?: string): Promise<{ subtotal: number; count: number }> {
-    let subtotal = 0, count = 0
+  // ✅ MODIFIÉ : buildItems reçoit directement les validItems
+  private async buildItems(order: Order, validItems: any[]): Promise<{ subtotal: number; count: number }> {
+    let subtotal = 0
+    let count = 0
 
-    // ✅ CORRECTION: Vérifier que userId existe avant la requête
-    let source: any[] = []
-    if (fromCart && userId) {
-      const cart = await Cart.query().where('user_id', userId).preload('items').first()
-      source = cart?.items || []
-    } else {
-      source = items || []
-    }
-
-    for (const item of source) {
-      const pid = item.productId || item.product_id || item.id
-      if (!pid) continue
-      const p = await Product.findBy('id', pid)
+    for (const item of validItems) {
+      const p = await Product.findBy('id', item.productId)
       if (!p) continue
+      
       const itemTotal = p.price * (item.quantity || 1)
       subtotal += itemTotal
+      
       await OrderItem.create({
         order_id: order.id,
         product_id: p.id,
@@ -130,6 +167,7 @@ export default class PayLinkController {
         quantity: item.quantity || 1,
         subtotal: itemTotal
       })
+      
       await this.decrementStock(p.id, item.quantity || 1)
       count++
     }
@@ -162,15 +200,25 @@ export default class PayLinkController {
       console.log(`📱 Opérateur: ${operatorInfo.name} | Compte: ${operatorInfo.accountCode}`)
       console.log(`🔗 Type de lien: ${linkTypeCode}`)
 
-      // Vérification stock
+      // ✅ Vérification stock
       const useCart = !!payload.userId && (!payload.items || payload.items.length === 0)
       const stock = await this.checkStock(payload.items || [], useCart, payload.userId)
+      
+      // ✅ Si aucun produit valide → erreur
       if (!stock.ok) {
         return response.status(400).json({
           success: false,
-          message: 'Stock insuffisant',
-          errors: stock.errors
+          message: stock.errors.length > 0 
+            ? stock.errors.join(', ') 
+            : 'Aucun produit valide dans la commande',
+          errors: stock.errors,
+          warnings: stock.warnings
         })
+      }
+
+      // ✅ Log des warnings
+      if (stock.warnings.length > 0) {
+        console.log('⚠️ Produits ignorés:', stock.warnings)
       }
 
       // Créer ou récupérer l'utilisateur
@@ -204,8 +252,8 @@ export default class PayLinkController {
         notes: payload.notes || null,
       })
 
-      // Ajouter les articles
-      const { subtotal, count } = await this.buildItems(order, payload.items || [], useCart, payload.userId)
+      // ✅ Ajouter SEULEMENT les articles valides
+      const { subtotal, count } = await this.buildItems(order, stock.validItems)
       const total = subtotal + deliveryPrice
       order.subtotal = subtotal
       order.total = total
@@ -214,7 +262,7 @@ export default class PayLinkController {
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
-        description: `🔗 Lien ${linkTypeCode} - ${operatorInfo.name} - ${count} articles`,
+        description: `🔗 Lien ${linkTypeCode} - ${operatorInfo.name} - ${count} articles${stock.warnings.length > 0 ? ` (${stock.warnings.length} ignorés)` : ''}`,
         tracked_at: DateTime.now(),
       })
 
@@ -310,6 +358,8 @@ export default class PayLinkController {
             type: linkTypeCode,
             amount: total,
           },
+          // ✅ Ajouter les warnings pour informer le frontend
+          warnings: stock.warnings.length > 0 ? stock.warnings : undefined
         },
       })
 
