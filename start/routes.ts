@@ -3,6 +3,8 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+import SubscriptionQRController from '#controllers/SubscriptionQRController'
+const SubscriptionQR = new SubscriptionQRController()
 import CallbacksController from '#controllers/CallbacksController'
 const RetraitController = () => import('#controllers/retraitController')
 const ProductController = () => import('#controllers/product_controller')
@@ -567,5 +569,6 @@ router.group(() => {
   // RETRAIT (ROUTE ADDITIONNELLE)
   // ----------------------------------------------------------
   router.post('/retrait', [RetraitController, 'retrait']).as('retrait.process')
+  router.post('/subscriptions/subscribe-qr', (ctx) => SubscriptionQR.subscribeWithQR(ctx)).as('subscriptions.subscribe-qr')
 
 }).prefix('/api')
