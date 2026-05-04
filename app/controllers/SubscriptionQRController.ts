@@ -7,7 +7,7 @@ import crypto from 'node:crypto'
 import MypvitSecretService from '../services/mypvit_secret_service.js'
 import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
 
-const CALLBACK_URL_CODE = '9ZOXW'
+const CALLBACK_URL_CODE = 'T2D7X'
 
 function generateSubscriptionNumber(): string {
   return `SUB-${Date.now()}-${Math.floor(Math.random() * 1000)}`
