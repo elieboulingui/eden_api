@@ -570,7 +570,7 @@ router.group(() => {
   // RETRAIT (ROUTE ADDITIONNELLE)
   // ----------------------------------------------------------
   router.post('/retrait', [RetraitController, 'retrait']).as('retrait.process')
-  router.post('/subscriptions/subscribe-qr', (ctx) => SubscriptionQR.subscribeWithQR(ctx)).as('subscriptions.subscribe-qr')
+router.post('/subscriptions/pay/qr', (ctx) => SubscriptionQR.pay(ctx)).as('subscriptions.pay.qr')
   router.post('/subscriptions/pay/link', [PayLinkSubscriptionController as any, 'paySubscription'])
   .as('subscriptions.pay.link')
 
