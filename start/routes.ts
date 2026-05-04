@@ -3,6 +3,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+const PayLinkSubscriptionController = () => import('#controllers/PayLinkSubscriptionController')
 import SubscriptionQRController from '#controllers/SubscriptionQRController'
 const SubscriptionQR = new SubscriptionQRController()
 import CallbacksController from '#controllers/CallbacksController'
@@ -570,5 +571,11 @@ router.group(() => {
   // ----------------------------------------------------------
   router.post('/retrait', [RetraitController, 'retrait']).as('retrait.process')
   router.post('/subscriptions/subscribe-qr', (ctx) => SubscriptionQR.subscribeWithQR(ctx)).as('subscriptions.subscribe-qr')
+  router.post('/subscriptions/pay/link', [PayLinkSubscriptionController as any, 'paySubscription'])
+  .as('subscriptions.pay.link')
+
+// ✅ Vérifier statut paiement abonnement
+router.get('/subscriptions/:id/payment-status', [PayLinkSubscriptionController as any, 'checkPaymentStatus'])
+  .as('subscriptions.payment-status')
 
 }).prefix('/api')
