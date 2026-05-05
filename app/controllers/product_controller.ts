@@ -2,6 +2,7 @@
 
 import type { HttpContext } from '@adonisjs/core/http'
 import Product from '#models/Product'
+import Category from '#models/Category' // ✅ Importer le modèle Category
 
 export default class ProductsController {
   
@@ -21,7 +22,7 @@ export default class ProductsController {
         .where('is_archived', false)
         .where('status', 'active')
         .preload('user')
-        .preload('categoryRelation') // ✅ categoryRelation au lieu de category
+        .preload('categoryRelation') // ✅ Charger la relation
         .orderByRaw('((old_price - price) / old_price) DESC')
 
       if (categoryId) {
@@ -30,9 +31,25 @@ export default class ProductsController {
 
       const products = await query.paginate(page, limit)
 
+      // ✅ Transformer les données pour inclure le nom de la catégorie
+      const productsWithCategoryName = products.map((product: any) => {
+        const productJson = product.toJSON()
+        return {
+          ...productJson,
+          categoryName: product.categoryRelation?.name || null,
+          categoryRelation: undefined // Supprimer la relation si vous voulez
+        }
+      })
+
       return response.json({
         success: true,
-        data: products,
+        data: productsWithCategoryName,
+        pagination: {
+          page: products.currentPage,
+          limit: products.perPage,
+          total: products.total,
+          lastPage: products.lastPage
+        }
       })
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue'
@@ -51,7 +68,7 @@ export default class ProductsController {
   async biggestDiscounts({ request, response }: HttpContext) {
     try {
       const limit = request.input('limit', 10)
-      const minDiscount = request.input('min_discount', 20) // % minimum de réduction
+      const minDiscount = request.input('min_discount', 20)
 
       const products = await Product.query()
         .whereNotNull('old_price')
@@ -61,13 +78,22 @@ export default class ProductsController {
         .where('is_archived', false)
         .where('status', 'active')
         .preload('user')
-        .preload('categoryRelation') // ✅ categoryRelation au lieu de category
+        .preload('categoryRelation') // ✅ Charger la relation
         .orderByRaw('((old_price - price) / old_price) DESC')
         .limit(limit)
 
+      // ✅ Transformer pour inclure le nom de la catégorie
+      const productsWithCategoryName = products.map((product: any) => {
+        const productJson = product.toJSON()
+        return {
+          ...productJson,
+          categoryName: product.categoryRelation?.name || null
+        }
+      })
+
       return response.json({
         success: true,
-        data: products,
+        data: productsWithCategoryName,
         total: products.length,
       })
     } catch (error: unknown) {
@@ -97,13 +123,28 @@ export default class ProductsController {
         .where('status', 'active')
         .where('is_on_sale', true)
         .preload('user')
-        .preload('categoryRelation') // ✅ categoryRelation au lieu de category
+        .preload('categoryRelation') // ✅ Charger la relation
         .orderByRaw('((old_price - price) / old_price) DESC')
         .paginate(page, limit)
 
+      // ✅ Transformer pour inclure le nom de la catégorie
+      const productsWithCategoryName = products.map((product: any) => {
+        const productJson = product.toJSON()
+        return {
+          ...productJson,
+          categoryName: product.categoryRelation?.name || null
+        }
+      })
+
       return response.json({
         success: true,
-        data: products,
+        data: productsWithCategoryName,
+        pagination: {
+          page: products.currentPage,
+          limit: products.perPage,
+          total: products.total,
+          lastPage: products.lastPage
+        }
       })
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue'
