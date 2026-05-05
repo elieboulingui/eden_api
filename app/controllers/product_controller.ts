@@ -2,7 +2,6 @@
 
 import type { HttpContext } from '@adonisjs/core/http'
 import Product from '#models/Product'
-import Category from '#models/categories'
 
 export default class ProductsController {
   
@@ -31,18 +30,18 @@ export default class ProductsController {
 
       const products = await query.paginate(page, limit)
 
-      // ✅ Transformer pour inclure le nom de la catégorie
-      const productsWithCategoryName = products.all().map((product) => {
-        const productJson = product.toJSON()
+      // ✅ Ajouter categoryName dans chaque produit
+      const data = products.all().map((product) => {
+        const json = product.toJSON()
         return {
-          ...productJson,
+          ...json,
           categoryName: product.categoryRelation?.name || null
         }
       })
 
       return response.json({
         success: true,
-        data: productsWithCategoryName,
+        data: data,
         meta: {
           page: products.currentPage,
           limit: products.perPage,
@@ -81,18 +80,18 @@ export default class ProductsController {
         .orderByRaw('((old_price - price) / old_price) DESC')
         .limit(limit)
 
-      // ✅ Transformer pour inclure le nom de la catégorie
-      const productsWithCategoryName = products.map((product) => {
-        const productJson = product.toJSON()
+      // ✅ Ajouter categoryName dans chaque produit
+      const data = products.map((product) => {
+        const json = product.toJSON()
         return {
-          ...productJson,
+          ...json,
           categoryName: product.categoryRelation?.name || null
         }
       })
 
       return response.json({
         success: true,
-        data: productsWithCategoryName,
+        data: data,
         total: products.length,
       })
     } catch (error: unknown) {
@@ -126,18 +125,18 @@ export default class ProductsController {
         .orderByRaw('((old_price - price) / old_price) DESC')
         .paginate(page, limit)
 
-      // ✅ Transformer pour inclure le nom de la catégorie
-      const productsWithCategoryName = products.all().map((product) => {
-        const productJson = product.toJSON()
+      // ✅ Ajouter categoryName dans chaque produit
+      const data = products.all().map((product) => {
+        const json = product.toJSON()
         return {
-          ...productJson,
+          ...json,
           categoryName: product.categoryRelation?.name || null
         }
       })
 
       return response.json({
         success: true,
-        data: productsWithCategoryName,
+        data: data,
         meta: {
           page: products.currentPage,
           limit: products.perPage,
