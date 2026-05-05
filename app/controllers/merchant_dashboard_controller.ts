@@ -1631,30 +1631,59 @@ async deleteProduct({ params, response }: HttpContext) {
   }
 }
 
-  async getCategories({ params, response }: HttpContext) {
-    try {
-      const { userId } = params
+ async getCategories({ params, response }: HttpContext) {
+  try {
+    const { userId } = params
 
-      if (!userId) {
-        return response.badRequest({ success: false, message: 'ID utilisateur requis' })
-      }
-
-      const user = await User.findBy('id', userId)
-
-      if (!user) {
-        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
-      }
-
-      const categories = await Category.query()
-        .where('user_id', user.id)
-        .orderBy('name', 'asc')
-
-      return response.ok({ success: true, data: categories })
-    } catch (error: any) {
-      console.error('ERREUR getCategories:', error)
-      return response.internalServerError({ success: false, message: error.message })
+    if (!userId) {
+      return response.badRequest({ success: false, message: 'ID utilisateur requis' })
     }
+
+    const user = await User.findBy('id', userId)
+
+    if (!user) {
+      return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+    }
+
+    const categories = await Category.query()
+      .where('user_id', user.id)
+      .orderBy('name', 'asc')
+
+    // ✅ Pour chaque catégorie, compter les vrais produits non archivés
+    const categoriesWithCount = await Promise.all(
+      categories.map(async (category) => {
+        const productCountResult = await Product.query()
+          .where('category_id', category.id)
+          .where('user_id', user.id)
+          .where('isArchived', false)
+          .count('* as total')
+
+        const realCount = parseInt(productCountResult[0].$extras.total) || 0
+
+        return {
+          id: category.id,
+          name: category.name,
+          slug: category.slug,
+          image_url: category.image_url || null,
+          icon_name: category.icon_name || null,
+          product_count: realCount,  // ✅ Vrai comptage
+          sort_order: category.sort_order ?? 0,
+          is_active: category.is_active,
+        }
+      })
+    )
+
+    return response.ok({ 
+      success: true, 
+      message: 'Catégories récupérées avec succès',
+      data: categoriesWithCount,
+      count: categoriesWithCount.length,
+    })
+  } catch (error: any) {
+    console.error('ERREUR getCategories:', error)
+    return response.internalServerError({ success: false, message: error.message })
   }
+}
 
   async createCategory({ params, request, response }: HttpContext) {
   try {
