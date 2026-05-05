@@ -79,13 +79,18 @@ export default class FavoritesController {
         productId = params.productId || params.product_id
       }
 
+      // Si on a un id dans les params et pas de productId, utiliser cet id comme productId
+      if (!productId && params.id) {
+        productId = params.id
+      }
+
       console.log('🗑️ Remove favorite:', { userId, productId, method: request.method(), url: request.url() })
 
       if (!userId || !productId) {
         return response.status(400).json({
           success: false,
           message: 'userId et productId sont requis',
-          received: { userId, productId }
+          received: { userId, productId, params: params }
         })
       }
 
@@ -139,20 +144,23 @@ export default class FavoritesController {
         .preload('product')
         .orderBy('created_at', 'desc')
 
-      // Extraire les produits
+      // Extraire les produits en évitant les propriétés qui n'existent pas
       const products = favorites.map(fav => {
-        const product = fav.product
+        const product = fav.product as any // Utiliser any pour éviter les erreurs de type
         if (!product) return null
+        
+        // Construire l'objet produit avec les propriétés disponibles
         return {
           id: product.id,
           name: product.name,
           price: product.price,
           description: product.description,
           stock: product.stock,
-          imageUrl: product.imageUrl || product.image_url || product.image,
-          image_url: product.image_url || product.imageUrl || product.image,
-          image: product.image || product.imageUrl || product.image_url,
-          category: product.category
+          category: product.category,
+          // Utiliser les propriétés d'image disponibles
+          image: product.imageUrl2 || product.imageUrl || product.image_url || product.image || null,
+          imageUrl: product.imageUrl2 || product.imageUrl || product.image_url || product.image || null,
+          image_url: product.imageUrl2 || product.imageUrl || product.image_url || product.image || null,
         }
       }).filter(Boolean)
 
