@@ -203,12 +203,38 @@ router.group(() => {
   router.delete('/cart/clear', [CartController, 'clear']).as('cart.clear')
 
   // ----------------------------------------------------------
-  // FAVORIS
+  // FAVORIS - VERSION ULTRA-COMPATIBLE AVEC TOUTES LES MÉTHODES
   // ----------------------------------------------------------
+  
+  // POST - Ajouter un favori
   router.post('/favorites/add', [FavoritesController, 'add']).as('favorites.add')
+  
+  // POST - Supprimer un favori (méthode principale)
   router.post('/favorites/remove', [FavoritesController, 'remove']).as('favorites.remove')
+  
+  // DELETE - Supprimer un favori (alternative)
+  router.delete('/favorites/remove', [FavoritesController, 'remove']).as('favorites.remove.delete')
+  
+  // POST - Supprimer un favori (alias)
+  router.post('/favorites/delete', [FavoritesController, 'remove']).as('favorites.delete')
+  
+  // DELETE - Supprimer un favori par userId/productId dans l'URL
+  router.delete('/favorites/:userId/:productId', [FavoritesController, 'remove']).as('favorites.remove.params')
+  
+  // DELETE - Supprimer un favori par ID
+  router.delete('/favorites/:id', [FavoritesController, 'remove']).as('favorites.delete.byId')
+  
+  // GET - Récupérer les favoris avec userId en query string
   router.get('/favorites', [FavoritesController, 'index']).as('favorites.index')
+  
+  // GET - Récupérer les favoris avec userId dans l'URL
+  router.get('/favorites/:userId', [FavoritesController, 'index']).as('favorites.user')
+  
+  // GET - Vérifier si un produit est en favori
   router.get('/favorites/check', [FavoritesController, 'check']).as('favorites.check')
+  
+  // ANY - Accepter n'importe quelle méthode pour /favorites/remove
+  router.any('/favorites/remove', [FavoritesController, 'remove']).as('favorites.remove.any')
 
   // ----------------------------------------------------------
   // COMMANDES (ORDERS)
