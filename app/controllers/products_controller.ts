@@ -10,7 +10,8 @@ export default class ProductsController {
       const product = await Product.query()
         .where('id', params.id)
         .where('isArchived', false)
-        .preload('user') // Important : charge les infos du vendeur
+        .preload('user')
+        .preload('categoryRelation')
         .first()
 
       if (!product) {
@@ -23,37 +24,40 @@ export default class ProductsController {
     }
   }
 
-  // 🔥 Récupérer tous les produits non archivés + pays du vendeur
   async index({ response }: HttpContext) {
     try {
-      // Récupérer tous les produits (même archivés pour mise à jour de isNew)
       const allProducts = await Product
         .query()
         .preload('user', (query) => {
           query.select(['id', 'full_name', 'country'])
         })
+        .preload('categoryRelation') // ✅ CHARGER LA CATÉGORIE
 
-      // Date d'il y a une semaine
       const oneWeekAgo = DateTime.now().minus({ weeks: 1 })
 
-      // Mettre à jour le statut "isNew" si nécessaire
       for (const product of allProducts) {
         const createdAt = DateTime.fromJSDate(product.createdAt.toJSDate())
-
-        // Si le produit a plus d'une semaine et est toujours marqué comme nouveau
         if (createdAt < oneWeekAgo && product.isNew === true) {
           product.isNew = false
           await product.save()
         }
       }
 
-      // Filtrer uniquement les produits non archivés
       const products = allProducts.filter(product => product.isArchived === false)
+
+      // ✅ AJOUTER categoryName
+      const data = products.map((product) => {
+        const json = product.toJSON()
+        return {
+          ...json,
+          categoryName: product.categoryRelation?.name || null
+        }
+      })
 
       return response.status(200).json({
         success: true,
-        data: products,
-        count: products.length
+        data: data,
+        count: data.length
       })
     } catch (error: any) {
       return response.status(500).json({
@@ -64,7 +68,6 @@ export default class ProductsController {
     }
   }
 
-  // 🔥 Récupérer un produit non archivé + pays du vendeur
   async show({ params, response }: HttpContext) {
     try {
       const product = await Product
@@ -73,9 +76,9 @@ export default class ProductsController {
         .preload('user', (query) => {
           query.select(['id', 'full_name', 'country'])
         })
+        .preload('categoryRelation') // ✅ CHARGER LA CATÉGORIE
         .firstOrFail()
 
-      // Vérifier si le produit est archivé
       if (product.isArchived === true) {
         return response.status(404).json({
           success: false,
@@ -83,7 +86,6 @@ export default class ProductsController {
         })
       }
 
-      // Mettre à jour le statut "isNew" si nécessaire
       const oneWeekAgo = DateTime.now().minus({ weeks: 1 })
       const createdAt = DateTime.fromJSDate(product.createdAt.toJSDate())
 
@@ -92,9 +94,16 @@ export default class ProductsController {
         await product.save()
       }
 
+      // ✅ AJOUTER categoryName
+      const json = product.toJSON()
+      const data = {
+        ...json,
+        categoryName: product.categoryRelation?.name || null
+      }
+
       return response.status(200).json({
         success: true,
-        data: product
+        data: data
       })
     } catch {
       return response.status(404).json({
@@ -104,7 +113,6 @@ export default class ProductsController {
     }
   }
 
-  // 🔥 Créer un produit
   async store({ request, response }: HttpContext) {
     try {
       const data = request.only([
@@ -120,23 +128,27 @@ export default class ProductsController {
         })
       }
 
-      // Par défaut, un nouveau produit n'est pas archivé
       const productData = {
         ...data,
         isArchived: false
       }
 
       const product = await Product.create(productData)
-
-      // 🔥 Recharge avec le pays
       await product.load('user', (query) => {
         query.select(['id', 'full_name', 'country'])
       })
+      await product.load('categoryRelation')
+
+      const json = product.toJSON()
+      const result = {
+        ...json,
+        categoryName: product.categoryRelation?.name || null
+      }
 
       return response.status(201).json({
         success: true,
         message: 'Produit créé avec succès',
-        data: product
+        data: result
       })
     } catch (error: any) {
       return response.status(400).json({
@@ -147,7 +159,6 @@ export default class ProductsController {
     }
   }
 
-  // 🔥 Mettre à jour
   async update({ params, request, response }: HttpContext) {
     try {
       const product = await Product.findOrFail(params.id)
@@ -167,7 +178,6 @@ export default class ProductsController {
         })
       }
 
-      // Vérifier si le produit n'est pas archivé
       if (product.isArchived === true) {
         return response.status(400).json({
           success: false,
@@ -183,16 +193,21 @@ export default class ProductsController {
 
       product.merge(data)
       await product.save()
-
-      // 🔥 Charger le pays
       await product.load('user', (query) => {
         query.select(['id', 'full_name', 'country'])
       })
+      await product.load('categoryRelation')
+
+      const json = product.toJSON()
+      const result = {
+        ...json,
+        categoryName: product.categoryRelation?.name || null
+      }
 
       return response.status(200).json({
         success: true,
         message: 'Produit mis à jour avec succès',
-        data: product
+        data: result
       })
     } catch (error: any) {
       return response.status(400).json({
@@ -203,7 +218,6 @@ export default class ProductsController {
     }
   }
 
-  // 🔥 Archiver un produit (méthode destroy qui archive au lieu de supprimer)
   async destroy({ params, request, response }: HttpContext) {
     try {
       const product = await Product.findOrFail(params.id)
@@ -223,7 +237,6 @@ export default class ProductsController {
         })
       }
 
-      // Archiver le produit au lieu de le supprimer
       product.isArchived = true
       await product.save()
 
