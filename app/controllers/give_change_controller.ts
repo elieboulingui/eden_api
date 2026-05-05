@@ -33,27 +33,163 @@ export default class GiveChangeController {
     try {
       const { userId, amount, customer_account_number, notes } = request.body()
 
+      // ==========================================
+      // ÉTAPE 1: VALIDATION DES PARAMÈTRES DE BASE
+      // ==========================================
+      
       if (!userId) {
-        return response.status(400).json({ success: false, message: 'ID utilisateur requis' })
+        return response.status(400).json({ 
+          success: false, 
+          message: 'ID utilisateur requis',
+          code: 'MISSING_USER_ID'
+        })
       }
+
       const user = await User.find(userId)
       if (!user) {
-        return response.status(404).json({ success: false, message: 'Utilisateur introuvable' })
+        return response.status(404).json({ 
+          success: false, 
+          message: 'Utilisateur introuvable',
+          code: 'USER_NOT_FOUND'
+        })
       }
+
+      // ==========================================
+      // ÉTAPE 2: VÉRIFICATION KYC DU MARCHAND
+      // ==========================================
+      
+      // Vérifier si le compte est vérifié (is_verified = true)
+      if (!user.is_verified) {
+        console.log('❌ Compte non vérifié (is_verified = false):', user.id)
+        return response.status(403).json({
+          success: false,
+          message: 'Votre compte n\'est pas vérifié. Les retraits sont réservés aux marchands vérifiés.',
+          code: 'ACCOUNT_NOT_VERIFIED',
+          data: {
+            user_id: user.id,
+            is_verified: false,
+            verification_status: user.verification_status,
+            required_action: 'complete_verification'
+          }
+        })
+      }
+
+      // Vérifier si le statut de vérification est "approved"
+      if (user.verification_status !== 'approved') {
+        console.log('❌ Vérification non approuvée:', user.id, 'Status:', user.verification_status)
+        
+        let message = 'Votre vérification n\'a pas encore été approuvée.'
+        let requiredAction = 'wait_for_approval'
+        
+        if (user.verification_status === 'pending') {
+          message = 'Votre demande de vérification est en attente d\'approbation. Vous ne pouvez pas encore effectuer de retraits.'
+          requiredAction = 'wait_for_approval'
+        } else if (user.verification_status === 'rejected') {
+          message = 'Votre demande de vérification a été rejetée. Veuillez contacter le support pour plus d\'informations.'
+          requiredAction = 'contact_support'
+        } else if (!user.verification_status) {
+          message = 'Vous n\'avez pas encore soumis de demande de vérification. Veuillez compléter votre profil KYC.'
+          requiredAction = 'submit_kyc'
+        }
+
+        return response.status(403).json({
+          success: false,
+          message: message,
+          code: 'VERIFICATION_NOT_APPROVED',
+          data: {
+            user_id: user.id,
+            is_verified: user.is_verified,
+            verification_status: user.verification_status,
+            required_action: requiredAction
+          }
+        })
+      }
+
+      // Vérifier si le rôle de l'utilisateur permet les retraits
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        console.log('❌ Rôle non autorisé:', user.role)
+        return response.status(403).json({
+          success: false,
+          message: 'Seuls les marchands vérifiés peuvent effectuer des retraits.',
+          code: 'ROLE_NOT_AUTHORIZED',
+          data: {
+            user_id: user.id,
+            role: user.role,
+            required_action: 'upgrade_account'
+          }
+        })
+      }
+
+      // Vérifier si le compte est actif
+      if (user.status !== 'active') {
+        console.log('❌ Compte non actif:', user.id, 'Status:', user.status)
+        return response.status(403).json({
+          success: false,
+          message: 'Votre compte n\'est pas actif. Veuillez contacter le support.',
+          code: 'ACCOUNT_NOT_ACTIVE',
+          data: {
+            user_id: user.id,
+            status: user.status,
+            required_action: 'contact_support'
+          }
+        })
+      }
+
+      console.log('✅ KYC validé - is_verified:', user.is_verified, 'verification_status:', user.verification_status)
+
+      // ==========================================
+      // ÉTAPE 3: VALIDATION DU MONTANT
+      // ==========================================
+
       if (!amount || Number(amount) < MIN_WITHDRAWAL_AMOUNT) {
-        return response.status(400).json({ success: false, message: `Montant minimum: ${MIN_WITHDRAWAL_AMOUNT} FCFA` })
+        return response.status(400).json({ 
+          success: false, 
+          message: `Le montant minimum de retrait est de ${MIN_WITHDRAWAL_AMOUNT} FCFA`,
+          code: 'AMOUNT_TOO_LOW',
+          data: {
+            minimum_amount: MIN_WITHDRAWAL_AMOUNT,
+            requested_amount: Number(amount)
+          }
+        })
       }
+
       if (!customer_account_number) {
-        return response.status(400).json({ success: false, message: 'Numéro de téléphone requis' })
+        return response.status(400).json({ 
+          success: false, 
+          message: 'Numéro de téléphone requis',
+          code: 'MISSING_PHONE_NUMBER'
+        })
       }
+
+      // ==========================================
+      // ÉTAPE 4: VÉRIFICATION DU WALLET
+      // ==========================================
 
       const wallet = await Wallet.query().where('user_id', user.id).first()
       if (!wallet) {
-        return response.status(400).json({ success: false, message: 'Wallet non trouvé' })
+        return response.status(400).json({ 
+          success: false, 
+          message: 'Wallet non trouvé',
+          code: 'WALLET_NOT_FOUND'
+        })
       }
+
       if (Number(wallet.balance) < Number(amount)) {
-        return response.status(400).json({ success: false, message: `Solde insuffisant: ${wallet.balance} FCFA` })
+        return response.status(400).json({ 
+          success: false, 
+          message: `Solde insuffisant. Votre solde actuel est de ${Number(wallet.balance).toLocaleString()} FCFA.`,
+          code: 'INSUFFICIENT_BALANCE',
+          data: {
+            current_balance: Number(wallet.balance),
+            requested_amount: Number(amount),
+            deficit: Number(amount) - Number(wallet.balance)
+          }
+        })
       }
+
+      // ==========================================
+      // ÉTAPE 5: TRAITEMENT DU PAIEMENT
+      // ==========================================
 
       const opInfo = this.getOperatorInfo(customer_account_number)
       console.log('📱 Opérateur détecté:', { phone: customer_account_number, operator: opInfo.operator, accountCode: opInfo.accountCode })
@@ -71,17 +207,28 @@ export default class GiveChangeController {
         merchant_operation_account_code: opInfo.accountCode,
         owner_charge: 'MERCHANT',
         operator_code: opInfo.operatorCode,
-free_info: `Retrait ${opInfo.operator}`.substring(0, 15),      })
+        free_info: `Retrait ${opInfo.operator}`.substring(0, 15),
+      })
 
       console.log('📡 Réponse MyPVit:', paymentResult)
+
+      // ==========================================
+      // ÉTAPE 6: TRAITEMENT DU RÉSULTAT
+      // ==========================================
 
       if (paymentResult.status === 'SUCCESS') {
         await wallet.subtractBalance(Number(amount))
         
         const withdrawal = await Withdrawal.create({
-          user_id: user.id, wallet_id: wallet.id, amount: Number(amount), fee: 0,
-          net_amount: Number(amount), currency: 'XAF', status: 'completed',
-          payment_method: opInfo.operator, operator: opInfo.operator,
+          user_id: user.id, 
+          wallet_id: wallet.id, 
+          amount: Number(amount), 
+          fee: 0,
+          net_amount: Number(amount), 
+          currency: 'XAF', 
+          status: 'completed',
+          payment_method: opInfo.operator, 
+          operator: opInfo.operator,
           account_number: customer_account_number.replace(/\s/g, ''),
           account_name: user.full_name || user.email || 'Marchand',
           notes: notes || `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
@@ -91,31 +238,59 @@ free_info: `Retrait ${opInfo.operator}`.substring(0, 15),      })
         })
 
         await WithdrawalHistory.create({
-          withdrawal_id: withdrawal.id, user_id: user.id, action: 'completed',
-          new_status: 'completed', amount: Number(amount),
-          notes: `✅ Retrait réussi - ${opInfo.operator} - Réf: ${paymentResult.reference_id}`,
+          withdrawal_id: withdrawal.id, 
+          user_id: user.id, 
+          action: 'completed',
+          new_status: 'completed', 
+          amount: Number(amount),
+          notes: `✅ Retrait réussi - ${opInfo.operator} - Réf: ${paymentResult.reference_id} - Marchand vérifié`,
           ip_address: request.ip(),
         })
 
+        console.log('✅ Retrait réussi pour marchand vérifié:', user.id)
+
         return response.status(200).json({
           success: true,
-          message: `✅ Retrait de ${amount} FCFA effectué avec succès via ${opInfo.operator}`,
+          message: `✅ Retrait de ${Number(amount).toLocaleString()} FCFA effectué avec succès via ${opInfo.operator}`,
           data: {
-            withdrawal_id: withdrawal.id, amount: Number(amount), status: 'completed',
-            new_balance: wallet.balance, operator: opInfo.operator,
+            withdrawal_id: withdrawal.id, 
+            amount: Number(amount), 
+            status: 'completed',
+            new_balance: Number(wallet.balance), 
+            operator: opInfo.operator,
+            reference: reference,
+            processed_at: DateTime.now().toISO()
           },
         })
       } else {
+        console.log('❌ Retrait refusé par MyPVit:', paymentResult.message)
+
         return response.status(400).json({
           success: false,
-          message: `❌ Retrait refusé: ${paymentResult.message || 'Échec'}`,
+          message: `❌ Retrait refusé: ${paymentResult.message || 'Échec du traitement'}`,
+          code: 'PAYMENT_FAILED',
           operator: opInfo.operator,
         })
       }
 
     } catch (error: any) {
       console.error('🔴 Erreur give-change:', error.message)
-      return response.status(500).json({ success: false, message: 'Erreur interne', error: error.message })
+      
+      // Gestion spécifique des erreurs de connexion
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        return response.status(503).json({ 
+          success: false, 
+          message: 'Service de paiement temporairement indisponible. Veuillez réessayer plus tard.',
+          code: 'SERVICE_UNAVAILABLE'
+        })
+      }
+
+      return response.status(500).json({ 
+        success: false, 
+        message: 'Erreur interne lors du traitement du retrait',
+        code: 'INTERNAL_ERROR',
+        error: error.message 
+      })
     }
   }
 
