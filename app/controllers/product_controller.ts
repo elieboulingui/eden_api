@@ -21,7 +21,7 @@ export default class ProductsController {
         .where('is_archived', false)
         .where('status', 'active')
         .preload('user')
-        .preload('category') // ✅ Ajouter la catégorie
+        .preload('categoryRelation') // ✅ categoryRelation au lieu de category
         .orderByRaw('((old_price - price) / old_price) DESC')
 
       if (categoryId) {
@@ -61,7 +61,7 @@ export default class ProductsController {
         .where('is_archived', false)
         .where('status', 'active')
         .preload('user')
-        .preload('category') // ✅ Ajouter la catégorie
+        .preload('categoryRelation') // ✅ categoryRelation au lieu de category
         .orderByRaw('((old_price - price) / old_price) DESC')
         .limit(limit)
 
@@ -97,7 +97,7 @@ export default class ProductsController {
         .where('status', 'active')
         .where('is_on_sale', true)
         .preload('user')
-        .preload('category') // ✅ Ajouter la catégorie
+        .preload('categoryRelation') // ✅ categoryRelation au lieu de category
         .orderByRaw('((old_price - price) / old_price) DESC')
         .paginate(page, limit)
 
