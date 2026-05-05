@@ -120,16 +120,19 @@ export default class GiveChangeController {
         })
       }
 
-      // Vérifier si le compte est actif
-      if (user.status !== 'active') {
-        console.log('❌ Compte non actif:', user.id, 'Status:', user.status)
+      // CORRECTION: Vérifier si le compte est actif
+      // Utiliser account_status au lieu de status, ou vérifier si la propriété existe
+      const accountStatus = (user as any).account_status || (user as any).status || 'active'
+      
+      if (accountStatus !== 'active') {
+        console.log('❌ Compte non actif:', user.id, 'Status:', accountStatus)
         return response.status(403).json({
           success: false,
           message: 'Votre compte n\'est pas actif. Veuillez contacter le support.',
           code: 'ACCOUNT_NOT_ACTIVE',
           data: {
             user_id: user.id,
-            status: user.status,
+            status: accountStatus,
             required_action: 'contact_support'
           }
         })
