@@ -1228,103 +1228,148 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
   }
 
   async dashboard(ctx: HttpContext) {
-    const { params, response } = ctx
-    const userId = params.userId
+  const { params, response } = ctx
+  const userId = params.userId
 
-    const user = await User.findBy('id', userId)
-    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-      return response.forbidden({ success: false, message: 'Non autorisé' })
-    }
+  const user = await User.findBy('id', userId)
+  if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+    return response.forbidden({ success: false, message: 'Non autorisé' })
+  }
 
-    // ✅ Charger les produits avec leur catégorie
-    const products = await Product.query()
-      .where('user_id', user.id)
-      .where('isArchived', false)  // 🔴 AJOUTER CE FILTRE
-      .preload('categoryRelation')
-      .orderBy('createdAt', 'desc')  // ✅ Correction: createdAt au lieu de created_at
+  // ✅ Charger les produits avec leur catégorie
+  const products = await Product.query()
+    .where('user_id', user.id)
+    .where('isArchived', false)
+    .preload('categoryRelation')
+    .orderBy('createdAt', 'desc')
 
-    // Récupérer les catégories du marchand
-    const categories = await Category.query()
-      .where('user_id', user.id)
-      .orderBy('name', 'asc')
+  // Récupérer les catégories du marchand
+  const categories = await Category.query()
+    .where('user_id', user.id)
+    .orderBy('name', 'asc')
 
-    // Récupérer les coupons du marchand
-    const coupons = await Coupon.query()
-      .where('user_id', user.id)
-      .orderBy('created_at', 'desc')
+  // Récupérer les coupons du marchand
+  const coupons = await Coupon.query()
+    .where('user_id', user.id)
+    .orderBy('created_at', 'desc')
 
-    // Récupérer le wallet
-    let wallet = await Wallet.query()
-      .where('user_id', user.id)
-      .first()
+  // Récupérer le wallet
+  let wallet = await Wallet.query()
+    .where('user_id', user.id)
+    .first()
 
-    if (!wallet) {
-      wallet = await Wallet.create({
-        user_id: user.id,
-        balance: 0,
-        currency: 'XAF',
-        status: 'active'
-      })
-    }
-
-    // Transformer les produits
-    const transformedProducts = products.map(p => {
-      let categoryName = 'Sans catégorie'
-      if (p.categoryRelation) {
-        categoryName = p.categoryRelation.name
-      } else if (p.category) {
-        categoryName = p.category
-      }
-
-      return {
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        price: p.price,
-        stock: p.stock,
-        image_url: p.image_url,
-        category: categoryName,
-        likes: 0,
-        sales: p.sales || 0,
-        status: p.status || 'active',
-        createdAt: p.createdAt  // ✅ Correction: createdAt au lieu de created_at
-      }
-    })
-
-    return response.ok({
-      success: true,
-      data: {
-        stats: {
-          totalProducts: products.length,
-          totalSales: 0,
-          totalRevenue: 0,
-          totalLikes: 0,
-          pendingOrders: 0,
-        },
-        products: transformedProducts,
-        categories: categories.map(c => ({
-          id: c.id,
-          name: c.name,
-          slug: c.slug,
-          image_url: c.image_url || null,
-          productCount: c.product_count || 0
-        })),
-        coupons: coupons,
-        salesChart: [],
-        pendingOrders: [],
-        popularProducts: [],
-        merchant: {
-          id: user.id,
-          uuid: user.id,
-          full_name: user.full_name,
-          email: user.email,
-          avatar: user.avatar || null,
-          availableBalance: wallet.balance
-        }
-      }
+  if (!wallet) {
+    wallet = await Wallet.create({
+      user_id: user.id,
+      balance: 0,
+      currency: 'XAF',
+      status: 'active'
     })
   }
 
+  // ✅ RÉCUPÉRER LES LIKES RÉELS (depuis la table favorites)
+  const productIds = products.map(p => p.id)
+  let likesCountMap: Record<string, number> = {}
+
+  if (productIds.length > 0) {
+    try {
+      const likesData = await Database
+        .from('favorites')
+        .select('product_id')
+        .count('* as total')
+        .whereIn('product_id', productIds)
+        .groupBy('product_id')
+
+      likesCountMap = likesData.reduce((acc: Record<string, number>, curr: any) => {
+        acc[curr.product_id] = parseInt(curr.total)
+        return acc
+      }, {})
+    } catch (error) {
+      console.log('Table favorites non disponible:', error)
+    }
+  }
+
+  // ✅ RÉCUPÉRER LES VENTES RÉELLES (depuis la table order_items)
+  let salesCountMap: Record<string, number> = {}
+
+  if (productIds.length > 0) {
+    try {
+      const orderItems = await OrderItem.query()
+        .whereIn('product_id', productIds)
+        .select('product_id')
+        .count('* as total')
+        .groupBy('product_id')
+
+      salesCountMap = orderItems.reduce((acc: Record<string, number>, curr: any) => {
+        acc[curr.product_id] = parseInt(curr.$extras.total)
+        return acc
+      }, {})
+    } catch (error) {
+      console.log('Table order_items non disponible:', error)
+    }
+  }
+
+  // ✅ Transformer les produits avec les vrais likes et ventes
+  const transformedProducts = products.map(p => {
+    let categoryName = 'Sans catégorie'
+    if (p.categoryRelation) {
+      categoryName = p.categoryRelation.name
+    } else if (p.category) {
+      categoryName = p.category
+    }
+
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      stock: p.stock,
+      image_url: p.image_url,
+      category: categoryName,
+      likes: likesCountMap[p.id] || 0,    // ✅ Vrais likes depuis favorites
+      sales: salesCountMap[p.id] || 0,   // ✅ Vraies ventes depuis order_items
+      status: p.status || 'active',
+      createdAt: p.createdAt
+    }
+  })
+
+  // Calculer les totaux
+  const totalLikes = transformedProducts.reduce((sum, p) => sum + p.likes, 0)
+  const totalSales = transformedProducts.reduce((sum, p) => sum + p.sales, 0)
+
+  return response.ok({
+    success: true,
+    data: {
+      stats: {
+        totalProducts: products.length,
+        totalSales: totalSales,
+        totalRevenue: 0,
+        totalLikes: totalLikes,
+        pendingOrders: 0,
+      },
+      products: transformedProducts,
+      categories: categories.map(c => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        image_url: c.image_url || null,
+        productCount: c.product_count || 0
+      })),
+      coupons: coupons,
+      salesChart: [],
+      pendingOrders: [],
+      popularProducts: [],
+      merchant: {
+        id: user.id,
+        uuid: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        avatar: user.avatar || null,
+        availableBalance: wallet.balance
+      }
+    }
+  })
+}
   async getProducts({ params, request, response }: HttpContext) {
     try {
       const { userId } = params
