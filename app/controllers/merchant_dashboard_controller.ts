@@ -1657,86 +1657,89 @@ async deleteProduct({ params, response }: HttpContext) {
   }
 
   async createCategory({ params, request, response }: HttpContext) {
-    try {
-      const { userId } = params
-      const { name, slug } = request.only(['name', 'slug'])
+  try {
+    const { userId } = params
+    const { name, slug, image_url } = request.only(['name', 'slug', 'image_url'])  // ✅ Ajouter image_url
 
-      if (!name) {
-        return response.badRequest({ success: false, message: 'Le nom est requis' })
-      }
-
-      const user = await User.findBy('id', userId)
-
-      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-        return response.forbidden({ success: false, message: 'Non autorisé' })
-      }
-
-      const slugToUse = slug || name.toLowerCase().replace(/\s+/g, '-')
-
-      const category = await Category.create({
-        name,
-        slug: slugToUse,
-        user_id: user.id,
-      })
-
-      return response.created({
-        success: true,
-        data: {
-          id: category.id,
-          name: category.name,
-          slug: category.slug,
-          productCount: 0,
-        },
-        message: 'Catégorie créée',
-      })
-    } catch (error: any) {
-      console.error('ERREUR createCategory:', error)
-      return response.internalServerError({
-        success: false,
-        message: error.message,
-      })
+    if (!name) {
+      return response.badRequest({ success: false, message: 'Le nom est requis' })
     }
-  }
 
-  async updateCategory({ params, request, response }: HttpContext) {
-    try {
-      const { userId, categoryId } = params
-      const { name, slug, is_active } = request.only(['name', 'slug', 'is_active'])
+    const user = await User.findBy('id', userId)
 
-      const user = await User.findBy('id', userId)
-
-      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-        return response.forbidden({ success: false, message: 'Non autorisé' })
-      }
-
-      const category = await Category.query()
-        .where('id', categoryId)
-        .where('user_id', user.id)
-        .first()
-
-      if (!category) {
-        return response.notFound({ success: false, message: 'Catégorie non trouvée' })
-      }
-
-      if (name) category.name = name
-      if (slug) category.slug = slug
-      if (is_active !== undefined) category.is_active = is_active
-
-      await category.save()
-
-      return response.ok({
-        success: true,
-        data: category,
-        message: 'Catégorie mise à jour avec succès'
-      })
-    } catch (error: any) {
-      console.error('Erreur updateCategory:', error)
-      return response.internalServerError({
-        success: false,
-        message: error.message
-      })
+    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+      return response.forbidden({ success: false, message: 'Non autorisé' })
     }
+
+    const slugToUse = slug || name.toLowerCase().replace(/\s+/g, '-')
+
+    const category = await Category.create({
+      name,
+      slug: slugToUse,
+      user_id: user.id,
+      image_url: image_url || null,  // ✅ Sauvegarder l'URL de l'image
+    })
+
+    return response.created({
+      success: true,
+      data: {
+        id: category.id,
+        name: category.name,
+        slug: category.slug,
+        image_url: category.image_url,  // ✅ Retourner l'URL
+        productCount: 0,
+      },
+      message: 'Catégorie créée',
+    })
+  } catch (error: any) {
+    console.error('ERREUR createCategory:', error)
+    return response.internalServerError({
+      success: false,
+      message: error.message,
+    })
   }
+}
+
+async updateCategory({ params, request, response }: HttpContext) {
+  try {
+    const { userId, categoryId } = params
+    const { name, slug, is_active, image_url } = request.only(['name', 'slug', 'is_active', 'image_url'])  // ✅ Ajouter image_url
+
+    const user = await User.findBy('id', userId)
+
+    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+      return response.forbidden({ success: false, message: 'Non autorisé' })
+    }
+
+    const category = await Category.query()
+      .where('id', categoryId)
+      .where('user_id', user.id)
+      .first()
+
+    if (!category) {
+      return response.notFound({ success: false, message: 'Catégorie non trouvée' })
+    }
+
+    if (name) category.name = name
+    if (slug) category.slug = slug
+    if (is_active !== undefined) category.is_active = is_active
+    if (image_url !== undefined) category.image_url = image_url  // ✅ Mettre à jour l'image
+
+    await category.save()
+
+    return response.ok({
+      success: true,
+      data: category,
+      message: 'Catégorie mise à jour avec succès'
+    })
+  } catch (error: any) {
+    console.error('Erreur updateCategory:', error)
+    return response.internalServerError({
+      success: false,
+      message: error.message
+    })
+  }
+}
 
   async deleteCategory({ params, response }: HttpContext) {
     try {
