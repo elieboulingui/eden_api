@@ -2,7 +2,7 @@
 
 import type { HttpContext } from '@adonisjs/core/http'
 import Product from '#models/Product'
-import Category from '#models/Category' // ✅ Importer le modèle Category
+import Category from '#models/categories'
 
 export default class ProductsController {
   
@@ -22,7 +22,7 @@ export default class ProductsController {
         .where('is_archived', false)
         .where('status', 'active')
         .preload('user')
-        .preload('categoryRelation') // ✅ Charger la relation
+        .preload('categoryRelation')
         .orderByRaw('((old_price - price) / old_price) DESC')
 
       if (categoryId) {
@@ -31,20 +31,19 @@ export default class ProductsController {
 
       const products = await query.paginate(page, limit)
 
-      // ✅ Transformer les données pour inclure le nom de la catégorie
-      const productsWithCategoryName = products.map((product: any) => {
+      // ✅ Transformer pour inclure le nom de la catégorie
+      const productsWithCategoryName = products.all().map((product) => {
         const productJson = product.toJSON()
         return {
           ...productJson,
-          categoryName: product.categoryRelation?.name || null,
-          categoryRelation: undefined // Supprimer la relation si vous voulez
+          categoryName: product.categoryRelation?.name || null
         }
       })
 
       return response.json({
         success: true,
         data: productsWithCategoryName,
-        pagination: {
+        meta: {
           page: products.currentPage,
           limit: products.perPage,
           total: products.total,
@@ -78,12 +77,12 @@ export default class ProductsController {
         .where('is_archived', false)
         .where('status', 'active')
         .preload('user')
-        .preload('categoryRelation') // ✅ Charger la relation
+        .preload('categoryRelation')
         .orderByRaw('((old_price - price) / old_price) DESC')
         .limit(limit)
 
       // ✅ Transformer pour inclure le nom de la catégorie
-      const productsWithCategoryName = products.map((product: any) => {
+      const productsWithCategoryName = products.map((product) => {
         const productJson = product.toJSON()
         return {
           ...productJson,
@@ -123,12 +122,12 @@ export default class ProductsController {
         .where('status', 'active')
         .where('is_on_sale', true)
         .preload('user')
-        .preload('categoryRelation') // ✅ Charger la relation
+        .preload('categoryRelation')
         .orderByRaw('((old_price - price) / old_price) DESC')
         .paginate(page, limit)
 
       // ✅ Transformer pour inclure le nom de la catégorie
-      const productsWithCategoryName = products.map((product: any) => {
+      const productsWithCategoryName = products.all().map((product) => {
         const productJson = product.toJSON()
         return {
           ...productJson,
@@ -139,7 +138,7 @@ export default class ProductsController {
       return response.json({
         success: true,
         data: productsWithCategoryName,
-        pagination: {
+        meta: {
           page: products.currentPage,
           limit: products.perPage,
           total: products.total,
