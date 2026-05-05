@@ -216,7 +216,6 @@ router.group(() => {
   router.delete('/favorites/remove', [FavoritesController, 'remove']).as('favorites.remove.delete')
   
   // POST - Supprimer un favori (alias)
-  router.post('/favorites/delete', [FavoritesController, 'remove']).as('favorites.delete')
   
   // DELETE - Supprimer un favori par userId/productId dans l'URL
   router.delete('/favorites/:userId/:productId', [FavoritesController, 'remove']).as('favorites.remove.params')
