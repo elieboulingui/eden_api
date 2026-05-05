@@ -1,7 +1,7 @@
-// app/controllers/products_controller.ts
+// app/controllers/product_controller.ts
 
 import type { HttpContext } from '@adonisjs/core/http'
-import Product from '#models/Product'  // ✅ Vérifiez que le chemin est correct
+import Product from '#models/Product'
 
 export default class ProductsController {
   
@@ -21,6 +21,7 @@ export default class ProductsController {
         .where('is_archived', false)
         .where('status', 'active')
         .preload('user')
+        .preload('category') // ✅ Ajouter la catégorie
         .orderByRaw('((old_price - price) / old_price) DESC')
 
       if (categoryId) {
@@ -33,7 +34,7 @@ export default class ProductsController {
         success: true,
         data: products,
       })
-    } catch (error: unknown) {  // ✅ Typage explicite
+    } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue'
       
       return response.status(500).json({
@@ -60,6 +61,7 @@ export default class ProductsController {
         .where('is_archived', false)
         .where('status', 'active')
         .preload('user')
+        .preload('category') // ✅ Ajouter la catégorie
         .orderByRaw('((old_price - price) / old_price) DESC')
         .limit(limit)
 
@@ -68,7 +70,7 @@ export default class ProductsController {
         data: products,
         total: products.length,
       })
-    } catch (error: unknown) {  // ✅ Typage explicite
+    } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue'
       
       return response.status(500).json({
@@ -93,8 +95,9 @@ export default class ProductsController {
         .whereRaw('old_price > price')
         .where('is_archived', false)
         .where('status', 'active')
-        .where('is_on_sale', true) // Flag spécial Black Friday
+        .where('is_on_sale', true)
         .preload('user')
+        .preload('category') // ✅ Ajouter la catégorie
         .orderByRaw('((old_price - price) / old_price) DESC')
         .paginate(page, limit)
 
@@ -102,7 +105,7 @@ export default class ProductsController {
         success: true,
         data: products,
       })
-    } catch (error: unknown) {  // ✅ Typage explicite
+    } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue'
       
       return response.status(500).json({
