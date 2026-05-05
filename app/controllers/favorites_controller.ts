@@ -3,30 +3,37 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Favorite from '#models/favorite'
 
 export default class FavoritesController {
+  
   // Ajouter un produit aux favoris
   public async add({ request, response }: HttpContext) {
-    const { userId, productId } = request.body()
-
-    if (!userId || !productId) {
-      return response.status(400).json({
-        success: false,
-        message: 'userId et productId sont requis'
-      })
-    }
-
     try {
+      const body = request.body()
+      const userId = body.userId || body.user_id
+      const productId = body.productId || body.product_id
+
+      if (!userId || !productId) {
+        return response.status(400).json({
+          success: false,
+          message: 'userId et productId sont requis',
+          received: { userId, productId }
+        })
+      }
+
+      // Vérifier si le favori existe déjà
       const existing = await Favorite.query()
         .where('user_id', userId)
         .andWhere('product_id', productId)
         .first()
 
       if (existing) {
-        return response.status(400).json({
-          success: false,
-          message: 'Produit déjà dans les favoris'
+        return response.status(200).json({
+          success: true,
+          message: 'Produit déjà dans les favoris',
+          data: existing
         })
       }
 
+      // Créer le favori
       const favorite = await Favorite.create({
         user_id: userId,
         product_id: productId
@@ -38,6 +45,7 @@ export default class FavoritesController {
         data: favorite
       })
     } catch (error: any) {
+      console.error('❌ Erreur add favorite:', error)
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de l\'ajout aux favoris',
@@ -49,45 +57,60 @@ export default class FavoritesController {
   // Supprimer un produit des favoris
   public async remove({ request, params, response }: HttpContext) {
     try {
-      // Récupérer les données soit du body POST, soit des params DELETE
       let userId, productId
-      
-      if (request.method() === 'POST') {
-        const body = request.body()
-        userId = body.userId
-        productId = body.productId
-      } else {
-        // Pour les requêtes DELETE /api/favorites/userId/productId
-        userId = params.userId
-        productId = params.productId
+
+      // Essayer de récupérer depuis le body
+      const body = request.body()
+      if (body) {
+        userId = body.userId || body.user_id
+        productId = body.productId || body.product_id
       }
+
+      // Si pas dans le body, essayer les query params
+      if (!userId || !productId) {
+        const qs = request.qs()
+        userId = qs.userId || qs.user_id
+        productId = qs.productId || qs.product_id
+      }
+
+      // Si toujours pas, essayer les params d'URL
+      if (!userId || !productId) {
+        userId = params.userId || params.user_id
+        productId = params.productId || params.product_id
+      }
+
+      console.log('🗑️ Remove favorite:', { userId, productId, method: request.method(), url: request.url() })
 
       if (!userId || !productId) {
         return response.status(400).json({
           success: false,
-          message: 'userId et productId sont requis'
+          message: 'userId et productId sont requis',
+          received: { userId, productId }
         })
       }
 
+      // Chercher le favori
       const favorite = await Favorite.query()
         .where('user_id', userId)
         .andWhere('product_id', productId)
         .first()
 
       if (!favorite) {
-        return response.status(404).json({
-          success: false,
-          message: 'Favori non trouvé'
+        // Si pas trouvé, on retourne quand même un succès pour éviter les erreurs
+        return response.status(200).json({
+          success: true,
+          message: 'Favori déjà supprimé ou inexistant'
         })
       }
 
       await favorite.delete()
 
-      return response.json({
+      return response.status(200).json({
         success: true,
         message: 'Produit retiré des favoris'
       })
     } catch (error: any) {
+      console.error('❌ Erreur remove favorite:', error)
       return response.status(500).json({
         success: false,
         message: 'Erreur lors du retrait des favoris',
@@ -99,8 +122,10 @@ export default class FavoritesController {
   // Récupérer tous les favoris d'un utilisateur
   public async index({ request, params, response }: HttpContext) {
     try {
-      // Supporter les deux formats : ?userId=... et /favorites/userId
+      // Récupérer userId de différentes sources
       let userId = request.qs().userId || params.userId
+
+      console.log('📋 Get favorites:', { userId, url: request.url() })
 
       if (!userId) {
         return response.status(400).json({
@@ -114,13 +139,31 @@ export default class FavoritesController {
         .preload('product')
         .orderBy('created_at', 'desc')
 
-      const products = favorites.map(fav => fav.product)
+      // Extraire les produits
+      const products = favorites.map(fav => {
+        const product = fav.product
+        if (!product) return null
+        return {
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          description: product.description,
+          stock: product.stock,
+          imageUrl: product.imageUrl || product.image_url || product.image,
+          image_url: product.image_url || product.imageUrl || product.image,
+          image: product.image || product.imageUrl || product.image_url,
+          category: product.category
+        }
+      }).filter(Boolean)
 
-      return response.json({
+      console.log('✅ Favorites found:', products.length)
+
+      return response.status(200).json({
         success: true,
         data: products
       })
     } catch (error: any) {
+      console.error('❌ Erreur index favorites:', error)
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la récupération des favoris',
@@ -131,26 +174,29 @@ export default class FavoritesController {
 
   // Vérifier si un produit est en favori
   public async check({ request, response }: HttpContext) {
-    const { userId, productId } = request.qs()
-
-    if (!userId || !productId) {
-      return response.status(400).json({
-        success: false,
-        message: 'userId et productId sont requis'
-      })
-    }
-
     try {
+      const qs = request.qs()
+      const userId = qs.userId
+      const productId = qs.productId
+
+      if (!userId || !productId) {
+        return response.status(400).json({
+          success: false,
+          message: 'userId et productId sont requis'
+        })
+      }
+
       const favorite = await Favorite.query()
         .where('user_id', userId)
         .andWhere('product_id', productId)
         .first()
 
-      return response.json({
+      return response.status(200).json({
         success: true,
         isFavorite: !!favorite
       })
     } catch (error: any) {
+      console.error('❌ Erreur check favorite:', error)
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la vérification',
