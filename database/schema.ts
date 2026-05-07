@@ -720,6 +720,55 @@ export class SecurityLogSchema extends BaseModel {
   declare userAgent: string | null
 }
 
+export class SubscriptionSchema extends BaseModel {
+  static $columns = ['autoRenew', 'boostMultiplier', 'boostedProductsCount', 'cancelledAt', 'createdAt', 'endDate', 'id', 'maxProducts', 'metadata', 'paymentMethod', 'paymentReferenceId', 'paymentStatus', 'plan', 'price', 'productId', 'startDate', 'status', 'subscriptionType', 'totalClicks', 'totalViews', 'updatedAt', 'userId'] as const
+  $columns = SubscriptionSchema.$columns
+  @column()
+  declare autoRenew: boolean | null
+  @column()
+  declare boostMultiplier: number | null
+  @column()
+  declare boostedProductsCount: number | null
+  @column.dateTime()
+  declare cancelledAt: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column.dateTime()
+  declare endDate: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare maxProducts: number | null
+  @column()
+  declare metadata: any | null
+  @column()
+  declare paymentMethod: string | null
+  @column()
+  declare paymentReferenceId: string | null
+  @column()
+  declare paymentStatus: string | null
+  @column()
+  declare plan: string
+  @column()
+  declare price: string
+  @column()
+  declare productId: string | null
+  @column.dateTime()
+  declare startDate: DateTime | null
+  @column()
+  declare status: string | null
+  @column()
+  declare subscriptionType: string | null
+  @column()
+  declare totalClicks: number | null
+  @column()
+  declare totalViews: number | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string
+}
+
 export class TestimonialSchema extends BaseModel {
   static $columns = ['createdAt', 'id', 'rating', 'text', 'updatedAt', 'userId'] as const
   $columns = TestimonialSchema.$columns

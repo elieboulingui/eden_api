@@ -1,4 +1,4 @@
-// app/controllers/CallbackController.ts - ADAPTÉ À VOTRE BASE DE DONNÉES ACTUELLE
+// app/controllers/CallbackController.ts - EMAIL CLIENT UNIQUEMENT (pas vendeur)
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -7,349 +7,190 @@ import User from '#models/user'
 import Product from '#models/Product'
 import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
+import OrderEmailService from '../services/OrderEmailService.js'
 
 export default class CallbackController {
 
+  private mapPaymentStatus(status: string): string {
+    switch (status?.toUpperCase()) {
+      case 'SUCCESS': return 'paid'
+      case 'FAILED':
+      case 'CANCELLED': return 'failed'
+      case 'PENDING': return 'pending'
+      default: return 'pending'
+    }
+  }
+
   async handle({ request, response }: HttpContext) {
-    console.log('📞 [Callback] MYPVIT')
+    console.log('📞 ========== CALLBACK MYPVIT REÇU ==========')
+
     try {
       const data = request.body()
-      console.log('📦', JSON.stringify(data))
 
       const refId = data.merchantReferenceId
-      const txId = data.transactionId
+        || data.merchant_reference_id
+        || data.reference_id
+        || data.referenceId
+        || data.reference
+        || ''
 
-      let order = await Order.query()
-        .where('payment_reference_id', refId)
-        .orWhere('payment_reference_id', txId)
-        .first()
+      const txId = data.transactionId
+        || data.transaction_id
+        || data.id
+        || ''
+
+      const rawStatus = data.status || data.transactionStatus || 'UNKNOWN'
+      const status = this.mapPaymentStatus(rawStatus)
+
+      const operator = data.operator || data.operator_name || ''
+      const code = data.code || data.status_code || ''
+      const message = data.message || data.error_message || ''
+      const amount = data.amount || data.total_amount || 0
+
+      console.log('🔍 Status reçu:', rawStatus, '→ mappé en:', status)
+
+      let order: Order | null = null
+
+      if (refId) {
+        order = await Order.query().where('payment_reference_id', refId).first()
+      }
+
+      if (!order && txId) {
+        order = await Order.query().where('payment_reference_id', txId).first()
+      }
 
       if (!order) {
-        const tracking = await OrderTracking.query()
-          .where('description', 'like', `%${refId}%`)
-          .orWhere('description', 'like', `%${txId}%`)
-          .first()
-        if (tracking) order = await Order.find(tracking.order_id)
+        const searchTerm = refId || txId
+        if (searchTerm) {
+          const tracking = await OrderTracking.query()
+            .where('description', 'like', `%${searchTerm}%`)
+            .first()
+
+          if (tracking) {
+            order = await Order.find(tracking.order_id)
+          }
+        }
       }
 
       if (order) {
+
         console.log(`📦 Commande: ${order.order_number}`)
 
-        if (data.status === 'SUCCESS') {
-          // ✅ PHASE 1 : Mise à jour du statut de la commande
+        if (order.payment_status === 'paid') {
+          console.log('⚠️ Déjà payé → skip')
+          return response.ok({ message: 'Déjà traité' })
+        }
+
+        order.payment_status = status
+        order.payment_transaction_id = txId || refId
+        order.payment_operator_simple = operator
+        order.payment_amount = amount
+
+        if (status === 'paid') {
           order.status = 'paid'
           order.payment_completed_at = DateTime.now()
-          order.payment_status = 'SUCCESS'
-          order.payment_transaction_id = txId
-          order.payment_operator_simple = data.operator || null
           await order.save()
 
-          // ✅ PHASE 2 : Créer l'événement de suivi
           await OrderTracking.create({
             order_id: order.id,
             status: 'paid',
-            description: `✅ Payé - ${data.operator || 'Mobile Money'} - ${txId}`,
+            description: `✅ Paiement confirmé ${amount} FCFA`,
             tracked_at: DateTime.now(),
           })
 
-          // ✅ PHASE 3 : Décrémenter le stock + archiver si stock = 0
           await this.updateProductStock(order.id)
-
-          // ✅ PHASE 4 : Créditer l'admin (0.5%)
           await this.creditAdmin(order.total)
-
-          // ✅ PHASE 5 : Créditer les vendeurs/marchants
           await this.creditSellers(order.id)
 
-          // ✅ PHASE 6 (NOUVEAU) : Mettre à jour la GuestOrder si c'est une commande invité
-          await this.updateGuestOrder(order)
+          // ✅ Email au CLIENT UNIQUEMENT
+          try {
+            await OrderEmailService.sendOrderConfirmation(order.id)
+            console.log('📧 Email de confirmation envoyé au client')
+          } catch (emailError: any) {
+            console.error('❌ Erreur email client:', emailError.message)
+          }
 
-          console.log('✅ [Callback] TOUT EST FAIT : Payé + Stock MAJ + Crédits!')
-
-        } else if (data.status === 'FAILED' || data.status === 'CANCELLED') {
-          // ❌ Paiement échoué
+        } else if (status === 'failed') {
           order.status = 'payment_failed'
-          order.payment_error_message = `Code: ${data.code || 'UNKNOWN'} - ${data.message || 'Échec du paiement'}`
-          order.payment_status = 'FAILED'
+          order.payment_error_message = `${code} - ${message}`
           await order.save()
 
           await OrderTracking.create({
             order_id: order.id,
             status: 'payment_failed',
-            description: `❌ Échec (${data.code || 'N/A'}) - ${data.operator || 'N/A'} - ${txId}`,
+            description: `❌ Paiement échoué`,
             tracked_at: DateTime.now(),
           })
 
-          // ✅ (NOUVEAU) Mettre à jour la GuestOrder
-          await this.updateGuestOrder(order)
-
-          console.log('❌ [Callback] ÉCHEC du paiement')
-
-        } else if (data.status === 'PENDING') {
-          // ⏳ Paiement en attente
+        } else {
           await OrderTracking.create({
             order_id: order.id,
             status: 'pending_payment',
-            description: `⏳ En attente - ${data.operator || 'N/A'} - ${txId}`,
+            description: `⏳ En attente`,
             tracked_at: DateTime.now(),
           })
-
-          console.log('⏳ [Callback] Paiement en attente')
         }
 
       } else {
-        console.log('⚠️ [Callback] Commande non trouvée pour refId:', refId, 'txId:', txId)
-
-        // ✅ (NOUVEAU) Sauvegarder le callback orphelin pour debug
-        await this.saveOrphanCallback(data)
+        console.log('❌ Commande non trouvée')
       }
 
-      return response.status(200).json({
-        responseCode: data.code || 200,
-        transactionId: txId || 'unknown',
-        message: 'Callback traité avec succès'
+      return response.ok({
+        responseCode: 200,
+        transactionId: txId || refId || 'unknown'
       })
 
     } catch (error: any) {
-      console.error('❌ [Callback] Erreur:', error.message)
-      console.error('❌ Stack:', error.stack)
-
-      return response.status(500).json({
-        responseCode: 500,
-        transactionId: request.body().transactionId || 'unknown',
-        message: 'Erreur interne lors du traitement du callback'
-      })
+      console.error('❌ Erreur:', error.message)
+      return response.ok({ responseCode: 200 })
     }
   }
 
-  // ==================== MISE À JOUR DU STOCK + ARCHIVAGE ====================
-  private async updateProductStock(orderId: string): Promise<void> {
-    try {
-      console.log('📦 [Stock] Mise à jour pour la commande:', orderId)
-
-      const items = await OrderItem.query().where('order_id', orderId)
-
-      if (items.length === 0) {
-        console.log('⚠️ [Stock] Aucun item trouvé pour cette commande')
-        return
+  private async updateProductStock(orderId: string) {
+    const items = await OrderItem.query().where('order_id', orderId)
+    for (const item of items) {
+      const product = await Product.find(item.product_id)
+      if (product) {
+        product.stock = Math.max(0, product.stock - item.quantity)
+        if (product.stock === 0) product.isArchived = true
+        await product.save()
       }
-
-      let totalUpdated = 0
-      let totalArchived = 0
-
-      for (const item of items) {
-        const product = await Product.findBy('id', item.product_id)
-
-        if (product) {
-          const stockAvant = product.stock
-          const quantiteAchetee = item.quantity
-          const nouveauStock = Math.max(0, stockAvant - quantiteAchetee)
-
-          // Mise à jour du stock
-          product.stock = nouveauStock
-
-          // ✅ Si stock = 0, on archive le produit
-          if (nouveauStock === 0) {
-            product.isArchived = true
-            totalArchived++
-            console.log(`📦 [Stock] ARCHIVAGE: "${product.name}" - Stock épuisé (${stockAvant} → 0)`)
-          }
-
-          await product.save()
-          totalUpdated++
-
-          console.log(
-            `📦 [Stock] ${product.name}: ${stockAvant} → ${nouveauStock} (-${quantiteAchetee}) ` +
-            `[${nouveauStock === 0 ? 'ARCHIVÉ' : 'Actif'}]`
-          )
-        } else {
-          console.log(`⚠️ [Stock] Produit ${item.product_id} non trouvé en BDD`)
-        }
-      }
-
-      console.log(`✅ [Stock] ${totalUpdated} produit(s) mis à jour, ${totalArchived} archivé(s)`)
-
-    } catch (error: any) {
-      console.error('❌ [Stock] Erreur:', error.message)
     }
   }
 
-  // ==================== CRÉDITER ADMIN (0.5%) ====================
-  private async creditAdmin(totalAmount: number): Promise<void> {
-    try {
-      const admins = await User.query()
-        .where('role', 'admin')
-        .orWhere('role', 'superadmin')
-
-      if (admins.length === 0) {
-        console.log('⚠️ [Crédit Admin] Aucun admin trouvé')
-        return
+  private async creditAdmin(total: number) {
+    const admins = await User.query().whereIn('role', ['admin', 'superadmin'])
+    for (const admin of admins) {
+      let wallet = await Wallet.findBy('user_id', admin.id)
+      const fee = total * 0.005
+      if (wallet) {
+        wallet.balance += fee
+        await wallet.save()
+      } else {
+        await Wallet.create({ user_id: admin.id, balance: fee, currency: 'XAF', status: 'active' })
       }
-
-      const adminFee = totalAmount * 0.005
-
-      for (const admin of admins) {
-        const wallet = await Wallet.findBy('user_id', admin.id)
-
-        if (wallet) {
-          const currentBalance = parseFloat(String(wallet.balance)) || 0
-          wallet.balance = currentBalance + adminFee
-          await wallet.save()
-          console.log(`✅ [Crédit Admin] ${admin.email}: ${currentBalance} + ${adminFee} = ${wallet.balance} FCFA`)
-        } else {
-          await Wallet.create({
-            user_id: admin.id,
-            balance: adminFee,
-            currency: 'XAF',
-            status: 'active'
-          })
-          console.log(`✅ [Crédit Admin] ${admin.email}: nouveau wallet ${adminFee} FCFA`)
-        }
-      }
-    } catch (error: any) {
-      console.error('❌ [Crédit Admin] Erreur:', error.message)
     }
   }
 
-  // ==================== CRÉDITER LES VENDEURS (MARCHANTS) ====================
-  private async creditSellers(orderId: string): Promise<void> {
-    try {
-      console.log('💰 [Crédit Vendeurs] Commande:', orderId)
+  private async creditSellers(orderId: string) {
+    const items = await OrderItem.query().where('order_id', orderId)
+    const map = new Map<string, number>()
 
-      const items = await OrderItem.query().where('order_id', orderId)
-      const sellerSales = new Map<string, number>()
-
-      for (const item of items) {
-        const product = await Product.findBy('id', item.product_id)
-        if (product && product.user_id) {
-          const current = sellerSales.get(product.user_id) || 0
-          sellerSales.set(product.user_id, current + Number(item.subtotal || 0))
-        }
+    for (const item of items) {
+      const product = await Product.find(item.product_id)
+      if (product?.user_id) {
+        map.set(product.user_id, (map.get(product.user_id) || 0) + Number(item.subtotal))
       }
-
-      if (sellerSales.size === 0) {
-        console.log('⚠️ [Crédit Vendeurs] Aucun vendeur à créditer')
-        return
-      }
-
-      for (const [sellerId, amount] of sellerSales.entries()) {
-        const seller = await User.findBy('id', sellerId)
-        const sellerName = seller?.full_name || seller?.email || sellerId
-
-        const wallet = await Wallet.findBy('user_id', sellerId)
-
-        if (wallet) {
-          const currentBalance = parseFloat(String(wallet.balance)) || 0
-          wallet.balance = currentBalance + amount
-          await wallet.save()
-          console.log(`✅ [Crédit Vendeurs] ${sellerName}: ${currentBalance} + ${amount} = ${wallet.balance} FCFA`)
-        } else {
-          await Wallet.create({
-            user_id: sellerId,
-            balance: amount,
-            currency: 'XAF',
-            status: 'active'
-          })
-          console.log(`✅ [Crédit Vendeurs] ${sellerName}: nouveau wallet ${amount} FCFA`)
-        }
-      }
-
-      console.log(`✅ [Crédit Vendeurs] ${sellerSales.size} vendeur(s) crédité(s)`)
-
-    } catch (error: any) {
-      console.error('❌ [Crédit Vendeurs] Erreur:', error.message)
     }
-  }
 
-  // ==================== (NOUVEAU) METTRE À JOUR LA COMMANDE INVITÉ ====================
-  private async updateGuestOrder(order: Order): Promise<void> {
-    try {
-      if (order.guestOrderId) {
-        const GuestOrder = (await import('#models/GuestOrder')).default
-        const guestOrder = await GuestOrder.find(order.guestOrderId)
-
-        if (guestOrder) {
-          guestOrder.status = order.status === 'paid' ? 'paid' : 'payment_failed'
-          guestOrder.orderId = order.id
-          await guestOrder.save()
-          console.log(`✅ [GuestOrder] ${guestOrder.id} → ${guestOrder.status}`)
-        }
+    for (const [sellerId, amount] of map.entries()) {
+      let wallet = await Wallet.findBy('user_id', sellerId)
+      if (wallet) {
+        wallet.balance += amount
+        await wallet.save()
+      } else {
+        await Wallet.create({ user_id: sellerId, balance: amount, currency: 'XAF', status: 'active' })
       }
-    } catch (error: any) {
-      console.error('❌ [GuestOrder] Erreur:', error.message)
-    }
-  }
-
-  // ==================== (NOUVEAU) SAUVEGARDER LES CALLBACKS ORPHELINS ====================
-  private async saveOrphanCallback(data: any): Promise<void> {
-    try {
-      console.log('💾 [Callback Orphelin] Sauvegarde pour debug:', JSON.stringify(data))
-
-      // Créer un fichier de log ou une entrée en base de données
-      // selon vos besoins. Pour l'instant, on log juste dans la console.
-
-      // Si vous voulez sauvegarder en base, créez un modèle CallbackLog :
-      // await CallbackLog.create({
-      //   transaction_id: data.transactionId,
-      //   reference_id: data.merchantReferenceId,
-      //   status: data.status,
-      //   raw_data: JSON.stringify(data),
-      //   processed: false
-      // })
-
-    } catch (error: any) {
-      console.error('❌ [Callback Orphelin] Erreur sauvegarde:', error.message)
-    }
-  }
-
-  // ==================== (NOUVEAU) VÉRIFIER L'INTÉGRITÉ DE LA COMMANDE ====================
-
-
-  // ==================== (NOUVEAU) MÉTHODE DE RETRY MANUEL ====================
-  public async retryFailedCallback({ params, response }: HttpContext) {
-    try {
-      const { orderId } = params
-      const order = await Order.find(orderId)
-
-      if (!order) {
-        return response.status(404).json({
-          success: false,
-          message: 'Commande non trouvée'
-        })
-      }
-
-      console.log('🔄 [Retry] Retraitement commande:', order.order_number)
-
-      if (order.payment_status === 'SUCCESS' && order.status !== 'paid') {
-        // Mettre à jour le statut
-        order.status = 'paid'
-        order.payment_completed_at = DateTime.now()
-        await order.save()
-
-        // Mettre à jour le stock
-        await this.updateProductStock(order.id)
-
-        // Créditer
-        await this.creditAdmin(order.total)
-        await this.creditSellers(order.id)
-
-        return response.status(200).json({
-          success: true,
-          message: 'Commande retraitée avec succès'
-        })
-      }
-
-      return response.status(400).json({
-        success: false,
-        message: 'La commande ne nécessite pas de retraitement'
-      })
-
-    } catch (error: any) {
-      console.error('❌ [Retry] Erreur:', error.message)
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur lors du retraitement'
-      })
     }
   }
 }

@@ -151,6 +151,7 @@ export type ScannedRoutes = {
     'merchant.coupons.store': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.coupons.update': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
     'merchant.coupons.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'userId': ParamValue,'couponId': ParamValue} }
+    'merchants.products': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'merchants.index': { paramsTuple?: []; params?: {} }
     'merchants.all': { paramsTuple?: []; params?: {} }
     'merchants.active': { paramsTuple?: []; params?: {} }
@@ -292,6 +293,7 @@ export type ScannedRoutes = {
     'merchant.archived-products.restful.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.categories.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.coupons.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchants.products': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'merchants.index': { paramsTuple?: []; params?: {} }
     'merchants.all': { paramsTuple?: []; params?: {} }
     'merchants.active': { paramsTuple?: []; params?: {} }
@@ -399,6 +401,7 @@ export type ScannedRoutes = {
     'merchant.archived-products.restful.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.categories.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
     'merchant.coupons.index': { paramsTuple: [ParamValue]; params: {'userId': ParamValue} }
+    'merchants.products': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'merchants.index': { paramsTuple?: []; params?: {} }
     'merchants.all': { paramsTuple?: []; params?: {} }
     'merchants.active': { paramsTuple?: []; params?: {} }
