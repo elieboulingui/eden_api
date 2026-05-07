@@ -51,6 +51,7 @@ const OrderTrackingController = () => import('#controllers/order_trackings_contr
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
 const CouponsController = () => import('#controllers/coupons_controller')
 const GiveChangeController = () => import('#controllers/give_change_controller')
+const HotelsController = () => import('#controllers/hotels_controller')
 
 // ============================================================
 // ROUTES WEB (PAGES)
@@ -354,6 +355,25 @@ router.group(() => {
   router.get('/reviews/:id', [ReviewsController, 'show']).as('reviews.show')
   router.patch('/reviews/:id/approve', [ReviewsController, 'approve']).as('reviews.approve')
   router.patch('/reviews/:id/reject', [ReviewsController, 'reject']).as('reviews.reject')
+
+  // ----------------------------------------------------------
+  // HÔTELS (HOTELS)
+  // ----------------------------------------------------------
+  router.group(() => {
+    // Routes de recherche (AVANT les routes avec paramètres)
+    router.get('/search/location', [HotelsController, 'searchByLocation']).as('hotels.search.location')
+    router.get('/city/:city', [HotelsController, 'getByCity']).as('hotels.city')
+    
+    // Routes CRUD standard
+    router.get('/', [HotelsController, 'index']).as('hotels.index')
+    router.post('/', [HotelsController, 'store']).as('hotels.store')
+    router.get('/:id', [HotelsController, 'show']).as('hotels.show')
+    router.put('/:id', [HotelsController, 'update']).as('hotels.update')
+    router.delete('/:id', [HotelsController, 'destroy']).as('hotels.destroy')
+    
+    // Routes pour les chambres d'un hôtel
+    router.get('/:id/rooms', [HotelsController, 'getRooms']).as('hotels.rooms')
+  }).prefix('/hotels')
 
   // ----------------------------------------------------------
   // SHOP
