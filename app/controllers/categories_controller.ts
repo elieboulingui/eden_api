@@ -6,37 +6,51 @@ import Product from '#models/Product'
 export default class CategoriesController {
 
   // 🔹 Liste toutes les catégories
-  async index({ response }: HttpContext) {
-    try {
-      const categories = await Category.query()
+ // 🔹 Liste toutes les catégories
+async index({ response }: HttpContext) {
+  try {
+    const categories = await Category.query()
 
-      const formattedCategories = categories.map((c) => ({
-        id: c.id,
-        name: c.name,
-        slug: c.slug,
-        image_url: c.image_url,
-        icon_name: c.icon_name,
-        description: c.description,
-        product_count: c.product_count ?? 0,
-        sort_order: c.sort_order ?? 0,
-        is_active: c.is_active,
-      }))
+    // ✅ Pour chaque catégorie, compter les vrais produits
+    const formattedCategories = await Promise.all(
+      categories.map(async (c) => {
+        // Compter les produits réels non archivés dans cette catégorie
+        const productCount = await Product.query()
+          .where('category_id', c.id)
+          .where('isArchived', false)
+          .count('* as total')
 
-      return response.status(200).json({
-        success: true,
-        message: 'Catégories récupérées avec succès',
-        data: formattedCategories,
-        count: formattedCategories.length,
+        const realCount = parseInt(productCount[0].$extras.total) || 0
+
+        return {
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          image_url: c.image_url,
+          icon_name: c.icon_name,
+          description: c.description,
+          product_count: realCount,  // ✅ Utiliser le comptage réel
+          sort_order: c.sort_order ?? 0,
+          is_active: c.is_active,
+        }
       })
-    } catch (error: any) {
-      console.error('Erreur récupération catégories:', error)
-      return response.status(500).json({
-        success: false,
-        message: 'Erreur lors de la récupération des catégories',
-        error: error.message,
-      })
-    }
+    )
+
+    return response.status(200).json({
+      success: true,
+      message: 'Catégories récupérées avec succès',
+      data: formattedCategories,
+      count: formattedCategories.length,
+    })
+  } catch (error: any) {
+    console.error('Erreur récupération catégories:', error)
+    return response.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des catégories',
+      error: error.message,
+    })
   }
+}
 
   // 🔹 Détails d'une catégorie
   async show({ params, response }: HttpContext) {

@@ -1,0 +1,229 @@
+@layout('layouts/app')
+
+@section('content')
+<div class="min-h-screen bg-gray-50">
+  <!-- Header -->
+  <div class="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 text-white">
+    <div class="container mx-auto px-4 py-8">
+      <div class="flex items-center gap-3 mb-4">
+        <a href="/dashboards/subscriptions" class="text-white hover:text-gray-200">
+          ← Retour
+        </a>
+        <i class="fas fa-crown text-2xl"></i>
+        <div>
+          <h1 class="text-2xl font-bold">Détails de l'abonnement</h1>
+          <p class="text-white/80">ID: {{ subscription.id }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container mx-auto px-4 -mt-6">
+    <!-- Merchant Info -->
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+      <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+        <i class="fas fa-store"></i> Informations du marchand
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <p class="text-gray-500 text-sm">Nom</p>
+          <p class="font-semibold">{{ subscription.merchant.name }}</p>
+        </div>
+        <div>
+          <p class="text-gray-500 text-sm">Email</p>
+          <p class="font-semibold">{{ subscription.merchant.email }}</p>
+        </div>
+        <div>
+          <p class="text-gray-500 text-sm">Téléphone</p>
+          <p class="font-semibold">{{ subscription.merchant.phone || 'Non renseigné' }}</p>
+        </div>
+        <div>
+          <p class="text-gray-500 text-sm">Boutique</p>
+          <p class="font-semibold">{{ subscription.merchant.shopName || 'Non renseigné' }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Subscription Info -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+      <div class="bg-white rounded-xl shadow-lg p-6 lg:col-span-2">
+        <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+          <i class="fas fa-file-contract"></i> Détails de l'abonnement
+        </h2>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-gray-500 text-sm">Plan</p>
+            <p class="font-semibold text-lg">{{ subscription.plan.name }}</p>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Montant</p>
+            <p class="font-semibold text-lg text-purple-600">{{ subscription.plan.price }}</p>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Durée</p>
+            <p class="font-semibold">{{ subscription.plan.duration }} jours</p>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Multiplicateur de boost</p>
+            <p class="font-semibold text-orange-600">x{{ subscription.plan.boostMultiplier }}</p>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Type</p>
+            <p class="font-semibold">{{ subscription.type }}</p>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Produits boostés</p>
+            <p class="font-semibold">{{ subscription.boostedProductsCount }} / {{ subscription.maxProducts === 999999 ? '∞' : subscription.maxProducts }}</p>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Renouvellement automatique</p>
+            <p class="font-semibold">{{ subscription.autoRenew ? '✅ Activé' : '❌ Désactivé' }}</p>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Statut</p>
+            <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: {{ subscription.statusColor }}20; color: {{ subscription.statusColor }}">
+              {{ subscription.statusLabel }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-lg p-6">
+        <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+          <i class="fas fa-chart-line"></i> Statistiques
+        </h2>
+        <div class="space-y-4">
+          <div>
+            <p class="text-gray-500 text-sm">Vues totales</p>
+            <p class="text-2xl font-bold text-blue-600">{{ subscription.totalViews || 0 }}</p>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Clics totaux</p>
+            <p class="text-2xl font-bold text-green-600">{{ subscription.totalClicks || 0 }}</p>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Taux de conversion</p>
+            <p class="text-2xl font-bold text-purple-600">
+              {{ subscription.totalViews > 0 ? Math.round((subscription.totalClicks / subscription.totalViews) * 100) : 0 }}%
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dates -->
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+      <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+        <i class="fas fa-calendar-alt"></i> Période
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <p class="text-gray-500 text-sm">Date de création</p>
+          <p class="font-semibold">{{ subscription.createdAt }}</p>
+        </div>
+        <div>
+          <p class="text-gray-500 text-sm">Date de début</p>
+          <p class="font-semibold">{{ subscription.startDate }}</p>
+        </div>
+        <div>
+          <p class="text-gray-500 text-sm">Date de fin</p>
+          <p class="font-semibold">{{ subscription.endDate }}</p>
+        </div>
+      </div>
+      @if(subscription.daysRemaining > 0)
+        <div class="mt-4">
+          <div class="flex justify-between text-sm mb-1">
+            <span>Progression</span>
+            <span>{{ subscription.daysRemaining }} jours restants</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-2">
+            <div class="bg-purple-600 h-2 rounded-full" style="width: {{ (subscription.daysRemaining / subscription.plan.duration) * 100 }}%"></div>
+          </div>
+        </div>
+      @elseif(subscription.daysRemaining === 0)
+        <p class="mt-4 text-orange-500">⚠️ L'abonnement expire aujourd'hui</p>
+      @else
+        <p class="mt-4 text-red-500">❌ Abonnement expiré</p>
+      @endif
+    </div>
+
+    <!-- Payment Info -->
+    @if(subscription.paymentReferenceId)
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+      <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+        <i class="fas fa-credit-card"></i> Informations de paiement
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <p class="text-gray-500 text-sm">Référence de paiement</p>
+          <p class="font-mono text-sm">{{ subscription.paymentReferenceId }}</p>
+        </div>
+        <div>
+          <p class="text-gray-500 text-sm">Statut du paiement</p>
+          <p class="font-semibold">{{ subscription.paymentStatus || 'N/A' }}</p>
+        </div>
+      </div>
+    </div>
+    @endif
+
+    <!-- Boosted Products -->
+    @if(boostedProduct || boostedProducts.length > 0)
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+      <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+        <i class="fas fa-rocket"></i> Produits boostés
+      </h2>
+      
+      @if(boostedProduct)
+      <div class="border rounded-lg p-4">
+        <div class="flex items-center gap-4">
+          <div class="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden">
+            @if(boostedProduct.image_url)
+              <img src="{{ boostedProduct.image_url }}" alt="{{ boostedProduct.name }}" class="w-full h-full object-cover">
+            @else
+              <div class="flex items-center justify-center h-full text-gray-400">
+                <i class="fas fa-box text-2xl"></i>
+              </div>
+            @endif
+          </div>
+          <div class="flex-1">
+            <h3 class="font-bold">{{ boostedProduct.name }}</h3>
+            <p class="text-sm text-gray-500">{{ boostedProduct.category?.name || 'Non catégorisé' }}</p>
+            <p class="text-purple-600 font-bold">{{ boostedProduct.price ? boostedProduct.price.toLocaleString('fr-FR') + ' FCFA' : 'Prix non défini' }}</p>
+          </div>
+          <div>
+            <span class="px-2 py-1 bg-orange-100 text-orange-600 rounded-full text-xs">
+              🔥 Boosté x{{ subscription.plan.boostMultiplier }}
+            </span>
+          </div>
+        </div>
+      </div>
+      @endif
+      
+      @if(boostedProducts.length > 0)
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        @each(product in boostedProducts)
+        <div class="border rounded-lg p-3">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden">
+              @if(product.image_url)
+                <img src="{{ product.image_url }}" alt="{{ product.name }}" class="w-full h-full object-cover">
+              @else
+                <div class="flex items-center justify-center h-full text-gray-400">
+                  <i class="fas fa-box text-lg"></i>
+                </div>
+              @endif
+            </div>
+            <div class="flex-1">
+              <h4 class="font-medium text-sm">{{ product.name }}</h4>
+              <p class="text-xs text-gray-500">{{ product.category?.name || 'Non catégorisé' }}</p>
+            </div>
+          </div>
+        </div>
+        @end
+      </div>
+      @endif
+    </div>
+    @endif
+  </div>
+</div>
+@endsection

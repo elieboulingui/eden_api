@@ -1,171 +1,243 @@
 // app/services/mypvit_qrcode_service.ts
 import axios from 'axios'
+import MypvitSecretService from './mypvit_secret_service.js'
 
 interface QRCodeResponse {
   status: string
   data: string
   reference_id?: string
   merchant_reference_id?: string
-}
-
-interface QRCodeParams {
-  accountOperationCode: string
-  amount?: string
-  terminalId: string
-  reference?: string
-  transactionType?: string
-  callbackUrlCode: string
+  message?: string
 }
 
 export class MypvitQRCodeService {
   private readonly BASE_URL = 'https://api.mypvit.pro/v2'
-
-  // ✅ Chaque API a son propre CODE_URL
-  private readonly RENEW_SECRET_URL = '6JN5J6U0NBJGKDAQ'   // Pour /renew-secret
-  private readonly QR_CODE_URL = '4XWLIAKA5UFSIIYZ'        // Pour /generate-qr-code
-
-  private readonly ACCOUNT_CODE = 'ACC_69EFB143D4F54'
-  private readonly PASSWORD = 'Boulinguisanduku@1'
-
-  private secret: string | null = null
-  private secretExpiresAt: number = 0
-
+  private readonly MAX_REFERENCE_LENGTH = 20
+  
   /**
-   * Récupère un secret valide (renouvelle si nécessaire)
-   * Le secret est généré via RENEW_SECRET_URL mais fonctionne pour tous les CODE_URL
+   * Génère un QR Code (statique ou dynamique)
+   * @param params - Paramètres de génération
+   * @returns QRCodeResponse
    */
-  private async getSecret(): Promise<string> {
-    const now = Date.now()
-
-    if (this.secret && now < this.secretExpiresAt) {
-      return this.secret
-    }
-
-    console.log('🔄 Génération secret QR...')
-
-    const body = new URLSearchParams()
-    body.append('operationAccountCode', this.ACCOUNT_CODE)
-    body.append('password', this.PASSWORD)
-
-    const response = await axios.post(
-      `${this.BASE_URL}/${this.RENEW_SECRET_URL}/renew-secret`,
-      body.toString(),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    )
-
-    if (!response.data?.secret) {
-      throw new Error('Secret non reçu')
-    }
-
-    this.secret = response.data.secret
-    this.secretExpiresAt = now + ((response.data.expires_in || 3600) * 1000) - 60000
-    console.log('✅ Secret QR prêt')
-    return this.secret!  // ← AJOUT DU ! ICI
-  }
-
-  /**
-   * Appel générique à l'API QR Code
-   */
-  private async callQRCodeAPI(params: Record<string, string>): Promise<QRCodeResponse> {
-    let lastError: any
-
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const secret = await this.getSecret()
-
-        const response = await axios.get<QRCodeResponse>(
-          `${this.BASE_URL}/${this.QR_CODE_URL}/generate-qr-code`,
-          {
-            headers: {
-              'X-Secret': secret,
-              'Accept': 'application/json'
-            },
-            params
-          }
-        )
-
-        return response.data
-
-      } catch (error: any) {
-        lastError = error
-        const errData = error.response?.data
-        const errCode = errData?.status_code
-
-        console.error(`❌ Tentative ${attempt}:`, {
-          code: errCode,
-          error: errData?.error,
-          message: errData?.message
-        })
-
-        // Si AUTHENTICATION_FAILED (3100) → renouveler le secret et réessayer
-        if (errCode === 3100 && attempt === 1) {
-          console.log('🔄 Secret invalide, renouvellement...')
-          this.secret = null
-          continue
-        }
-
-        // Pour les autres erreurs, ne pas réessayer
-        throw new Error(errData?.message || errData?.error || error.message)
+  async generateQRCode(params: {
+    accountOperationCode: string
+    terminalId: string
+    callbackUrlCode: string
+    amount?: number
+    reference?: string
+    phoneNumber?: string
+  }): Promise<QRCodeResponse> {
+    
+    console.log('📷 [QRCodeService] ========== DÉBUT GÉNÉRATION QR CODE ==========')
+    console.log('📷 Paramètres reçus:', JSON.stringify(params, null, 2))
+    
+    // Récupérer le CODE_URL spécifique à l'opérateur
+    const operatorInfo = MypvitSecretService.getOperatorInfo(params.phoneNumber || '')
+    const codeUrl = operatorInfo.codeUrl
+    
+    console.log(`🔗 CODE_URL pour l'opérateur: ${codeUrl}`)
+    console.log(`🔑 accountOperationCode: ${params.accountOperationCode}`)
+    console.log(`🏷️ terminalId: ${params.terminalId}`)
+    console.log(`🔗 callbackUrlCode: ${params.callbackUrlCode}`)
+    console.log(`💰 amount: ${params.amount || 'non fourni (QR statique)'}`)
+    
+    // ========== VALIDATION ET TRONCATURE DE LA RÉFÉRENCE ==========
+    if (params.reference) {
+      const originalLength = params.reference.length
+      console.log(`📝 reference originale (longueur: ${originalLength}): "${params.reference}"`)
+      
+      if (originalLength > this.MAX_REFERENCE_LENGTH) {
+        // Tronquer à 20 caractères
+        const originalRef = params.reference
+        params.reference = params.reference.substring(0, this.MAX_REFERENCE_LENGTH)
+        
+        console.warn(`⚠️ RÉFÉRENCE TRONQUÉE CAR DÉPASSE LA LIMITE DE ${this.MAX_REFERENCE_LENGTH} CARACTÈRES:`)
+        console.warn(`   Longueur originale: ${originalLength}`)
+        console.warn(`   Avant: "${originalRef}"`)
+        console.warn(`   Après: "${params.reference}"`)
+      } else {
+        console.log(`✅ Référence valide (${originalLength} caractères)`)
       }
+    } else {
+      console.log('📝 reference: non fournie')
     }
-
-    throw lastError
-  }
-
-  /**
-   * Génère un QR Code statique
-   */
-  public async generateStaticQRCode(params: Omit<QRCodeParams, 'amount' | 'reference'>): Promise<QRCodeResponse> {
-    console.log('📷 QR Code statique...')
-
+    
+    // Obtenir le secret
+    const secret = await MypvitSecretService.getSecret(params.phoneNumber)
+    
+    if (!secret) {
+      throw new Error('Impossible d\'obtenir un secret valide pour le QR Code')
+    }
+    
+    console.log('🔐 Secret obtenu (premiers caractères):', secret.substring(0, 20) + '...')
+    
+    // Construction des paramètres query
     const queryParams: Record<string, string> = {
-      accountOperationCode: params.accountOperationCode || this.ACCOUNT_CODE,
-      terminalId: params.terminalId || 'T001',
-      callbackUrlCode: params.callbackUrlCode || '9ZOXW',
+      accountOperationCode: params.accountOperationCode,
+      terminalId: params.terminalId,
+      callbackUrlCode: params.callbackUrlCode
     }
-
-    if (params.transactionType) {
-      queryParams.transactionType = params.transactionType
+    
+    // Ajouter amount si fourni (QR dynamique)
+    if (params.amount && params.amount > 0) {
+      queryParams.amount = params.amount.toString()
+      console.log(`💰 QR dynamique avec montant: ${params.amount} FCFA`)
+    } else {
+      console.log('📷 QR statique (sans montant)')
     }
-
-    return this.callQRCodeAPI(queryParams)
+    
+    // Ajouter reference si fournie (déjà tronquée si nécessaire)
+    if (params.reference) {
+      queryParams.reference = params.reference
+      console.log(`📝 Référence envoyée (longueur: ${params.reference.length}): "${params.reference}"`)
+    }
+    
+    console.log('📤 Query params envoyés:', JSON.stringify(queryParams, null, 2))
+    
+    // URL complète pour debug
+    const fullUrl = `${this.BASE_URL}/4XWLIAKA5UFSIIYZ/generate-qr-code`
+    console.log(`🌐 URL complète: ${fullUrl}`)
+    
+    try {
+      // Requête GET vers l'API MyPVit
+      const response = await axios.get(
+        fullUrl,
+        {
+          headers: {
+            'Accept': 'application/json',
+            'X-Secret': secret
+          },
+          params: queryParams
+        }
+      )
+      
+      console.log('✅ [QRCodeService] Réponse reçue avec succès')
+      console.log('📊 Status:', response.data?.status)
+      console.log('🔑 reference_id:', response.data?.reference_id)
+      console.log('📊 merchant_reference_id:', response.data?.merchant_reference_id)
+      console.log('📊 data (premiers caractères):', response.data?.data?.substring(0, 50) + '...')
+      
+      return response.data
+      
+    } catch (error: any) {
+      console.error('❌ [QRCodeService] ========== ERREUR ==========')
+      console.error('❌ Status HTTP:', error.response?.status)
+      console.error('❌ Message:', error.message)
+      console.error('❌ Données réponse:', JSON.stringify(error.response?.data, null, 2))
+      
+      // Gestion des erreurs spécifiques
+      if (error.response?.status === 401) {
+        console.error('🔐 AUTHENTICATION_FAILED - Secret invalide ou expiré')
+        console.log('🔄 Tentative de renouvellement du secret...')
+        
+        try {
+          await MypvitSecretService.forceRenewal(params.phoneNumber)
+          const newSecret = await MypvitSecretService.getSecret(params.phoneNumber)
+          
+          console.log('🔄 Nouvelle tentative avec secret frais...')
+          const retryResponse = await axios.get(
+            fullUrl,
+            {
+              headers: {
+                'Accept': 'application/json',
+                'X-Secret': newSecret
+              },
+              params: queryParams
+            }
+          )
+          
+          console.log('✅ Succès après renouvellement du secret')
+          return retryResponse.data
+        } catch (retryError: any) {
+          console.error('❌ Échec après renouvellement:', retryError.message)
+          throw new Error('AUTHENTICATION_FAILED: Secret invalide après renouvellement')
+        }
+      }
+      
+      if (error.response?.status === 403) {
+        console.error('⛔ FORBIDDEN - Vérifiez les permissions du compte')
+        console.error('   - Compte opération actif?')
+        console.error('   - Service actif pour cet opérateur?')
+        console.error('   - Type de transaction autorisé?')
+        throw new Error(`FORBIDDEN: ${error.response?.data?.message || 'Accès interdit'}`)
+      }
+      
+      if (error.response?.status === 404) {
+        console.error('🔍 NOT_FOUND - Vérifiez:')
+        console.error('   - CODE_URL est-il valide?')
+        console.error('   - API endpoint existe-t-il?')
+        throw new Error(`NOT_FOUND: ${error.response?.data?.message || 'Ressource non trouvée'}`)
+      }
+      
+      if (error.response?.status === 422) {
+        console.error('⚠️ CONSTRAINT_VIOLATION - Vérifiez les paramètres:')
+        console.error('   - accountOperationCode: doit être un code valide chez MyPVit')
+        console.error('   - terminalId: doit être un identifiant valide')
+        console.error('   - callbackUrlCode: doit exister et être actif')
+        console.error('   - amount: doit être un nombre positif (si fourni)')
+        console.error('   - reference: doit être unique et ≤ 20 caractères (si fournie)')
+        
+        const errorData = error.response?.data
+        throw new Error(`CONSTRAINT_VIOLATION: ${JSON.stringify(errorData)}`)
+      }
+      
+      if (error.response?.status === 500) {
+        console.error('💥 SERVER_ERROR - Problème côté MyPVit')
+        throw new Error(`SERVER_ERROR: ${error.response?.data?.message || 'Erreur serveur MyPVit'}`)
+      }
+      
+      // Erreur générique
+      throw new Error(error.response?.data?.message || error.message || 'Erreur inconnue lors de la génération du QR Code')
+    }
   }
-
+  
   /**
-   * Génère un QR Code dynamique
+   * Génère un QR Code statique (sans montant, informations fixes)
    */
-  public async generateDynamicQRCode(
-    params: Required<Pick<QRCodeParams, 'amount' | 'reference'>> & Omit<QRCodeParams, 'amount' | 'reference'>
-  ): Promise<QRCodeResponse> {
-    console.log('📷 QR Code dynamique...')
-
-    const queryParams: Record<string, string> = {
-      accountOperationCode: params.accountOperationCode || this.ACCOUNT_CODE,
-      terminalId: params.terminalId || 'T001',
-      callbackUrlCode: params.callbackUrlCode || '9ZOXW',
+  async generateStaticQR(params: {
+    accountOperationCode: string
+    terminalId: string
+    callbackUrlCode: string
+    phoneNumber?: string
+  }): Promise<QRCodeResponse> {
+    console.log('📷 Génération QR Code statique...')
+    return this.generateQRCode({
+      accountOperationCode: params.accountOperationCode,
+      terminalId: params.terminalId,
+      callbackUrlCode: params.callbackUrlCode,
+      phoneNumber: params.phoneNumber
+      // Pas de amount ni reference → QR statique
+    })
+  }
+  
+  /**
+   * Génère un QR Code dynamique (avec montant et référence)
+   */
+  async generateDynamicQR(params: {
+    accountOperationCode: string
+    terminalId: string
+    callbackUrlCode: string
+    amount: number
+    reference: string
+    phoneNumber?: string
+  }): Promise<QRCodeResponse> {
+    console.log('📷 Génération QR Code dynamique...')
+    console.log(`💰 Montant: ${params.amount} FCFA`)
+    console.log(`📝 Référence originale: "${params.reference}" (longueur: ${params.reference.length})`)
+    
+    // Tronquer la référence si nécessaire AVANT d'appeler generateQRCode
+    if (params.reference.length > this.MAX_REFERENCE_LENGTH) {
+      console.warn(`⚠️ Référence sera tronquée à ${this.MAX_REFERENCE_LENGTH} caractères dans generateQRCode`)
+    }
+    
+    return this.generateQRCode({
+      accountOperationCode: params.accountOperationCode,
+      terminalId: params.terminalId,
+      callbackUrlCode: params.callbackUrlCode,
       amount: params.amount,
       reference: params.reference,
-    }
-
-    if (params.transactionType) {
-      queryParams.transactionType = params.transactionType
-    }
-
-    return this.callQRCodeAPI(queryParams)
-  }
-
-  /**
-   * Génération automatique
-   */
-  public async generateQRCode(params: QRCodeParams): Promise<QRCodeResponse> {
-    if (params.amount && params.reference) {
-      return this.generateDynamicQRCode({
-        ...params,
-        amount: params.amount,
-        reference: params.reference,
-      })
-    }
-    return this.generateStaticQRCode(params)
+      phoneNumber: params.phoneNumber
+    })
   }
 }
 

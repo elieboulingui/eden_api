@@ -1,19 +1,19 @@
+// app/controllers/PayLinkController.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
 import OrderTracking from '#models/order_tracking'
 import Cart from '#models/Cart'
+import CartItem from '#models/CartItem'
 import User from '#models/user'
 import Product from '#models/Product'
 import { DateTime } from 'luxon'
-import crypto from 'node:crypto'
 import MypvitSecretService from '../services/mypvit_secret_service.js'
 import axios from 'axios'
 
 const CALLBACK_URL_CODE = '9ZOXW'
 const MYPVIT_CODE_URL = 'MTX1MTKQQCULKA3W'
 
-// Types de lien disponibles
 const LINK_TYPES: Record<string, string> = {
   'web': 'WEB',
   'visa': 'VISA_MASTERCARD',
@@ -22,10 +22,6 @@ const LINK_TYPES: Record<string, string> = {
 
 function generateOrderNumber(): string {
   return `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-}
-
-function generateRandomPassword(): string {
-  return crypto.randomBytes(16).toString('hex')
 }
 
 export default class PayLinkController {
@@ -49,88 +45,80 @@ export default class PayLinkController {
     return { name: 'MOOV_MONEY', code: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
   }
 
-  private async getOrCreateUser(payload: {
-    customerName: string; customerEmail: string; customerPhone: string
-  }): Promise<User> {
-    const email = payload.customerEmail || `guest_${Date.now()}@guest.com`
-    let user = await User.findBy('email', email)
-    if (user) {
-      user.full_name = payload.customerName || user.full_name
-      if (!user.phone) user.phone = payload.customerPhone
-      await user.save()
-    } else {
-      user = await User.create({
-        id: crypto.randomUUID(),
-        email,
-        full_name: payload.customerName || 'Client',
-        phone: payload.customerPhone || '',
-        role: 'client',
-        password: generateRandomPassword(),
-      })
+  private async renewSecretIfNeeded(phoneNumber?: string): Promise<void> {
+    try {
+      console.log('🔄 Tentative de renouvellement du secret...')
+      await MypvitSecretService.renewSecret(phoneNumber)
+      console.log('✅ Clé renouvelée avec succès')
+    } catch (error: any) {
+      console.error('⚠️ Erreur renouvellement secret:', error.message)
     }
-    return user
   }
 
-  private async checkStock(items: any[], useCart: boolean, userId?: string): Promise<{ ok: boolean; errors: string[] }> {
+  // ✅ Vérifie le stock SANS décrémenter
+  private async checkStock(userId: string): Promise<{ 
+    ok: boolean
+    errors: string[]
+    cart: Cart | null
+  }> {
     const errors: string[] = []
-    let toCheck: any[] = []
+    
+    console.log('🛒 Récupération du panier pour userId:', userId)
+    
+    const cart = await Cart.query()
+      .where('user_id', userId)
+      .preload('items')
+      .first()
 
-    if (useCart && userId) {
-      const cart = await Cart.query().where('user_id', userId).preload('items').first()
-      if (cart) toCheck = cart.items.map((i: any) => ({ id: i.product_id, qty: i.quantity }))
-    } else if (items?.length > 0) {
-      toCheck = items.map((i: any) => ({ id: i.productId || i.id, qty: i.quantity }))
+    if (!cart || !cart.items || cart.items.length === 0) {
+      return { ok: false, errors: ['Panier vide'], cart: null }
     }
 
-    for (const item of toCheck) {
-      if (!item.id) continue
-      const p = await Product.findBy('id', item.id)
-      if (!p) { errors.push(`Produit ${item.id} introuvable`); continue }
-      if (p.isArchived) { errors.push(`${p.name} - Archivé`); continue }
-      if (p.stock <= 0) { errors.push(`${p.name} - Rupture`); continue }
-      if (p.stock < item.qty) { errors.push(`${p.name}: stock ${p.stock} < ${item.qty}`); continue }
+    for (const item of cart.items) {
+      const p = await Product.findBy('id', item.product_id)
+      if (!p) { 
+        errors.push(`Produit ${item.product_id} introuvable`)
+        continue 
+      }
+      if (p.isArchived) { 
+        errors.push(`${p.name} - Archivé`)
+        continue 
+      }
+      if (p.stock <= 0) { 
+        errors.push(`${p.name} - Rupture de stock`)
+        continue 
+      }
+      if (p.stock < item.quantity) { 
+        errors.push(`${p.name}: stock ${p.stock} < ${item.quantity}`)
+        continue 
+      }
     }
 
-    return { ok: errors.length === 0, errors }
+    return { ok: errors.length === 0, errors, cart }
   }
 
-  private async decrementStock(productId: string, qty: number): Promise<void> {
-    const p = await Product.findBy('id', productId)
-    if (p) {
-      p.stock = Math.max(0, p.stock - qty)
-      if (p.stock === 0) p.isArchived = true
-      await p.save()
-    }
-  }
+  // ✅ Crée les OrderItems à partir du panier SANS décrémenter le stock
+  private async buildItemsFromCart(order: Order, cart: Cart): Promise<{ subtotal: number; count: number }> {
+    let subtotal = 0
+    let count = 0
 
-  private async buildItems(order: Order, items: any[], fromCart: boolean, userId?: string): Promise<{ subtotal: number; count: number }> {
-    let subtotal = 0, count = 0
-
-    // ✅ CORRECTION: Vérifier que userId existe avant la requête
-    let source: any[] = []
-    if (fromCart && userId) {
-      const cart = await Cart.query().where('user_id', userId).preload('items').first()
-      source = cart?.items || []
-    } else {
-      source = items || []
-    }
-
-    for (const item of source) {
-      const pid = item.productId || item.product_id || item.id
-      if (!pid) continue
-      const p = await Product.findBy('id', pid)
+    for (const item of cart.items) {
+      const p = await Product.findBy('id', item.product_id)
       if (!p) continue
-      const itemTotal = p.price * (item.quantity || 1)
+
+      const itemTotal = p.price * item.quantity
       subtotal += itemTotal
+
       await OrderItem.create({
         order_id: order.id,
         product_id: p.id,
         product_name: p.name,
         price: p.price,
-        quantity: item.quantity || 1,
+        quantity: item.quantity,
         subtotal: itemTotal
       })
-      await this.decrementStock(p.id, item.quantity || 1)
+
+      // ✅ Stock NON décrémenté ici - sera fait par le callback après confirmation
       count++
     }
 
@@ -145,72 +133,103 @@ export default class PayLinkController {
       const payload = request.only([
         'userId', 'customerAccountNumber', 'shippingAddress',
         'deliveryMethod', 'deliveryPrice', 'customerName',
-        'customerEmail', 'customerPhone', 'items', 'linkType', 'notes'
+        'customerEmail', 'customerPhone', 'linkType', 'notes'
       ])
 
-      if (!payload.customerAccountNumber) {
+      console.log('📦 Données reçues:', payload)
+
+      const userId = payload.userId
+      const phoneNumber = payload.customerAccountNumber || payload.customerPhone
+
+      if (!userId) {
+        return response.status(400).json({
+          success: false,
+          message: 'userId requis'
+        })
+      }
+
+      if (!phoneNumber) {
         return response.status(400).json({
           success: false,
           message: 'Numéro de téléphone requis'
         })
       }
 
-      const operatorInfo = this.detectOperatorGabon(payload.customerAccountNumber)
+      // ✅ 1. RÉCUPÉRER LE PANIER DE L'UTILISATEUR
+      const { ok, errors, cart } = await this.checkStock(userId)
+      
+      if (!ok) {
+        return response.status(400).json({
+          success: false,
+          message: 'Stock insuffisant ou panier vide',
+          errors
+        })
+      }
+
+      if (!cart) {
+        return response.status(400).json({
+          success: false,
+          message: 'Panier introuvable'
+        })
+      }
+
+      console.log(`🛒 Panier trouvé avec ${cart.items.length} articles`)
+
+      // 2. Détecter l'opérateur
+      const operatorInfo = this.detectOperatorGabon(phoneNumber)
       const linkType = payload.linkType || 'web'
       const linkTypeCode = LINK_TYPES[linkType] || 'WEB'
 
       console.log(`📱 Opérateur: ${operatorInfo.name} | Compte: ${operatorInfo.accountCode}`)
       console.log(`🔗 Type de lien: ${linkTypeCode}`)
 
-      // Vérification stock
-      const useCart = !!payload.userId && (!payload.items || payload.items.length === 0)
-      const stock = await this.checkStock(payload.items || [], useCart, payload.userId)
-      if (!stock.ok) {
-        return response.status(400).json({
-          success: false,
-          message: 'Stock insuffisant',
-          errors: stock.errors
-        })
+      // 3. Renouveler le secret
+      await this.renewSecretIfNeeded(phoneNumber)
+
+      // 4. Récupérer l'utilisateur (pour son nom/email)
+      const user = await User.findBy('id', userId)
+
+      // 5. Calculer le total depuis le panier
+      let subtotal = 0
+      for (const item of cart.items) {
+        const product = await Product.findBy('id', item.product_id)
+        if (product) {
+          subtotal += product.price * item.quantity
+        }
       }
 
-      // Créer ou récupérer l'utilisateur
-      let userId = payload.userId
-      if (!userId) {
-        const newUser = await this.getOrCreateUser({
-          customerName: payload.customerName || 'Client',
-          customerEmail: payload.customerEmail || '',
-          customerPhone: payload.customerPhone || payload.customerAccountNumber,
-        })
-        userId = newUser.id
-      }
-
-      const deliveryPrice = payload.deliveryPrice || 2500
+      const deliveryPrice = payload.deliveryPrice || 0
+      const total = subtotal + deliveryPrice
       const orderNumber = generateOrderNumber()
 
-      // Créer la commande
+      console.log('💰 Subtotal:', subtotal, '| Livraison:', deliveryPrice, '| Total:', total)
+
+      // 6. Création commande
       const order = await Order.create({
         user_id: userId,
         order_number: orderNumber,
         status: 'pending',
-        total: 0,
-        subtotal: 0,
+        total: total,
+        subtotal: subtotal,
         shipping_cost: deliveryPrice,
         delivery_method: payload.deliveryMethod || 'standard',
-        customer_name: payload.customerName || 'Client',
-        customer_phone: payload.customerAccountNumber,
+        customer_name: user?.full_name || payload.customerName || 'Client',
+        customer_phone: phoneNumber,
         payment_method: `link_${linkType}_${operatorInfo.name.toLowerCase()}`,
-        customer_email: payload.customerEmail || 'invite@email.com',
+        customer_email: user?.email || payload.customerEmail || 'invite@email.com',
         shipping_address: payload.shippingAddress || 'non renseigné',
         notes: payload.notes || null,
+        payment_operator_simple: operatorInfo.name
       })
 
-      // Ajouter les articles
-      const { subtotal, count } = await this.buildItems(order, payload.items || [], useCart, payload.userId)
-      const total = subtotal + deliveryPrice
-      order.subtotal = subtotal
-      order.total = total
-      await order.save()
+      // 7. Créer les OrderItems à partir du panier
+      const { count } = await this.buildItemsFromCart(order, cart)
 
+      // 8. Vider le panier après création de la commande
+      await CartItem.query().where('cart_id', cart.id).delete()
+      console.log('🛒 Panier vidé')
+
+      // 9. Tracking initial
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
@@ -218,13 +237,7 @@ export default class PayLinkController {
         tracked_at: DateTime.now(),
       })
 
-      // Renouveler le secret si nécessaire
-      const secret = await MypvitSecretService.getSecret(payload.customerAccountNumber)
-      if (!secret) {
-        await MypvitSecretService.renewSecret(payload.customerAccountNumber)
-      }
-
-      // Générer le lien de paiement
+      // 10. Générer le lien de paiement
       console.log(`🔑 Génération lien ${linkTypeCode}...`)
 
       const linkPayload: any = {
@@ -236,28 +249,30 @@ export default class PayLinkController {
         merchant_operation_account_code: operatorInfo.accountCode,
         transaction_type: 'PAYMENT',
         owner_charge: 'MERCHANT',
-        success_redirection_url_code: 'YTJEI',
+        success_redirection_url_code: 'W0L8C',
         failed_redirection_url_code: 'YTJEI',
       }
 
-      // customer_account_number : obligatoire pour VISA_MASTERCARD et RESTLINK, optionnel pour WEB
       if (linkTypeCode === 'VISA_MASTERCARD' || linkTypeCode === 'RESTLINK') {
-        linkPayload.customer_account_number = payload.customerAccountNumber
-      } else if (linkTypeCode === 'WEB' && payload.customerAccountNumber) {
-        linkPayload.customer_account_number = payload.customerAccountNumber
+        linkPayload.customer_account_number = phoneNumber
+      } else if (linkTypeCode === 'WEB' && phoneNumber) {
+        linkPayload.customer_account_number = phoneNumber
       }
 
       console.log('📤 Payload Mypvit:', JSON.stringify(linkPayload, null, 2))
 
+      const secret = await MypvitSecretService.getSecret(phoneNumber)
+      
       const linkResponse = await axios.post(
         `https://api.mypvit.pro/${MYPVIT_CODE_URL}/link`,
         linkPayload,
         {
           headers: {
             'Content-Type': 'application/json',
-            'X-Secret': await MypvitSecretService.getSecret(payload.customerAccountNumber),
+            'X-Secret': secret,
             'X-Callback-MediaType': 'application/json',
-          }
+          },
+          timeout: 30000
         }
       )
 
@@ -269,6 +284,7 @@ export default class PayLinkController {
         url: linkResult.url
       })
 
+      // 11. Mettre à jour la commande avec la référence de paiement
       if (linkResult.merchant_reference_id) {
         order.payment_reference_id = linkResult.merchant_reference_id
         order.payment_operator_simple = operatorInfo.name
@@ -281,7 +297,7 @@ export default class PayLinkController {
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending_payment',
-        description: `🔗 Lien ${linkTypeCode} - ${operatorInfo.name} - Réf: ${linkResult.merchant_reference_id || order.order_number}`,
+        description: `⏳ Lien ${linkTypeCode} - ${operatorInfo.name} - Réf: ${linkResult.merchant_reference_id || order.order_number}`,
         tracked_at: DateTime.now(),
       })
 
@@ -314,10 +330,15 @@ export default class PayLinkController {
       })
 
     } catch (error: any) {
-      console.error('🔴 Erreur Lien:', error.response?.data || error.message)
+      console.error('🔴 Erreur Lien:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      })
+      
       return response.status(500).json({
         success: false,
-        message: 'Erreur lien de paiement',
+        message: 'Erreur lors de la génération du lien de paiement',
         error: error.response?.data?.message || error.message
       })
     }

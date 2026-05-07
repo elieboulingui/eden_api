@@ -1,4 +1,4 @@
-// app/controllers/PayMobileMoneyController.ts - PROPRE ET ARRANGÉ
+// app/controllers/PayMobileMoneyController.ts - CORRIGÉ FINAL
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -8,7 +8,6 @@ import User from '#models/user'
 import Product from '#models/Product'
 import KYC from '#models/kyc'
 import { DateTime } from 'luxon'
-import crypto from 'node:crypto'
 import MypvitSecretService from '../services/mypvit_secret_service.js'
 import MypvitTransactionService from '../services/mypvit_transaction_service.js'
 import MypvitKYCService from '../services/mypvit_kyc_service.js'
@@ -19,75 +18,47 @@ function generateOrderNumber(): string {
   return `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
 }
 
-function generateRandomPassword(): string {
-  return crypto.randomBytes(16).toString('hex')
-}
-
 export default class PayMobileMoneyController {
 
   private async renewSecretIfNeeded(phoneNumber?: string): Promise<void> {
-    await MypvitSecretService.renewSecret(phoneNumber)
-    console.log('🔐 Clé renouvelée')
+    try {
+      console.log('🔄 Tentative de renouvellement du secret...')
+      await MypvitSecretService.renewSecret(phoneNumber)
+      console.log('✅ Clé renouvelée avec succès')
+    } catch (error: any) {
+      console.error('⚠️ Erreur renouvellement secret:', error.message)
+    }
   }
 
   private detectOperatorGabon(phoneNumber: string): { name: string; code: string; accountCode: string } {
+    console.log('🔍 Détection opérateur pour:', phoneNumber)
+    
     const clean = phoneNumber.replace(/[\s\+\.\-]/g, '')
     let local = clean
-    if (clean.startsWith('241')) local = clean.substring(3)
+    
+    if (clean.startsWith('+241')) local = clean.substring(4)
+    else if (clean.startsWith('241')) local = clean.substring(3)
+    
     if (local.startsWith('0')) local = local.substring(1)
+    
+    console.log('📱 Numéro nettoyé:', local)
+    console.log('🔢 Premier chiffre:', local.charAt(0))
 
-    // Détection selon le préfixe
-    if (local.startsWith('06') || local.startsWith('6')) {
-      return {
-        name: 'LIBERTIS',
-        code: 'LIBERTIS',
-        accountCode: 'ACC_69EA59CBC7495'
-      }
-    }
-    if (local.startsWith('07') || local.startsWith('7')) {
+    if (local.startsWith('7')) {
+      console.log('✅ AIRTEL_MONEY détecté')
       return {
         name: 'AIRTEL_MONEY',
         code: 'AIRTEL_MONEY',
         accountCode: 'ACC_69EFB0E02FCA3'
       }
     }
-    // Par défaut MOOV
+    
+    console.log('✅ MOOV_MONEY détecté')
     return {
       name: 'MOOV_MONEY',
       code: 'MOOV_MONEY',
       accountCode: 'ACC_69EFB143D4F54'
     }
-  }
-
-  // ==================== CRÉER UN USER SI PAS D'ID ====================
-  private async getOrCreateUser(payload: {
-    customerName: string
-    customerEmail: string
-    customerPhone: string
-  }): Promise<User> {
-    const { customerEmail, customerPhone, customerName } = payload
-    const email = customerEmail || `guest_${Date.now()}@guest.com`
-
-    let user = await User.findBy('email', email)
-
-    if (user) {
-      user.full_name = customerName || user.full_name
-      if (!user.phone) user.phone = customerPhone
-      await user.save()
-      console.log('👤 User existant:', user.id)
-    } else {
-      user = await User.create({
-        id: crypto.randomUUID(),
-        email: email,
-        full_name: customerName || 'Client',
-        phone: customerPhone || '',
-        role: 'client',
-        password: generateRandomPassword(),
-      })
-      console.log('👤 User créé:', user.id)
-    }
-
-    return user
   }
 
   private async performKYC(phoneNumber: string): Promise<{
@@ -98,6 +69,8 @@ export default class PayMobileMoneyController {
     accountCode: string
     isActive: boolean
   }> {
+    console.log('🆔 Démarrage KYC pour:', phoneNumber)
+    
     const detected = this.detectOperatorGabon(phoneNumber)
     let fullName = 'Client'
 
@@ -105,11 +78,11 @@ export default class PayMobileMoneyController {
       await this.renewSecretIfNeeded(phoneNumber)
       const kycData = await MypvitKYCService.getKYCInfo(phoneNumber, detected.code)
       fullName = kycData.firstname || kycData.full_name || 'Client'
-    } catch (error:any) {
+      console.log('✅ KYC réussi, nom:', fullName)
+    } catch (error: any) {
       console.log('🟡 KYC fallback:', error.message)
     }
 
-    // Sauvegarder KYC en base
     try {
       const existingKYC = await KYC.findBy('numeroTelephone', phoneNumber)
       if (existingKYC) {
@@ -123,7 +96,7 @@ export default class PayMobileMoneyController {
           operateur: detected.name
         })
       }
-    } catch (error:any) {
+    } catch (error: any) {
       console.log('🟡 KYC save error:', error.message)
     }
 
@@ -137,81 +110,56 @@ export default class PayMobileMoneyController {
     }
   }
 
-  private async checkStock(items: any[], useCart: boolean, userId?: string): Promise<{
+  // ✅ Vérifie le stock du panier
+  private async checkCartStock(userId: string): Promise<{
     ok: boolean
     errors: string[]
+    cart: Cart | null
   }> {
     const errors: string[] = []
-    let toCheck: any[] = []
+    
+    const cart = await Cart.query()
+      .where('user_id', userId)
+      .preload('items')
+      .first()
 
-    if (useCart && userId) {
-      const cart = await Cart.query().where('user_id', userId).preload('items').first()
-      if (cart) toCheck = cart.items.map((i: any) => ({ id: i.product_id, qty: i.quantity }))
-    } else if (items?.length > 0) {
-      toCheck = items.map((i: any) => ({ id: i.productId || i.id, qty: i.quantity }))
+    if (!cart || !cart.items || cart.items.length === 0) {
+      return { ok: false, errors: ['Panier vide'], cart: null }
     }
 
-    for (const item of toCheck) {
-      if (!item.id) continue
-      const p = await Product.findBy('id', item.id)
-      if (!p) {
-        errors.push(`Produit ${item.id} introuvable`)
-        continue
-      }
-      if (p.isArchived) {
-        errors.push(`${p.name} - Archivé`)
-        continue
-      }
-      if (p.stock <= 0) {
-        errors.push(`${p.name} - Rupture de stock`)
-        continue
-      }
-      if (p.stock < item.qty) {
-        errors.push(`${p.name}: stock disponible ${p.stock} < ${item.qty} demandé`)
-        continue
-      }
-    }
-
-    return { ok: errors.length === 0, errors }
-  }
-
-  private async decrementStock(productId: string, qty: number): Promise<void> {
-    const p = await Product.findBy('id', productId)
-    if (p) {
-      p.stock = Math.max(0, p.stock - qty)
-      if (p.stock === 0) p.isArchived = true
-      await p.save()
-    }
-  }
-
-  private async restoreStock(orderId: string): Promise<void> {
-    const items = await OrderItem.query().where('order_id', orderId)
-    for (const item of items) {
+    for (const item of cart.items) {
       const p = await Product.findBy('id', item.product_id)
-      if (p) {
-        p.stock += item.quantity
-        if (p.isArchived && p.stock > 0) p.isArchived = false
-        await p.save()
+      if (!p) { 
+        errors.push(`Produit ${item.product_id} introuvable`)
+        continue 
+      }
+      if (p.isArchived) { 
+        errors.push(`${p.name} - Archivé`)
+        continue 
+      }
+      if (p.stock <= 0) { 
+        errors.push(`${p.name} - Rupture de stock`)
+        continue 
+      }
+      if (p.stock < item.quantity) { 
+        errors.push(`${p.name}: stock ${p.stock} < ${item.quantity}`)
+        continue 
       }
     }
+
+    return { ok: errors.length === 0, errors, cart }
   }
 
-  private async buildItems(order: Order, items: any[], fromCart: boolean, userId?: string): Promise<{ subtotal: number; count: number }> {
+  // ✅ Crée les OrderItems à partir du panier
+  private async buildItemsFromCart(order: Order, cart: Cart): Promise<{ subtotal: number; count: number }> {
     let subtotal = 0
     let count = 0
 
-    const source = fromCart
-      ? (await Cart.query().where('user_id', userId!).preload('items').first())?.items || []
-      : items
-
-    for (const item of source) {
-      const pid = item.productId || item.product_id || item.id
-      if (!pid) continue
-
-      const p = await Product.findBy('id', pid)
+    for (const item of cart.items) {
+      const p = await Product.findBy('id', item.product_id)
       if (!p) continue
 
-      const itemTotal = p.price * (item.quantity || 1)
+      const itemTotal = p.price * item.quantity
       subtotal += itemTotal
 
       await OrderItem.create({
@@ -219,11 +167,11 @@ export default class PayMobileMoneyController {
         product_id: p.id,
         product_name: p.name,
         price: p.price,
-        quantity: item.quantity || 1,
+        quantity: item.quantity,
         subtotal: itemTotal
       })
 
-      await this.decrementStock(p.id, item.quantity || 1)
+      // ✅ Stock NON décrémenté ici - sera fait par le CallbackController après confirmation
       count++
     }
 
@@ -235,77 +183,98 @@ export default class PayMobileMoneyController {
     console.log('📱 ========== PAIEMENT MOBILE MONEY ==========')
 
     try {
+      // Récupérer toutes les données envoyées
       const payload = request.only([
         'userId', 'customerAccountNumber', 'shippingAddress', 'deliveryMethod',
-        'deliveryPrice', 'customerName', 'customerEmail', 'customerPhone', 'agent', 'items',
+        'deliveryPrice', 'customerName', 'customerEmail', 'customerPhone', 'agent', 'linkType', 'notes'
       ])
 
-      if (!payload.customerAccountNumber) {
+      console.log('📦 Données reçues:', payload)
+
+      const userId = payload.userId
+      const phoneNumber = payload.customerAccountNumber || payload.customerPhone
+
+      if (!userId) {
+        return response.status(400).json({
+          success: false,
+          message: 'userId requis'
+        })
+      }
+
+      if (!phoneNumber) {
         return response.status(400).json({
           success: false,
           message: 'Numéro de téléphone requis'
         })
       }
 
-      // 1. Vérification stock
-      const useCart = !!payload.userId && (!payload.items || payload.items.length === 0)
-      const stock = await this.checkStock(payload.items || [], useCart, payload.userId)
-      if (!stock.ok) {
+      // ✅ 1. RÉCUPÉRER LE PANIER DE L'UTILISATEUR
+      console.log('🛒 Récupération du panier pour userId:', userId)
+      
+      const { ok, errors, cart } = await this.checkCartStock(userId)
+      
+      if (!ok) {
         return response.status(400).json({
           success: false,
-          message: 'Stock insuffisant',
-          errors: stock.errors
+          message: 'Stock insuffisant ou panier vide',
+          errors
         })
       }
+
+      if (!cart) {
+        return response.status(400).json({
+          success: false,
+          message: 'Panier introuvable'
+        })
+      }
+
+      console.log(`🛒 Panier trouvé avec ${cart.items.length} articles`)
 
       // 2. KYC et détection opérateur
-      const kyc = await this.performKYC(payload.customerAccountNumber)
-      console.log(`📱 Opérateur détecté: ${kyc.operator} (${kyc.operatorCode})`)
-      console.log(`🔑 Compte: ${kyc.accountCode}`)
+      const kyc = await this.performKYC(phoneNumber)
+      console.log(`📱 Opérateur: ${kyc.operator} | Code: ${kyc.operatorCode} | Compte: ${kyc.accountCode}`)
 
-      // 3. Renouveler le secret pour l'opérateur détecté
-      await this.renewSecretIfNeeded(payload.customerAccountNumber)
+      // 3. Renouveler le secret
+      await this.renewSecretIfNeeded(phoneNumber)
 
-      // 4. User ID : si absent → créer un User
-      let userId = payload.userId
-      if (!userId) {
-        const newUser = await this.getOrCreateUser({
-          customerName: payload.customerName || kyc.fullName,
-          customerEmail: payload.customerEmail || '',
-          customerPhone: payload.customerPhone || payload.customerAccountNumber,
-        })
-        userId = newUser.id
+      // 4. Récupérer l'utilisateur (pour son nom/email)
+      const user = await User.findBy('id', userId)
+
+      // 5. Calculer le total depuis le panier
+      let subtotal = 0
+      for (const item of cart.items) {
+        const product = await Product.findBy('id', item.product_id)
+        if (product) {
+          subtotal += product.price * item.quantity
+        }
       }
 
-      // 5. Création commande
+      const shippingCost = payload.deliveryPrice || 1
+      const total = subtotal + shippingCost
+
+      console.log('💰 Subtotal:', subtotal, '| Livraison:', shippingCost, '| Total:', total)
+
+      // 6. Création commande
       const order = await Order.create({
         user_id: userId,
         order_number: generateOrderNumber(),
         status: 'pending',
-        total: 0,
-        subtotal: 0,
-        shipping_cost: payload.deliveryPrice || 2500,
+        total: total,
+        subtotal: subtotal,
+        shipping_cost: shippingCost,
         delivery_method: payload.deliveryMethod || 'standard',
-        customer_name: payload.customerName || kyc.fullName,
-        customer_phone: kyc.accountNumber,
+        customer_name: user?.full_name || payload.customerName || kyc.fullName,
+        customer_phone: phoneNumber,
         payment_method: kyc.operator,
-        customer_email: payload.customerEmail || 'invite@email.com',
+        customer_email: user?.email || payload.customerEmail || '',
         shipping_address: payload.shippingAddress || 'non renseigné',
+        payment_operator_simple: kyc.operator
       })
 
-      // 6. Items
-      const { subtotal, count } = await this.buildItems(
-        order,
-        payload.items || [],
-        useCart,
-        payload.userId
-      )
+      // 7. Créer les OrderItems à partir du panier
+      const { count } = await this.buildItemsFromCart(order, cart)
 
-      const total = subtotal + (payload.deliveryPrice || 2500)
-      order.subtotal = subtotal
-      order.total = total
-      await order.save()
-
+      // 8. Tracking initial
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
@@ -313,8 +282,8 @@ export default class PayMobileMoneyController {
         tracked_at: DateTime.now(),
       })
 
-      // 7. Paiement avec le bon compte opérateur
-      console.log(`💳 Lancement paiement ${kyc.operator} via compte ${kyc.accountCode}...`)
+      // 9. PAIEMENT
+      console.log(`💳 Paiement ${kyc.operator} via compte ${kyc.accountCode}...`)
 
       const payment = await MypvitTransactionService.processPayment({
         agent: payload.agent || 'AGENT_DEFAULT',
@@ -322,20 +291,15 @@ export default class PayMobileMoneyController {
         reference: `REF${Date.now()}`.substring(0, 15),
         callback_url_code: CALLBACK_URL_CODE,
         customer_account_number: kyc.accountNumber,
-        merchant_operation_account_code: kyc.accountCode, // Compte spécifique à l'opérateur
+        merchant_operation_account_code: kyc.accountCode,
         owner_charge: 'CUSTOMER',
         operator_code: kyc.operatorCode,
       })
 
-      console.log('💳 Résultat paiement:', {
-        status: payment.status,
-        reference: payment.reference_id,
-        message: payment.message
-      })
+      console.log('💳 Résultat paiement:', payment)
 
-      // 8. Traitement selon résultat
+      // 10. Traitement résultat
       if (payment.status !== 'FAILED' && payment.reference_id) {
-        // Paiement initié avec succès
         order.payment_reference_id = payment.reference_id
         order.payment_operator_simple = kyc.operator
         order.payment_amount = total
@@ -346,7 +310,7 @@ export default class PayMobileMoneyController {
         await OrderTracking.create({
           order_id: order.id,
           status: 'pending_payment',
-          description: `⏳ En attente de confirmation - ${kyc.operator} - Réf: ${payment.reference_id}`,
+          description: `⏳ En attente - ${kyc.operator} - Réf: ${payment.reference_id}`,
           tracked_at: DateTime.now(),
         })
 
@@ -376,8 +340,7 @@ export default class PayMobileMoneyController {
           },
         })
       } else {
-        // Échec du paiement
-        await this.restoreStock(order.id)
+        // Paiement échoué → Pas de restauration de stock nécessaire
         order.status = 'payment_failed'
         order.payment_error_message = payment.message || 'Erreur inconnue'
         await order.save()
@@ -385,7 +348,7 @@ export default class PayMobileMoneyController {
         await OrderTracking.create({
           order_id: order.id,
           status: 'payment_failed',
-          description: `❌ Échec paiement ${kyc.operator}: ${payment.message}`,
+          description: `❌ Échec ${kyc.operator}: ${payment.message}`,
           tracked_at: DateTime.now(),
         })
 
@@ -398,10 +361,17 @@ export default class PayMobileMoneyController {
       }
     } catch (error: any) {
       console.error('🔴 Erreur paiement:', error.message)
+      
+      if (error.response) {
+        console.error('🔴 Status:', error.response.status)
+        console.error('🔴 Data:', JSON.stringify(error.response.data))
+      }
+      
       return response.status(500).json({
         success: false,
         message: 'Erreur lors du paiement',
-        error: error.message
+        error: error.message,
+        details: error.response?.data || null
       })
     }
   }

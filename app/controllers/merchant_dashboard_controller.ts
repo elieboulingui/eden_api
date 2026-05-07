@@ -12,6 +12,7 @@ import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
 import crypto from 'node:crypto'
 import axios from 'axios'
+import Withdrawal from '#models/Withdrawal'
 
 export default class MerchantDashboardController {
 
@@ -616,19 +617,112 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
     }
   }
 
-  async getWithdrawalHistory({ params, response }: HttpContext) {
+async getWithdrawalHistory({ params, response }: HttpContext) {
+  try {
+    const { userId } = params
+
+    if (!userId) {
+      return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+    }
+
+    const user = await User.findBy('id', userId)
+
+    if (!user) {
+      return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+    }
+
+    // ✅ Utiliser le modèle Withdrawal directement
+    const withdrawals = await Withdrawal.query()
+      .where('user_id', user.id)
+      .orderBy('created_at', 'desc')
+
+    console.log(`📦 ${withdrawals.length} retrait(s) trouvé(s) pour l'utilisateur ${userId}`)
+
+    // Transformer les données pour le frontend
+    const formattedWithdrawals = withdrawals.map(w => ({
+      id: w.id,
+      amount: w.net_amount || w.amount,
+      status: w.status,
+      payment_method: w.payment_method,
+      account_number: w.account_number,
+      account_name: w.account_name,
+      operator: w.operator,
+      reference: w.reference,
+      created_at: w.created_at,
+      fee: w.fee,
+      net_amount: w.net_amount
+    }))
+
+    // Calculer les statistiques
+    const completed = formattedWithdrawals.filter(w => w.status === 'completed')
+    const pending = formattedWithdrawals.filter(w => w.status === 'pending' || w.status === 'processing')
+    const failed = formattedWithdrawals.filter(w => w.status === 'failed' || w.status === 'cancelled')
+    
+    const totalWithdrawn = completed.reduce((sum, w) => sum + Number(w.amount), 0)
+
+    // Récupérer le solde actuel
+    const wallet = await Wallet.query().where('user_id', user.id).first()
+    const currentBalance = wallet ? wallet.balance : 0
+
+    return response.ok({
+      success: true,
+      data: formattedWithdrawals,
+      stats: {
+        total_withdrawn: totalWithdrawn,
+        total_withdrawals: withdrawals.length,
+        completed_count: completed.length,
+        pending_count: pending.length,
+        failed_count: failed.length
+      },
+      count: withdrawals.length,
+      current_balance: currentBalance
+    })
+
+  } catch (error: any) {
+    console.error('Erreur dans getWithdrawalHistory:', error)
+    return response.internalServerError({
+      success: false,
+      message: error.message
+    })
+  }
+}
+  /**
+   * Récupère les statistiques détaillées des retraits pour un marchand
+   * GET /api/merchant/give-change/stats?userId={userId}
+   */
+  async getWithdrawalStats({ request, response }: HttpContext) {
     try {
-      const { userId } = params
+      const userId = request.qs().userId || request.input('userId')
 
       if (!userId) {
-        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+        return response.badRequest({ 
+          success: false, 
+          message: "Paramètre userId manquant" 
+        })
       }
 
       const user = await User.findBy('id', userId)
 
       if (!user) {
-        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+        return response.notFound({ 
+          success: false, 
+          message: 'Utilisateur non trouvé' 
+        })
       }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ 
+          success: false, 
+          message: 'Accès réservé aux marchands' 
+        })
+      }
+
+      // Récupérer le wallet
+      const wallet = await Wallet.query()
+        .where('user_id', user.id)
+        .first()
+
+      const currentBalance = wallet ? wallet.balance : 0
 
       // Vérifier si la table merchant_withdrawals existe
       const hasWithdrawalsTable = await Database.rawQuery(`
@@ -647,29 +741,101 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
           .orderBy('created_at', 'desc')
       }
 
-      // Calculer les statistiques
-      const stats = {
-        total_withdrawn: withdrawals
-          .filter(w => w.status === 'completed')
-          .reduce((sum, w) => sum + Number(w.amount), 0),
-        total_withdrawals: withdrawals.length,
-        completed_count: withdrawals.filter(w => w.status === 'completed').length,
-        pending_count: withdrawals.filter(w => w.status === 'pending').length,
-        failed_count: withdrawals.filter(w => w.status === 'failed').length
+      // Statistiques globales
+      const completed = withdrawals.filter(w => w.status === 'completed')
+      const pending = withdrawals.filter(w => w.status === 'pending')
+      const failed = withdrawals.filter(w => w.status === 'failed')
+
+      const totalWithdrawn = completed.reduce((sum, w) => sum + Number(w.amount), 0)
+      const averageWithdrawal = completed.length > 0 ? totalWithdrawn / completed.length : 0
+
+      // Dernier retrait
+      const lastWithdrawal = withdrawals.length > 0 ? {
+        id: withdrawals[0].id,
+        amount: Number(withdrawals[0].amount),
+        status: withdrawals[0].status,
+        payment_method: withdrawals[0].payment_method,
+        account_number: withdrawals[0].account_number,
+        account_name: withdrawals[0].account_name,
+        operator: withdrawals[0].operator,
+        reference: withdrawals[0].reference,
+        created_at: withdrawals[0].created_at
+      } : null
+
+      // Statistiques par mois (24 derniers mois)
+      const monthlyStats: { month: string; amount: number; count: number }[] = []
+      const now = DateTime.now()
+      const twoYearsAgo = now.minus({ years: 2 })
+
+      for (let i = 0; i <= 24; i++) {
+        const monthDate = now.minus({ months: i })
+        if (monthDate < twoYearsAgo) continue
+
+        const monthStr = monthDate.toFormat('yyyy-MM')
+        const monthName = monthDate.toFormat('MMM yyyy')
+
+        const monthWithdrawals = completed.filter(w => {
+          const wDate = DateTime.fromSQL(w.created_at)
+          return wDate.toFormat('yyyy-MM') === monthStr
+        })
+
+        monthlyStats.unshift({
+          month: monthName,
+          amount: monthWithdrawals.reduce((sum, w) => sum + Number(w.amount), 0),
+          count: monthWithdrawals.length
+        })
+      }
+
+      // Statistiques par opérateur
+      const operatorStats: { operator: string; amount: number; count: number }[] = []
+      const operatorMap = new Map<string, { amount: number; count: number }>()
+
+      for (const w of completed) {
+        const operator = w.operator || w.payment_method || 'Autre'
+        const existing = operatorMap.get(operator) || { amount: 0, count: 0 }
+        operatorMap.set(operator, {
+          amount: existing.amount + Number(w.amount),
+          count: existing.count + 1
+        })
+      }
+
+      for (const [operator, data] of operatorMap) {
+        operatorStats.push({
+          operator,
+          amount: data.amount,
+          count: data.count
+        })
+      }
+
+      operatorStats.sort((a, b) => b.amount - a.amount)
+
+      // Résumé
+      const summary = {
+        totalWithdrawn,
+        totalWithdrawals: withdrawals.length,
+        completedWithdrawals: completed.length,
+        pendingWithdrawals: pending.length,
+        failedWithdrawals: failed.length,
+        averageWithdrawal,
+        currentBalance
       }
 
       return response.ok({
         success: true,
-        data: withdrawals,
-        stats: stats,
-        count: withdrawals.length
+        data: {
+          summary,
+          monthly: monthlyStats,
+          by_operator: operatorStats,
+          last_withdrawal: lastWithdrawal,
+          current_balance: currentBalance
+        }
       })
 
     } catch (error: any) {
-      console.error('Erreur dans getWithdrawalHistory:', error)
+      console.error('Erreur dans getWithdrawalStats:', error)
       return response.internalServerError({
         success: false,
-        message: error.message
+        message: error.message || 'Erreur lors de la récupération des statistiques'
       })
     }
   }
@@ -695,6 +861,7 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
       // ✅ Récupérer TOUS les produits du marchand
       const merchantProducts = await Product.query()
         .where('user_id', user.id)
+        .where('isArchived', false)  // ✅ Exclure les produits archivés
         .select('id', 'name', 'price', 'image_url')
 
       const productIds = merchantProducts.map(p => p.id)
@@ -884,6 +1051,7 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
       // ✅ Récupérer les produits du marchand
       const merchantProducts = await Product.query()
         .where('user_id', user.id)
+        .where('isArchived', false)
         .select('id')
 
       const productIds = merchantProducts.map(p => p.id)
@@ -988,6 +1156,7 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
 
       const merchantProducts = await Product.query()
         .where('user_id', user.id)
+        .where('isArchived', false)
         .select('id')
 
       const merchantProductIds = merchantProducts.map(p => p.id)
@@ -1059,103 +1228,148 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
   }
 
   async dashboard(ctx: HttpContext) {
-    const { params, response } = ctx
-    const userId = params.userId
+  const { params, response } = ctx
+  const userId = params.userId
 
-    const user = await User.findBy('id', userId)
-    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-      return response.forbidden({ success: false, message: 'Non autorisé' })
-    }
+  const user = await User.findBy('id', userId)
+  if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+    return response.forbidden({ success: false, message: 'Non autorisé' })
+  }
 
-    // ✅ Charger les produits avec leur catégorie
-    const products = await Product.query()
-      .where('user_id', user.id)
-      .where('isArchived', false)  // 🔴 AJOUTER CE FILTRE
-      .preload('categoryRelation')
-      .orderBy('createdAt', 'desc')  // ✅ Correction: createdAt au lieu de created_at
+  // ✅ Charger les produits avec leur catégorie
+  const products = await Product.query()
+    .where('user_id', user.id)
+    .where('isArchived', false)
+    .preload('categoryRelation')
+    .orderBy('createdAt', 'desc')
 
-    // Récupérer les catégories du marchand
-    const categories = await Category.query()
-      .where('user_id', user.id)
-      .orderBy('name', 'asc')
+  // Récupérer les catégories du marchand
+  const categories = await Category.query()
+    .where('user_id', user.id)
+    .orderBy('name', 'asc')
 
-    // Récupérer les coupons du marchand
-    const coupons = await Coupon.query()
-      .where('user_id', user.id)
-      .orderBy('created_at', 'desc')
+  // Récupérer les coupons du marchand
+  const coupons = await Coupon.query()
+    .where('user_id', user.id)
+    .orderBy('created_at', 'desc')
 
-    // Récupérer le wallet
-    let wallet = await Wallet.query()
-      .where('user_id', user.id)
-      .first()
+  // Récupérer le wallet
+  let wallet = await Wallet.query()
+    .where('user_id', user.id)
+    .first()
 
-    if (!wallet) {
-      wallet = await Wallet.create({
-        user_id: user.id,
-        balance: 0,
-        currency: 'XAF',
-        status: 'active'
-      })
-    }
-
-    // Transformer les produits
-    const transformedProducts = products.map(p => {
-      let categoryName = 'Sans catégorie'
-      if (p.categoryRelation) {
-        categoryName = p.categoryRelation.name
-      } else if (p.category) {
-        categoryName = p.category
-      }
-
-      return {
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        price: p.price,
-        stock: p.stock,
-        image_url: p.image_url,
-        category: categoryName,
-        likes: 0,
-        sales: p.sales || 0,
-        status: p.status || 'active',
-        createdAt: p.createdAt  // ✅ Correction: createdAt au lieu de created_at
-      }
-    })
-
-    return response.ok({
-      success: true,
-      data: {
-        stats: {
-          totalProducts: products.length,
-          totalSales: 0,
-          totalRevenue: 0,
-          totalLikes: 0,
-          pendingOrders: 0,
-        },
-        products: transformedProducts,
-        categories: categories.map(c => ({
-          id: c.id,
-          name: c.name,
-          slug: c.slug,
-          image_url: c.image_url || null,
-          productCount: c.product_count || 0
-        })),
-        coupons: coupons,
-        salesChart: [],
-        pendingOrders: [],
-        popularProducts: [],
-        merchant: {
-          id: user.id,
-          uuid: user.id,
-          full_name: user.full_name,
-          email: user.email,
-          avatar: user.avatar || null,
-          availableBalance: wallet.balance
-        }
-      }
+  if (!wallet) {
+    wallet = await Wallet.create({
+      user_id: user.id,
+      balance: 0,
+      currency: 'XAF',
+      status: 'active'
     })
   }
 
+  // ✅ RÉCUPÉRER LES LIKES RÉELS (depuis la table favorites)
+  const productIds = products.map(p => p.id)
+  let likesCountMap: Record<string, number> = {}
+
+  if (productIds.length > 0) {
+    try {
+      const likesData = await Database
+        .from('favorites')
+        .select('product_id')
+        .count('* as total')
+        .whereIn('product_id', productIds)
+        .groupBy('product_id')
+
+      likesCountMap = likesData.reduce((acc: Record<string, number>, curr: any) => {
+        acc[curr.product_id] = parseInt(curr.total)
+        return acc
+      }, {})
+    } catch (error) {
+      console.log('Table favorites non disponible:', error)
+    }
+  }
+
+  // ✅ RÉCUPÉRER LES VENTES RÉELLES (depuis la table order_items)
+  let salesCountMap: Record<string, number> = {}
+
+  if (productIds.length > 0) {
+    try {
+      const orderItems = await OrderItem.query()
+        .whereIn('product_id', productIds)
+        .select('product_id')
+        .count('* as total')
+        .groupBy('product_id')
+
+      salesCountMap = orderItems.reduce((acc: Record<string, number>, curr: any) => {
+        acc[curr.product_id] = parseInt(curr.$extras.total)
+        return acc
+      }, {})
+    } catch (error) {
+      console.log('Table order_items non disponible:', error)
+    }
+  }
+
+  // ✅ Transformer les produits avec les vrais likes et ventes
+  const transformedProducts = products.map(p => {
+    let categoryName = 'Sans catégorie'
+    if (p.categoryRelation) {
+      categoryName = p.categoryRelation.name
+    } else if (p.category) {
+      categoryName = p.category
+    }
+
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      stock: p.stock,
+      image_url: p.image_url,
+      category: categoryName,
+      likes: likesCountMap[p.id] || 0,    // ✅ Vrais likes depuis favorites
+      sales: salesCountMap[p.id] || 0,   // ✅ Vraies ventes depuis order_items
+      status: p.status || 'active',
+      createdAt: p.createdAt
+    }
+  })
+
+  // Calculer les totaux
+  const totalLikes = transformedProducts.reduce((sum, p) => sum + p.likes, 0)
+  const totalSales = transformedProducts.reduce((sum, p) => sum + p.sales, 0)
+
+  return response.ok({
+    success: true,
+    data: {
+      stats: {
+        totalProducts: products.length,
+        totalSales: totalSales,
+        totalRevenue: 0,
+        totalLikes: totalLikes,
+        pendingOrders: 0,
+      },
+      products: transformedProducts,
+      categories: categories.map(c => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        image_url: c.image_url || null,
+        productCount: c.product_count || 0
+      })),
+      coupons: coupons,
+      salesChart: [],
+      pendingOrders: [],
+      popularProducts: [],
+      merchant: {
+        id: user.id,
+        uuid: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        avatar: user.avatar || null,
+        availableBalance: wallet.balance
+      }
+    }
+  })
+}
   async getProducts({ params, request, response }: HttpContext) {
     try {
       const { userId } = params
@@ -1462,112 +1676,144 @@ async deleteProduct({ params, response }: HttpContext) {
   }
 }
 
-  async getCategories({ params, response }: HttpContext) {
-    try {
-      const { userId } = params
+ async getCategories({ params, response }: HttpContext) {
+  try {
+    const { userId } = params
 
-      if (!userId) {
-        return response.badRequest({ success: false, message: 'ID utilisateur requis' })
-      }
-
-      const user = await User.findBy('id', userId)
-
-      if (!user) {
-        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
-      }
-
-      const categories = await Category.query()
-        .where('user_id', user.id)
-        .orderBy('name', 'asc')
-
-      return response.ok({ success: true, data: categories })
-    } catch (error: any) {
-      console.error('ERREUR getCategories:', error)
-      return response.internalServerError({ success: false, message: error.message })
+    if (!userId) {
+      return response.badRequest({ success: false, message: 'ID utilisateur requis' })
     }
-  }
 
-  async createCategory({ params, request, response }: HttpContext) {
-    try {
-      const { userId } = params
-      const { name, slug } = request.only(['name', 'slug'])
+    const user = await User.findBy('id', userId)
 
-      if (!name) {
-        return response.badRequest({ success: false, message: 'Le nom est requis' })
-      }
+    if (!user) {
+      return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+    }
 
-      const user = await User.findBy('id', userId)
+    const categories = await Category.query()
+      .where('user_id', user.id)
+      .orderBy('name', 'asc')
 
-      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-        return response.forbidden({ success: false, message: 'Non autorisé' })
-      }
+    // ✅ Pour chaque catégorie, compter les vrais produits non archivés
+    const categoriesWithCount = await Promise.all(
+      categories.map(async (category) => {
+        const productCountResult = await Product.query()
+          .where('category_id', category.id)
+          .where('user_id', user.id)
+          .where('isArchived', false)
+          .count('* as total')
 
-      const slugToUse = slug || name.toLowerCase().replace(/\s+/g, '-')
+        const realCount = parseInt(productCountResult[0].$extras.total) || 0
 
-      const category = await Category.create({
-        name,
-        slug: slugToUse,
-        user_id: user.id,
-      })
-
-      return response.created({
-        success: true,
-        data: {
+        return {
           id: category.id,
           name: category.name,
           slug: category.slug,
-          productCount: 0,
-        },
-        message: 'Catégorie créée',
+          image_url: category.image_url || null,
+          icon_name: category.icon_name || null,
+          product_count: realCount,  // ✅ Vrai comptage
+          sort_order: category.sort_order ?? 0,
+          is_active: category.is_active,
+        }
       })
-    } catch (error: any) {
-      console.error('ERREUR createCategory:', error)
-      return response.internalServerError({
-        success: false,
-        message: error.message,
-      })
-    }
+    )
+
+    return response.ok({ 
+      success: true, 
+      message: 'Catégories récupérées avec succès',
+      data: categoriesWithCount,
+      count: categoriesWithCount.length,
+    })
+  } catch (error: any) {
+    console.error('ERREUR getCategories:', error)
+    return response.internalServerError({ success: false, message: error.message })
   }
+}
 
-  async updateCategory({ params, request, response }: HttpContext) {
-    try {
-      const { userId, categoryId } = params
-      const { name, slug, is_active } = request.only(['name', 'slug', 'is_active'])
+  async createCategory({ params, request, response }: HttpContext) {
+  try {
+    const { userId } = params
+    const { name, slug, image_url } = request.only(['name', 'slug', 'image_url'])  // ✅ Ajouter image_url
 
-      const user = await User.findBy('id', userId)
-
-      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-        return response.forbidden({ success: false, message: 'Non autorisé' })
-      }
-
-      const category = await Category.query()
-        .where('id', categoryId)
-        .where('user_id', user.id)
-        .first()
-
-      if (!category) {
-        return response.notFound({ success: false, message: 'Catégorie non trouvée' })
-      }
-
-      if (name) category.name = name
-      if (slug) category.slug = slug
-      if (is_active !== undefined) category.is_active = is_active
-
-      await category.save()
-
-      return response.ok({
-        success: true,
-        data: category,
-        message: 'Catégorie mise à jour avec succès'
-      })
-    } catch (error: any) {
-      console.error('Erreur updateCategory:', error)
-      return response.internalServerError({
-        success: false,
-        message: error.message
-      })
+    if (!name) {
+      return response.badRequest({ success: false, message: 'Le nom est requis' })
     }
+
+    const user = await User.findBy('id', userId)
+
+    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+      return response.forbidden({ success: false, message: 'Non autorisé' })
+    }
+
+    const slugToUse = slug || name.toLowerCase().replace(/\s+/g, '-')
+
+    const category = await Category.create({
+      name,
+      slug: slugToUse,
+      user_id: user.id,
+      image_url: image_url || null,  // ✅ Sauvegarder l'URL de l'image
+    })
+
+    return response.created({
+      success: true,
+      data: {
+        id: category.id,
+        name: category.name,
+        slug: category.slug,
+        image_url: category.image_url,  // ✅ Retourner l'URL
+        productCount: 0,
+      },
+      message: 'Catégorie créée',
+    })
+  } catch (error: any) {
+    console.error('ERREUR createCategory:', error)
+    return response.internalServerError({
+      success: false,
+      message: error.message,
+    })
   }
+}
+
+async updateCategory({ params, request, response }: HttpContext) {
+  try {
+    const { userId, categoryId } = params
+    const { name, slug, is_active, image_url } = request.only(['name', 'slug', 'is_active', 'image_url'])  // ✅ Ajouter image_url
+
+    const user = await User.findBy('id', userId)
+
+    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+      return response.forbidden({ success: false, message: 'Non autorisé' })
+    }
+
+    const category = await Category.query()
+      .where('id', categoryId)
+      .where('user_id', user.id)
+      .first()
+
+    if (!category) {
+      return response.notFound({ success: false, message: 'Catégorie non trouvée' })
+    }
+
+    if (name) category.name = name
+    if (slug) category.slug = slug
+    if (is_active !== undefined) category.is_active = is_active
+    if (image_url !== undefined) category.image_url = image_url  // ✅ Mettre à jour l'image
+
+    await category.save()
+
+    return response.ok({
+      success: true,
+      data: category,
+      message: 'Catégorie mise à jour avec succès'
+    })
+  } catch (error: any) {
+    console.error('Erreur updateCategory:', error)
+    return response.internalServerError({
+      success: false,
+      message: error.message
+    })
+  }
+}
 
   async deleteCategory({ params, response }: HttpContext) {
     try {

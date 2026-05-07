@@ -1,4 +1,3 @@
-// app/services/mypvit_secret_service.ts
 import axios from 'axios'
 import { DateTime } from 'luxon'
 
@@ -11,7 +10,7 @@ interface StoredSecret {
 
 interface AccountConfig {
   code: string        // ACC_... pour operationAccountCode dans le body
-  codeUrl: string     // CODE_URL pour l'URL (6JN5J6U0NBJGKDAQ)
+  codeUrl: string     // CODE_URL pour l'URL
   password: string
   operator: string
 }
@@ -30,11 +29,11 @@ export class MypvitSecretService {
       password: 'Boulinguisanduku@1',
       operator: 'AIRTEL_MONEY'
     },
-    '06': { // LIBERTIS
+    '06': { // MOOV/LIBERTIS
       code: 'ACC_69EFB143D4F54',
       codeUrl: '6JN5J6U0NBJGKDAQ',
       password: 'Boulinguisanduku@1',
-      operator: 'LIBERTIS'
+      operator: 'MOOV_MONEY'
     }
   }
 
@@ -49,15 +48,20 @@ export class MypvitSecretService {
    * Détecte l'opérateur selon le numéro de téléphone
    */
   private detectOperator(phoneNumber?: string): string {
-    if (!phoneNumber) return 'default'
+    if (!phoneNumber) return '06' // MOOV par défaut
 
     // Nettoyer le numéro
     const cleanNumber = phoneNumber.replace(/\D/g, '')
+    
+    // Enlever le préfixe international
+    let local = cleanNumber
+    if (local.startsWith('241')) local = local.substring(3)
+    if (local.startsWith('0')) local = local.substring(1)
 
-    if (cleanNumber.startsWith('07')) return '07'
-    if (cleanNumber.startsWith('06')) return '06'
-
-    return 'default' // MOOV par défaut
+    if (local.startsWith('7')) return '07'  // AIRTEL
+    if (local.startsWith('6')) return '06'  // MOOV
+    
+    return '06' // MOOV par défaut
   }
 
   /**
@@ -65,11 +69,16 @@ export class MypvitSecretService {
    */
   private getAccountConfig(phoneNumber?: string): AccountConfig {
     const operator = this.detectOperator(phoneNumber)
-    return this.ACCOUNTS[operator]
+    const config = this.ACCOUNTS[operator]
+    if (!config) return this.ACCOUNTS['06']
+    return config
   }
 
   async renewSecret(phoneNumber?: string): Promise<StoredSecret> {
-    if (this.renewalPromise) return this.renewalPromise
+    if (this.renewalPromise) {
+      console.log('⏳ [SecretService] Renouvellement déjà en cours, attente...')
+      return this.renewalPromise
+    }
     this.renewalPromise = this.performRenewal(phoneNumber)
     try {
       return await this.renewalPromise
@@ -89,10 +98,8 @@ export class MypvitSecretService {
       try {
         console.log(`📡 [SecretService] Tentative ${i}/3 - Renouvellement pour ${accountConfig.operator}...`)
 
-        // ✅ CODE_URL dans l'URL, PAS le code compte
         const url = `/${accountConfig.codeUrl}/renew-secret`
 
-        // ✅ code compte dans le body
         const body = new URLSearchParams()
         body.append('operationAccountCode', accountConfig.code)
         body.append('password', accountConfig.password)
