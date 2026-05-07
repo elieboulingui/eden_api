@@ -52,6 +52,7 @@ const MerchantDashboardController = () => import('#controllers/merchant_dashboar
 const CouponsController = () => import('#controllers/coupons_controller')
 const GiveChangeController = () => import('#controllers/give_change_controller')
 const HotelsController = () => import('#controllers/hotels_controller')
+const RoomsController = () => import('#controllers/rooms_controller')
 
 // ============================================================
 // ROUTES WEB (PAGES)
@@ -374,6 +375,17 @@ router.group(() => {
     // Routes pour les chambres d'un hôtel
     router.get('/:id/rooms', [HotelsController, 'getRooms']).as('hotels.rooms')
   }).prefix('/hotels')
+
+  // ----------------------------------------------------------
+  // CHAMBRES (ROOMS)
+  // ----------------------------------------------------------
+  router.group(() => {
+    router.get('/', [RoomsController, 'index']).as('rooms.index')
+    router.post('/', [RoomsController, 'store']).as('rooms.store')
+    router.get('/:id', [RoomsController, 'show']).as('rooms.show')
+    router.put('/:id', [RoomsController, 'update']).as('rooms.update')
+    router.delete('/:id', [RoomsController, 'destroy']).as('rooms.destroy')
+  }).prefix('/rooms')
 
   // ----------------------------------------------------------
   // SHOP
