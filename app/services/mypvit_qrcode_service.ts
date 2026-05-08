@@ -37,7 +37,7 @@ export class MypvitQRCodeService {
       })
 
       // ✅ Utiliser le callbackUrlCode dans l'URL (comme pour renew-secret)
-      const url = `/${options.callbackUrlCode}/generate-qr-code`
+      const url = `/4XWLIAKA5UFSIIYZ/generate-qr-code`
       
       console.log(`📡 URL complète: ${this.BASE_URL}${url}`)
 
