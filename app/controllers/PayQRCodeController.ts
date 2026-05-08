@@ -1,4 +1,4 @@
-// app/controllers/PayQRCodeController.ts - GIMAC UNIQUEMENT
+// app/controllers/PayQRCodeController.ts - GIMAC UNIQUEMENT AVEC IMAGE PNG
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -115,22 +115,26 @@ export default class PayQRCodeController {
       })
       console.log('📊 Tracking OK')
 
-      // ÉTAPE 7 : QR Code GIMAC
+      // ÉTAPE 7 : QR Code GIMAC AVEC IMAGE PNG
       console.log('🔑 ÉTAPE 7: QR Code GIMAC...')
       
-      // Optionnel: Forcer un renouvellement pour être sûr d'avoir un secret frais
-      // Mais le generateQRCode le fera automatiquement si nécessaire
+      // Forcer un renouvellement pour être sûr d'avoir un secret frais
       await MypvitSecretService.forceRenewal()
       
+      // ✅ Générer le QR Code en image PNG (base64)
       const qrResult = await MypvitQRCodeService.generateQRCode({
         accountOperationCode: GIMAC_ACCOUNT,
         terminalId: `T${Date.now().toString(36).toUpperCase()}`,
         callbackUrlCode: CALLBACK_URL_CODE,
         amount: subtotal,
         reference: order.order_number,
-        phoneNumber: rawBody.customerPhone || '060000000'  // Utiliser le vrai numéro si dispo
+        phoneNumber: rawBody.customerPhone || '060000000',
+        returnAsImage: true  // ✅ Retourne l'image PNG en base64
       })
-      console.log('🔑 QR Code généré, reference_id:', qrResult.reference_id)
+      
+      console.log('🔑 QR Code généré (image PNG base64)')
+      console.log('🔑 Format:', qrResult.format)
+      console.log('🔑 Reference ID:', qrResult.reference_id)
 
       // ÉTAPE 8 : Sauvegarder la référence
       if (qrResult.reference_id) {
@@ -149,6 +153,7 @@ export default class PayQRCodeController {
 
       await order.load('items')
 
+      // ✅ Retourner le QR code en base64 pour affichage immédiat
       return response.status(201).json({
         success: true,
         message: '✅ QR Code GIMAC généré !',
@@ -159,10 +164,12 @@ export default class PayQRCodeController {
           status: 'pending_payment',
           itemsCount: validProducts.length,
           qr_code: {
-            data: qrResult.data,
+            data: qrResult.data,  // Base64 de l'image PNG
+            format: qrResult.format,  // 'png_base64'
             reference_id: qrResult.reference_id,
             amount: subtotal,
             expires_in: 600,
+            mime_type: 'image/png'  // Pour l'affichage frontend
           }
         }
       })
