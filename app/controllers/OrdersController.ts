@@ -78,6 +78,109 @@ export default class OrdersController {
   }
 
   /**
+   * ✅ Récupérer l'adresse de la boutique du marchand à partir des produits de la commande
+   */
+  private async getMerchantStoreAddress(orderId: string): Promise<string | null> {
+    try {
+      // Récupérer les items de la commande
+      const items = await OrderItem.query().where('order_id', orderId)
+      
+      if (items.length === 0) {
+        console.log('📍 [Adresse Boutique] Aucun item trouvé pour la commande')
+        return null
+      }
+
+      // Trouver tous les produits de la commande et leurs marchands
+      const merchantAddresses: string[] = []
+      
+      for (const item of items) {
+        const product = await Product.query()
+          .where('id', item.product_id)
+          .preload('user')
+          .first()
+
+        if (!product || !product.user) continue
+        
+        const merchant = product.user
+
+        // Vérifier que c'est bien un marchand
+        if (!merchant.isMerchant) continue
+
+        let address: string | null = null
+
+        // Récupérer l'adresse selon le type de vendeur
+        if (merchant.vendor_type === 'boutique_physique' && merchant.shop_address) {
+          address = merchant.shop_name 
+            ? `${merchant.shop_name}, ${merchant.shop_address}`
+            : merchant.shop_address
+        } else if ((merchant.vendor_type === 'vendeur_ligne' || merchant.vendor_type === 'particulier') && merchant.stock_address) {
+          address = merchant.stock_address
+        } else {
+          // Fallback : adresse de résidence ou adresse du user
+          address = merchant.residence_address || merchant.address
+        }
+
+        if (address && !merchantAddresses.includes(address)) {
+          merchantAddresses.push(address)
+        }
+      }
+
+      if (merchantAddresses.length > 0) {
+        // Si plusieurs marchands, prendre le premier ou les combiner
+        const finalAddress = merchantAddresses.length === 1 
+          ? merchantAddresses[0]
+          : merchantAddresses.join(' | ')
+        
+        console.log('📍 [Adresse Boutique] Adresse(s) trouvée(s):', finalAddress)
+        return finalAddress
+      }
+
+      console.log('📍 [Adresse Boutique] Aucune adresse trouvée pour les marchands')
+      return null
+
+    } catch (error) {
+      console.error('❌ [Adresse Boutique] Erreur:', error)
+      return null
+    }
+  }
+
+  /**
+   * ✅ Récupérer l'adresse de livraison ou l'adresse boutique
+   */
+  private async getShippingOrStoreAddress(
+    orderId: string, 
+    providedAddress?: string
+  ): Promise<{ address: string; isPickup: boolean; storeAddress: string | null }> {
+    
+    // Si une adresse de livraison est fournie et valide
+    if (providedAddress && providedAddress !== 'non renseigné' && providedAddress !== 'TEMP_ADDRESS' && providedAddress.trim() !== '') {
+      return {
+        address: providedAddress,
+        isPickup: false,
+        storeAddress: null
+      }
+    }
+
+    // Sinon, récupérer l'adresse de la boutique du marchand
+    const storeAddress = await this.getMerchantStoreAddress(orderId)
+    
+    if (storeAddress) {
+      return {
+        address: storeAddress,
+        isPickup: true,
+        storeAddress: storeAddress
+      }
+    }
+
+    // Fallback final
+    return {
+      address: 'Adresse non disponible',
+      isPickup: true,
+      storeAddress: null
+    }
+  }
+
+  /**
    * Confirmer la livraison par le client (avec email + numéro de commande)
    * PUT /api/orders/:orderId/confirm-delivery
    */
@@ -165,6 +268,9 @@ export default class OrdersController {
       order.delivered_at = DateTime.now()
       await order.save()
 
+      // ✅ Récupérer l'adresse pour la réponse
+      const addressInfo = await this.getShippingOrStoreAddress(order.id, order.shipping_address)
+
       console.log(`✅ [Confirmation] Commande ${order.order_number} livrée !`)
 
       return response.status(200).json({
@@ -179,6 +285,10 @@ export default class OrdersController {
           confirmedBy: 'customer',
           customerEmail: order.customer_email,
           total: order.total,
+          // ✅ Ajout des infos d'adresse
+          shippingAddress: addressInfo.address,
+          isPickup: addressInfo.isPickup,
+          storeAddress: addressInfo.storeAddress,
           items: order.items
         }
       })
@@ -717,6 +827,7 @@ export default class OrdersController {
       const deliveryPrice = payload.deliveryPrice || 2500
       const orderNumber = generateOrderNumber()
 
+      // ✅ Créer la commande avec une adresse temporaire
       const order = await Order.create({
         user_id: payload.userId || null,
         guestOrderId: guestOrder?.id || null,
@@ -730,7 +841,7 @@ export default class OrdersController {
         customer_phone: kycInfo.accountNumber,
         payment_method: paymentMethod,
         customer_email: user?.email || payload.customerEmail || 'invite@email.com',
-        shipping_address: payload.shippingAddress || 'non renseigné',
+        shipping_address: payload.shippingAddress || 'TEMP_ADDRESS',
         billing_address: payload.billingAddress || payload.shippingAddress || 'non renseigné',
         notes: payload.notes || null,
       })
@@ -781,12 +892,17 @@ export default class OrdersController {
         })
       }
 
+      // ✅ Mettre à jour l'adresse de livraison/boutique APRÈS la création des items
+      const addressInfo = await this.getShippingOrStoreAddress(order.id, payload.shippingAddress)
+      order.shipping_address = addressInfo.address
+      
       const total = subtotal + deliveryPrice
       order.subtotal = subtotal
       order.total = total
       await order.save()
 
       console.log(`💰 Total: ${total} FCFA (subtotal=${subtotal} + livraison=${deliveryPrice}) | Source: ${itemsSource}`)
+      console.log(`📍 Adresse: ${addressInfo.address} | Pickup: ${addressInfo.isPickup}`)
 
       await OrderTracking.create({
         order_id: order.id,
@@ -844,7 +960,6 @@ export default class OrdersController {
           break
 
         case 'qr_code':
-          // ✅ CORRECTION: Passer orderNumber
           paymentResult = await this.payWithQRCode(total, order.order_number)
           if (paymentResult.success) {
             qrCodeData = paymentResult.qrData
@@ -899,6 +1014,11 @@ export default class OrdersController {
           guestOrderId: guestOrder?.id || null,
           itemsCount,
           itemsSource,
+          // ✅ Ajout des infos d'adresse
+          shippingAddress: addressInfo.address,
+          isPickup: addressInfo.isPickup,
+          storeAddress: addressInfo.storeAddress,
+          deliveryMethod: addressInfo.isPickup ? 'pickup' : 'delivery',
           payment: {
             method: paymentMethod,
             status: paymentStatus,
@@ -1048,11 +1168,33 @@ export default class OrdersController {
   }
 
   async allOrders({ response }: HttpContext) {
-    const orders = await Order.query()
-      .preload('items')
-      .preload('tracking')
-      .orderBy('created_at', 'desc')
-    return response.ok({ success: true, data: orders })
+    try {
+      const orders = await Order.query()
+        .preload('items')
+        .preload('tracking')
+        .orderBy('created_at', 'desc')
+
+      // ✅ Enrichir chaque commande avec l'adresse
+      const enrichedOrders = await Promise.all(
+        orders.map(async (order) => {
+          const addressInfo = await this.getShippingOrStoreAddress(order.id, order.shipping_address)
+          return {
+            ...order.toJSON(),
+            shippingAddress: addressInfo.address,
+            isPickup: addressInfo.isPickup,
+            storeAddress: addressInfo.storeAddress,
+            deliveryMethod: addressInfo.isPickup ? 'pickup' : 'delivery',
+          }
+        })
+      )
+
+      return response.ok({ success: true, data: enrichedOrders })
+    } catch (error: any) {
+      return response.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
+      })
+    }
   }
 
   async index({ params, response }: HttpContext) {
@@ -1062,7 +1204,22 @@ export default class OrdersController {
         .where('user_id', userId)
         .preload('items')
         .orderBy('created_at', 'desc')
-      return response.status(200).json({ success: true, data: orders })
+
+      // ✅ Enrichir chaque commande avec l'adresse
+      const enrichedOrders = await Promise.all(
+        orders.map(async (order) => {
+          const addressInfo = await this.getShippingOrStoreAddress(order.id, order.shipping_address)
+          return {
+            ...order.toJSON(),
+            shippingAddress: addressInfo.address,
+            isPickup: addressInfo.isPickup,
+            storeAddress: addressInfo.storeAddress,
+            deliveryMethod: addressInfo.isPickup ? 'pickup' : 'delivery',
+          }
+        })
+      )
+
+      return response.status(200).json({ success: true, data: enrichedOrders })
     } catch (error: any) {
       return response.status(500).json({
         success: false,
@@ -1094,7 +1251,19 @@ export default class OrdersController {
         return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
 
-      return response.status(200).json({ success: true, data: order })
+      // ✅ Enrichir avec l'adresse
+      const addressInfo = await this.getShippingOrStoreAddress(order.id, order.shipping_address)
+
+      return response.status(200).json({
+        success: true,
+        data: {
+          ...order.toJSON(),
+          shippingAddress: addressInfo.address,
+          isPickup: addressInfo.isPickup,
+          storeAddress: addressInfo.storeAddress,
+          deliveryMethod: addressInfo.isPickup ? 'pickup' : 'delivery',
+        }
+      })
     } catch (error: any) {
       return response.status(500).json({
         success: false,
@@ -1165,6 +1334,9 @@ export default class OrdersController {
         console.log('⚠️ Erreur tracking (non bloquante):', trackingError)
       }
 
+      // ✅ Récupérer l'adresse pour la réponse
+      const addressInfo = await this.getShippingOrStoreAddress(order.id, order.shipping_address)
+
       console.log('✅ Statut mis à jour avec succès:', {
         id: order.id,
         ancien: oldStatus,
@@ -1179,7 +1351,12 @@ export default class OrdersController {
           order_number: order.order_number,
           old_status: oldStatus,
           new_status: order.status,
-          updated_at: order.updated_at
+          updated_at: order.updated_at,
+          // ✅ Ajout des infos d'adresse
+          shippingAddress: addressInfo.address,
+          isPickup: addressInfo.isPickup,
+          storeAddress: addressInfo.storeAddress,
+          deliveryMethod: addressInfo.isPickup ? 'pickup' : 'delivery',
         }
       })
     } catch (error: any) {
@@ -1231,10 +1408,19 @@ export default class OrdersController {
         tracked_at: DateTime.now(),
       })
 
+      // ✅ Récupérer l'adresse pour la réponse
+      const addressInfo = await this.getShippingOrStoreAddress(order.id, order.shipping_address)
+
       return response.status(200).json({
         success: true,
         message: '✅ Commande annulée avec succès',
-        data: order
+        data: {
+          ...order.toJSON(),
+          shippingAddress: addressInfo.address,
+          isPickup: addressInfo.isPickup,
+          storeAddress: addressInfo.storeAddress,
+          deliveryMethod: addressInfo.isPickup ? 'pickup' : 'delivery',
+        }
       })
     } catch (error: any) {
       return response.status(500).json({
@@ -1267,6 +1453,9 @@ export default class OrdersController {
         return response.status(404).json({ success: false, message: 'Commande non trouvée' })
       }
 
+      // ✅ Enrichir avec l'adresse
+      const addressInfo = await this.getShippingOrStoreAddress(order.id, order.shipping_address)
+
       return response.status(200).json({
         success: true,
         data: {
@@ -1277,11 +1466,13 @@ export default class OrdersController {
             subtotal: order.subtotal,
             shippingCost: order.shipping_cost,
             total: order.total,
-            deliveryMethod: order.delivery_method,
+            deliveryMethod: addressInfo.isPickup ? 'pickup' : 'delivery',
             customerName: order.customer_name,
             customerEmail: order.customer_email,
             customerPhone: order.customer_phone,
-            shippingAddress: order.shipping_address,
+            shippingAddress: addressInfo.address,
+            storeAddress: addressInfo.storeAddress,
+            isPickup: addressInfo.isPickup,
             paymentMethod: order.payment_method,
             trackingNumber: order.tracking_number,
             estimatedDelivery: order.estimated_delivery,
@@ -1291,7 +1482,7 @@ export default class OrdersController {
           items: order.items,
         },
       })
-    } catch (error:any) {
+    } catch (error: any) {
       return response.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Erreur inconnue'
