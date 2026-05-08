@@ -1,4 +1,4 @@
-// app/controllers/SubscriptionQRController.ts
+// app/controllers/SubscriptionQRController.ts - GIMAC UNIQUEMENT
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import Product from '#models/Product'
@@ -10,39 +10,9 @@ const SUBSCRIPTION_CALLBACK_URL_CODE = 'T2D7X'
 
 export default class SubscriptionQRController {
 
-  private detectOperatorGabon(phoneNumber?: string): { name: string; code: string; accountCode: string } {
-    if (!phoneNumber) {
-      // 🏦 Par défaut : GIMAC
-      return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
-    }
-
-    const clean = phoneNumber.replace(/[\s\+\.\-]/g, '')
-    let local = clean
-    if (clean.startsWith('241')) local = clean.substring(3)
-    if (local.startsWith('0')) local = local.substring(1)
-
-    // 📱 MOOV MONEY (06xxxxxxxx)
-    if (local.startsWith('06') || local.startsWith('6')) {
-      return { name: 'MOOV_MONEY', code: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
-    }
-    
-    // 📱 AIRTEL MONEY (07xxxxxxxx)
-    if (local.startsWith('07') || local.startsWith('7')) {
-      return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
-    }
-    
-    // 🏦 GIMAC (par défaut : numéros fixes, autres formats, cartes bancaires)
+  // 🏦 GIMAC uniquement
+  private getOperatorInfo(): { name: string; code: string; accountCode: string } {
     return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
-  }
-
-  private async renewSecretIfNeeded(phoneNumber?: string): Promise<void> {
-    try {
-      console.log('🔄 Tentative de renouvellement du secret...')
-      await MypvitSecretService.renewSecret(phoneNumber)
-      console.log('✅ Clé renouvelée avec succès')
-    } catch (error: any) {
-      console.error('⚠️ Erreur renouvellement secret:', error.message)
-    }
   }
 
   // ==================== PAIEMENT ABONNEMENT PAR QR CODE ====================
@@ -59,8 +29,9 @@ export default class SubscriptionQRController {
       console.log('📦 Données abonnement QR reçues:', payload)
 
       const userId = payload.userId
-      const phoneNumber = payload.customerAccountNumber || payload.customerPhone
+      const phoneNumber = payload.customerAccountNumber || payload.customerPhone || '060000000'
       const plan = payload.plan
+      const operatorInfo = this.getOperatorInfo()
 
       // Validations
       if (!userId) {
@@ -70,17 +41,10 @@ export default class SubscriptionQRController {
         })
       }
 
-      if (!phoneNumber) {
-        return response.status(400).json({
-          success: false,
-          message: 'Numéro de téléphone requis'
-        })
-      }
-
       if (!plan) {
         return response.status(400).json({
           success: false,
-          message: 'Plan d\'abonnement requis'
+          message: "Plan d'abonnement requis"
         })
       }
 
@@ -111,11 +75,13 @@ export default class SubscriptionQRController {
       }
 
       // Vérifier le produit si single_product
-      if (payload.subscriptionType === 'single_product') {
+      const subscriptionType = payload.subscriptionType || 'all_products'
+      
+      if (subscriptionType === 'single_product') {
         if (!payload.productId) {
           return response.status(400).json({
             success: false,
-            message: 'Un produit est requis pour ce type d\'abonnement'
+            message: "Un produit est requis pour ce type d'abonnement"
           })
         }
         const product = await Product.find(payload.productId)
@@ -134,7 +100,6 @@ export default class SubscriptionQRController {
       }
 
       // Vérifier abonnement global existant
-      const subscriptionType = payload.subscriptionType || 'all_products'
       if (subscriptionType === 'all_products') {
         const existingGlobal = await Subscription.query()
           .where('userId', user.id)
@@ -154,14 +119,8 @@ export default class SubscriptionQRController {
         }
       }
 
-      // Détecter l'opérateur
-      const operatorInfo = this.detectOperatorGabon(phoneNumber)
-
-      console.log(`📱 Opérateur: ${operatorInfo.name} | Compte: ${operatorInfo.accountCode}`)
+      console.log(`🏦 Opérateur: ${operatorInfo.name} | Compte: ${operatorInfo.accountCode}`)
       console.log(`💎 Plan: ${planConfig.name} | Prix: ${planConfig.price} FCFA | Durée: ${planConfig.duration} jours`)
-
-      // Renouveler le secret
-      await this.renewSecretIfNeeded(phoneNumber)
 
       // Préparer le nom du produit pour les métadonnées
       let productName = 'Tous les produits'
@@ -180,7 +139,7 @@ export default class SubscriptionQRController {
         price: planConfig.price,
         boostMultiplier: planConfig.boostMultiplier,
         maxProducts: planConfig.maxProducts,
-        paymentMethod: `qr_code_${operatorInfo.name.toLowerCase()}`,
+        paymentMethod: 'qr_code_gimac',
         autoRenew: payload.autoRenew || false,
         metadata: {
           productName,
@@ -201,7 +160,7 @@ export default class SubscriptionQRController {
       console.log(`🏷️ Terminal ID: ${terminalId}`)
       console.log(`💰 Montant: ${planConfig.price}`)
 
-      // ✅ Renouvellement forcé du secret avant QR Code
+      // Renouvellement forcé du secret avant QR Code
       try {
         await MypvitSecretService.forceRenewal(phoneNumber)
         console.log('✅ Secret frais obtenu pour QR Code')
@@ -213,7 +172,7 @@ export default class SubscriptionQRController {
       const qrResult = await MypvitQRCodeService.generateQRCode({
         accountOperationCode: operatorInfo.accountCode,
         terminalId: terminalId,
-        callbackUrlCode: SUBSCRIPTION_CALLBACK_URL_CODE,  // ✅ T2D7X
+        callbackUrlCode: SUBSCRIPTION_CALLBACK_URL_CODE,
         amount: planConfig.price,
         reference: reference,
         phoneNumber: phoneNumber
@@ -246,7 +205,7 @@ export default class SubscriptionQRController {
           duration: planConfig.duration,
           status: 'pending_payment',
           customerName: user.full_name || payload.customerName || 'Client',
-          paymentMethod: `qr_code_${operatorInfo.name.toLowerCase()}`,
+          paymentMethod: 'qr_code_gimac',
           userId,
           operator: {
             name: operatorInfo.name,
@@ -271,7 +230,7 @@ export default class SubscriptionQRController {
 
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la génération du QR Code pour l\'abonnement',
+        message: "Erreur lors de la génération du QR Code pour l'abonnement",
         error: error.response?.data?.message || error.message
       })
     }
