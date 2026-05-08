@@ -36,7 +36,7 @@ export class MypvitSecretService {
     const body = new URLSearchParams()
     
     // ✅ CORRECTION ICI : 'operationAccountCode' au lieu de 'accountOperationCode'
-    body.append('operationAccountCode', this.GIMAC_CONFIG.code)
+body.append('operationAccountCode', this.GIMAC_CONFIG.code)
     body.append('password', this.GIMAC_CONFIG.password)
 
     console.log('🔑 === RENOUVELLEMENT SECRET ===')
