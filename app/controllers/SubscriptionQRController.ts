@@ -12,7 +12,8 @@ export default class SubscriptionQRController {
 
   private detectOperatorGabon(phoneNumber?: string): { name: string; code: string; accountCode: string } {
     if (!phoneNumber) {
-      return { name: 'MOOV_MONEY', code: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
+      // 🏦 Par défaut : GIMAC
+      return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
     }
 
     const clean = phoneNumber.replace(/[\s\+\.\-]/g, '')
@@ -20,13 +21,18 @@ export default class SubscriptionQRController {
     if (clean.startsWith('241')) local = clean.substring(3)
     if (local.startsWith('0')) local = local.substring(1)
 
+    // 📱 MOOV MONEY (06xxxxxxxx)
     if (local.startsWith('06') || local.startsWith('6')) {
       return { name: 'MOOV_MONEY', code: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
     }
+    
+    // 📱 AIRTEL MONEY (07xxxxxxxx)
     if (local.startsWith('07') || local.startsWith('7')) {
       return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
     }
-    return { name: 'MOOV_MONEY', code: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
+    
+    // 🏦 GIMAC (par défaut : numéros fixes, autres formats, cartes bancaires)
+    return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
   }
 
   private async renewSecretIfNeeded(phoneNumber?: string): Promise<void> {
@@ -166,7 +172,7 @@ export default class SubscriptionQRController {
 
       // Créer l'abonnement en statut "pending"
       const subscription = await Subscription.create({
-        userId: user.id,  // ✅ userId (pas user_id)
+        userId: user.id,
         plan,
         subscriptionType,
         productId: subscriptionType === 'single_product' ? payload.productId : null,
@@ -217,7 +223,7 @@ export default class SubscriptionQRController {
 
       // Mettre à jour l'abonnement avec la référence de paiement
       if (qrResult.reference_id) {
-        subscription.paymentReferenceId = qrResult.reference_id  // ✅ paymentReferenceId
+        subscription.paymentReferenceId = qrResult.reference_id
         subscription.paymentStatus = 'PENDING'
         await subscription.save()
       }
@@ -235,7 +241,7 @@ export default class SubscriptionQRController {
         data: {
           subscriptionId: subscription.id,
           type: subscriptionType,
-          plan: planConfig.name,  // ✅ planName → planConfig.name
+          plan: planConfig.name,
           price: planConfig.price,
           duration: planConfig.duration,
           status: 'pending_payment',
