@@ -1,4 +1,4 @@
-// app/controllers/PayQRCodeController.ts - SANS VÉRIFICATION STATUS
+// app/controllers/PayQRCodeController.ts - GIMAC UNIQUEMENT
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -24,21 +24,8 @@ function generateRandomPassword(): string {
 
 export default class PayQRCodeController {
 
-  private detectOperatorGabon(phoneNumber?: string): { name: string; code: string; accountCode: string } {
-    if (!phoneNumber) {
-      return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
-    }
-    const clean = phoneNumber.replace(/[\s\+\.\-]/g, '')
-    let local = clean
-    if (clean.startsWith('+241')) local = clean.substring(4)
-    else if (clean.startsWith('241')) local = clean.substring(3)
-    if (local.startsWith('0')) local = local.substring(1)
-    if (local.startsWith('06') || local.startsWith('6')) {
-      return { name: 'MOOV_MONEY', code: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
-    }
-    if (local.startsWith('07') || local.startsWith('7')) {
-      return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
-    }
+  // 🏦 GIMAC uniquement
+  private getOperatorInfo(): { name: string; code: string; accountCode: string } {
     return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
   }
 
@@ -61,11 +48,12 @@ export default class PayQRCodeController {
         items
       } = rawBody
 
-      const phoneNumber = customerAccountNumber || customerPhone
-      const operatorInfo = this.detectOperatorGabon(phoneNumber)
+      const phoneNumber = customerAccountNumber || customerPhone || '060000000'
+      const operatorInfo = this.getOperatorInfo()
       const hasDirectItems = items && Array.isArray(items) && items.length > 0
 
-      console.log(`📱 Téléphone: ${phoneNumber || 'N/A'}`)
+      console.log(`📱 Téléphone: ${phoneNumber}`)
+      console.log(`🏦 Opérateur: ${operatorInfo.name}`)
       console.log(`📦 Items: ${hasDirectItems ? items.length : 'NON'}`)
 
       // ============================================================
@@ -97,11 +85,10 @@ export default class PayQRCodeController {
             isArchived: product.isArchived
           } : 'INTROUVABLE')
 
-          // ✅ VÉRIFIE UNIQUEMENT : existe, pas archivé, stock suffisant
           if (!product) {
             return response.status(400).json({
               success: false,
-              message: `Produit introuvable`,
+              message: 'Produit introuvable',
               error: 'PRODUCT_NOT_FOUND'
             })
           }
@@ -112,7 +99,6 @@ export default class PayQRCodeController {
               error: 'PRODUCT_ARCHIVED'
             })
           }
-          // ❌ NE VÉRIFIE PLUS LE STATUS
           if (product.stock < qty) {
             return response.status(400).json({
               success: false,
@@ -148,7 +134,7 @@ export default class PayQRCodeController {
           if (!product || product.isArchived || product.stock < cartItem.quantity) {
             return response.status(400).json({
               success: false,
-              message: `Produit indisponible`,
+              message: 'Produit indisponible',
               error: 'PRODUCT_UNAVAILABLE'
             })
           }
@@ -183,7 +169,7 @@ export default class PayQRCodeController {
             id: crypto.randomUUID(),
             email,
             full_name: customerName || 'Client',
-            phone: phoneNumber || '',
+            phone: phoneNumber,
             role: 'client',
             password: generateRandomPassword(),
           })
@@ -207,12 +193,14 @@ export default class PayQRCodeController {
         shipping_cost: shippingCost,
         delivery_method: deliveryMethod || 'pickup',
         customer_name: customerName || 'Client',
-        customer_phone: phoneNumber || '',
-        payment_method: `qr_code_${operatorInfo.name.toLowerCase()}`,
+        customer_phone: phoneNumber,
+        payment_method: 'qr_code_gimac',
         customer_email: customerEmail || 'invite@email.com',
         shipping_address: shippingAddress || 'Retrait en magasin',
-        payment_operator_simple: operatorInfo.name
+        payment_operator_simple: 'GIMAC'
       })
+
+      console.log('✅ Commande créée:', order.id)
 
       // ============================================================
       // CRÉER LES ORDER ITEMS
@@ -234,7 +222,7 @@ export default class PayQRCodeController {
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
-        description: `📷 QR Code ${operatorInfo.name} - ${validProducts.length} articles`,
+        description: `📷 QR Code GIMAC - ${validProducts.length} articles`,
         tracked_at: DateTime.now(),
       })
 
@@ -268,7 +256,7 @@ export default class PayQRCodeController {
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending_payment',
-        description: `📱 QR Code - Réf: ${qrResult.reference_id || order.order_number}`,
+        description: `📱 QR Code GIMAC - Réf: ${qrResult.reference_id || order.order_number}`,
         tracked_at: DateTime.now(),
       })
 
@@ -276,7 +264,7 @@ export default class PayQRCodeController {
 
       return response.status(201).json({
         success: true,
-        message: `✅ QR Code généré !`,
+        message: '✅ QR Code GIMAC généré !',
         data: {
           orderId: order.id,
           orderNumber: order.order_number,
