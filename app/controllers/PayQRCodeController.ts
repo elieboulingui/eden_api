@@ -7,10 +7,11 @@ import Cart from '#models/Cart'
 import CartItem from '#models/CartItem'
 import Product from '#models/Product'
 import { DateTime } from 'luxon'
-import MypvitSecretService from '../services/mypvit_secret_service.js'
+import MypvitSecretService from '../services/mypvit_secret_services.js'
 import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
 
 const CALLBACK_URL_CODE = '9ZOXW'
+const GIMAC_ACCOUNT = 'ACC_69FE0E1BC34B4'
 
 export default class PayQRCodeController {
 
@@ -116,19 +117,15 @@ export default class PayQRCodeController {
 
       // ÉTAPE 7 : QR Code GIMAC
       console.log('🔑 ÉTAPE 7: QR Code GIMAC...')
-      
-      // Utiliser forceRenewal sans phoneNumber pour GIMAC (détection automatique)
-      // Ou passer 'gimac' explicitement selon l'implémentation
-      const secretInfo = await MypvitSecretService.forceRenewal()
-      console.log('🔑 Secret récupéré pour opérateur:', secretInfo.accountCode)
+      await MypvitSecretService.forceRenewal()
       
       const qrResult = await MypvitQRCodeService.generateQRCode({
-        accountOperationCode: secretInfo.accountCode, // Utiliser le code du compte récupéré
+        accountOperationCode: GIMAC_ACCOUNT,
         terminalId: `T${Date.now().toString(36).toUpperCase()}`,
         callbackUrlCode: CALLBACK_URL_CODE,
         amount: subtotal,
         reference: order.order_number,
-        phoneNumber: rawBody.customerPhone || '060000000'
+        phoneNumber: '060000000'
       })
       console.log('🔑 QR Code OK')
 
