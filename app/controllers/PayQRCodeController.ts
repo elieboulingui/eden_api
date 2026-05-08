@@ -1,4 +1,4 @@
-// app/controllers/PayQRCodeController.ts - PANIER UNIQUEMENT (SANS ERREURS TS)
+// app/controllers/PayQRCodeController.ts - DEBUG
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -12,213 +12,132 @@ import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
 
 const CALLBACK_URL_CODE = '9ZOXW'
 
-function generateOrderNumber(): string {
-  return `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-}
-
 export default class PayQRCodeController {
 
-  private getOperatorInfo(): { name: string; code: string; accountCode: string } {
-    return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
-  }
-
   async pay({ request, response }: HttpContext) {
-    console.log('📷 ========== PAIEMENT QR CODE ==========')
-
+    console.log('📷 ========== START ==========')
+    
     try {
       const rawBody = request.body() as Record<string, any>
-      console.log('📦 BODY:', JSON.stringify(rawBody))
+      console.log('📦 BODY OK')
 
-      const {
-        userId,
-        customerAccountNumber,
-        customerPhone,
-        customerName,
-        customerEmail,
-        shippingAddress,
-        deliveryMethod,
-        deliveryPrice,
-      } = rawBody
+      const userId = rawBody.userId
+      console.log('👤 userId:', userId)
 
-      const phoneNumber = customerAccountNumber || customerPhone || '060000000'
-      const operatorInfo = this.getOperatorInfo()
-
-      console.log(`👤 userId: ${userId || 'NON'}`)
-
-      // ============================================================
-      // 🛒 userId OBLIGATOIRE - TOUJOURS LE PANIER
-      // ============================================================
       if (!userId) {
-        return response.status(400).json({
-          success: false,
-          message: 'userId requis',
-          error: 'USER_ID_REQUIRED'
-        })
+        return response.status(400).json({ success: false, message: 'userId requis' })
       }
 
-      const cart = await Cart.query()
-        .where('user_id', userId)
-        .preload('items')
-        .first()
+      // ÉTAPE 1 : Cart
+      console.log('🛒 ÉTAPE 1: Recherche Cart...')
+      const cart = await Cart.query().where('user_id', userId).preload('items').first()
+      console.log('🛒 Cart trouvé:', cart ? 'OUI' : 'NON')
 
-      if (!cart || !cart.items || cart.items.length === 0) {
-        return response.status(400).json({
-          success: false,
-          message: 'Votre panier est vide',
-          error: 'EMPTY_CART'
-        })
+      if (!cart) {
+        return response.status(400).json({ success: false, message: 'Aucun panier' })
       }
 
-      console.log(`🛒 ${cart.items.length} articles dans le panier`)
+      console.log('🛒 Items:', cart.items?.length || 0)
 
-      // ============================================================
-      // VALIDER LES PRODUITS
-      // ============================================================
+      if (!cart.items || cart.items.length === 0) {
+        return response.status(400).json({ success: false, message: 'Panier vide' })
+      }
+
+      // ÉTAPE 2 : Produits
       let subtotal = 0
-      const productsToOrder: { productId: string; quantity: number; product: Product }[] = []
-
-      for (const cartItem of cart.items) {
-        const product = await Product.findBy('id', cartItem.product_id)
-
-        if (!product) {
-          return response.status(400).json({
-            success: false,
-            message: `Produit ${cartItem.product_id} introuvable`,
-            error: 'PRODUCT_NOT_FOUND'
-          })
+      for (const item of cart.items) {
+        console.log('🔍 ÉTAPE 2: Produit', item.product_id)
+        const product = await Product.find(item.product_id)
+        console.log('🔍 Trouvé:', product ? product.name : 'NON')
+        if (product) {
+          subtotal += product.price * item.quantity
         }
-        if (product.isArchived) {
-          return response.status(400).json({
-            success: false,
-            message: `${product.name} n'est plus disponible`,
-            error: 'PRODUCT_ARCHIVED'
-          })
-        }
-        if (product.stock < cartItem.quantity) {
-          return response.status(400).json({
-            success: false,
-            message: `Stock insuffisant pour ${product.name}: ${product.stock} < ${cartItem.quantity}`,
-            error: 'INSUFFICIENT_STOCK'
-          })
-        }
-
-        subtotal += product.price * cartItem.quantity
-        productsToOrder.push({ productId: cartItem.product_id, quantity: cartItem.quantity, product })
-        console.log(`✅ ${product.name} (stock: ${product.stock})`)
       }
 
-      console.log(`✅ ${productsToOrder.length} produits, Sous-total: ${subtotal} FCFA`)
+      console.log('💰 Sous-total:', subtotal)
 
-      // ============================================================
-      // VIDER LE PANIER
-      // ============================================================
+      // ÉTAPE 3 : Vider panier
+      console.log('🗑️ ÉTAPE 3: Vidage panier...')
       await CartItem.query().where('cart_id', cart.id).delete()
-      console.log('🛒 Panier vidé')
+      console.log('🗑️ Panier vidé')
 
-      // ============================================================
-      // CRÉER LA COMMANDE
-      // ============================================================
-      const shippingCost = deliveryPrice || 0
-      const total = subtotal + shippingCost
-
+      // ÉTAPE 4 : Commande
+      console.log('📝 ÉTAPE 4: Création commande...')
       const order = await Order.create({
         user_id: userId,
-        order_number: generateOrderNumber(),
+        order_number: `CMD-${Date.now()}`,
         status: 'pending',
-        total,
+        total: subtotal,
         subtotal,
-        shipping_cost: shippingCost,
-        delivery_method: deliveryMethod || 'pickup',
-        customer_name: customerName || 'Client',
-        customer_phone: phoneNumber,
+        shipping_cost: 0,
+        delivery_method: 'pickup',
+        customer_name: 'Client',
+        customer_phone: rawBody.customerPhone || '060000000',
         payment_method: 'qr_code_gimac',
-        customer_email: customerEmail || 'invite@email.com',
-        shipping_address: shippingAddress || 'Retrait en magasin',
+        customer_email: 'invite@email.com',
+        shipping_address: 'Retrait en magasin',
         payment_operator_simple: 'GIMAC'
       })
+      console.log('📝 Commande:', order.id)
 
-      console.log('✅ Commande:', order.id)
-
-      // ============================================================
-      // ORDER ITEMS
-      // ============================================================
-      for (const item of productsToOrder) {
-        await OrderItem.create({
-          order_id: order.id,
-          product_id: item.productId,
-          product_name: item.product.name,
-          price: item.product.price,
-          quantity: item.quantity,
-          subtotal: item.product.price * item.quantity
-        })
+      // ÉTAPE 5 : OrderItems
+      console.log('📦 ÉTAPE 5: OrderItems...')
+      for (const item of cart.items) {
+        const product = await Product.find(item.product_id)
+        if (product) {
+          await OrderItem.create({
+            order_id: order.id,
+            product_id: product.id,
+            product_name: product.name,
+            price: product.price,
+            quantity: item.quantity,
+            subtotal: product.price * item.quantity
+          })
+        }
       }
+      console.log('📦 OrderItems OK')
 
-      // ============================================================
-      // TRACKING
-      // ============================================================
+      // ÉTAPE 6 : Tracking
+      console.log('📊 ÉTAPE 6: Tracking...')
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
-        description: `📷 QR Code GIMAC - ${productsToOrder.length} articles`,
+        description: 'QR Code GIMAC',
         tracked_at: DateTime.now(),
       })
+      console.log('📊 Tracking OK')
 
-      // ============================================================
-      // QR CODE
-      // ============================================================
-      try {
-        await MypvitSecretService.forceRenewal(phoneNumber)
-        await new Promise(resolve => setTimeout(resolve, 1000))
-      } catch (e: any) {
-        console.error('⚠️ Secret:', e.message)
-      }
-
+      // ÉTAPE 7 : QR Code
+      console.log('🔑 ÉTAPE 7: QR Code...')
+      await MypvitSecretService.forceRenewal('060000000').catch(() => {})
+      
       const qrResult = await MypvitQRCodeService.generateQRCode({
-        accountOperationCode: operatorInfo.accountCode,
+        accountOperationCode: 'ACC_69FE0E1BC34B4',
         terminalId: `T${Date.now().toString(36).toUpperCase()}`,
         callbackUrlCode: CALLBACK_URL_CODE,
-        amount: total,
+        amount: subtotal,
         reference: order.order_number,
-        phoneNumber
+        phoneNumber: '060000000'
       })
-
-      if (qrResult.reference_id) {
-        order.payment_reference_id = qrResult.reference_id
-        order.status = 'pending_payment'
-        await order.save()
-      }
-
-      await OrderTracking.create({
-        order_id: order.id,
-        status: 'pending_payment',
-        description: `📱 QR Code - Réf: ${qrResult.reference_id || order.order_number}`,
-        tracked_at: DateTime.now(),
-      })
-
-      await order.load('items')
+      console.log('🔑 QR Code OK')
 
       return response.status(201).json({
         success: true,
-        message: '✅ QR Code GIMAC généré !',
+        message: '✅ OK',
         data: {
           orderId: order.id,
           orderNumber: order.order_number,
-          total,
-          status: 'pending_payment',
-          itemsCount: productsToOrder.length,
-          qr_code: {
-            data: qrResult.data,
-            reference_id: qrResult.reference_id,
-            amount: total,
-          }
+          total: subtotal,
+          qr_code: { data: qrResult.data, reference_id: qrResult.reference_id, amount: subtotal }
         }
       })
 
     } catch (error: any) {
       console.error('🔴 ERREUR:', error.message)
+      console.error('🔴 STACK:', error.stack)
       return response.status(500).json({
         success: false,
-        message: 'Erreur interne',
+        message: 'Erreur: ' + error.message,
         error: error.message
       })
     }
