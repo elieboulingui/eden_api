@@ -1,4 +1,4 @@
-// app/controllers/PayQRCodeController.ts - GIMAC UNIQUEMENT
+// app/controllers/PayQRCodeController.ts - GIMAC UNIQUEMENT + AUTO PANIER
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -24,7 +24,6 @@ function generateRandomPassword(): string {
 
 export default class PayQRCodeController {
 
-  // 🏦 GIMAC uniquement
   private getOperatorInfo(): { name: string; code: string; accountCode: string } {
     return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
   }
@@ -53,16 +52,18 @@ export default class PayQRCodeController {
       const hasDirectItems = items && Array.isArray(items) && items.length > 0
 
       console.log(`📱 Téléphone: ${phoneNumber}`)
-      console.log(`🏦 Opérateur: ${operatorInfo.name}`)
-      console.log(`📦 Items: ${hasDirectItems ? items.length : 'NON'}`)
+      console.log(`👤 userId: ${userId || 'NON'}`)
+      console.log(`📦 Items directs: ${hasDirectItems ? items.length : 'NON'}`)
 
       // ============================================================
-      // VALIDATION DES PRODUITS
+      // RÉCUPÉRER LES PRODUITS (items directs OU panier)
       // ============================================================
+      let productsToOrder: { productId: string; quantity: number; product: Product }[] = []
       let subtotal = 0
-      let validProducts: any[] = []
+      let cartToClear: any = null
 
       if (hasDirectItems) {
+        // 📦 MODE ITEMS DIRECTS
         console.log('📦 Mode: ITEMS DIRECTS')
 
         for (const item of items) {
@@ -79,16 +80,12 @@ export default class PayQRCodeController {
 
           const product = await Product.findBy('id', productId)
 
-          console.log(`🔍 Produit ${productId}:`, product ? {
-            name: product.name,
-            stock: product.stock,
-            isArchived: product.isArchived
-          } : 'INTROUVABLE')
+          console.log(`🔍 Produit ${productId}:`, product ? `${product.name} (stock: ${product.stock})` : 'INTROUVABLE')
 
           if (!product) {
             return response.status(400).json({
               success: false,
-              message: 'Produit introuvable',
+              message: `Produit ${productId} introuvable`,
               error: 'PRODUCT_NOT_FOUND'
             })
           }
@@ -102,17 +99,18 @@ export default class PayQRCodeController {
           if (product.stock < qty) {
             return response.status(400).json({
               success: false,
-              message: `Stock insuffisant pour ${product.name}: ${product.stock} disponible(s), ${qty} demandé(s)`,
+              message: `Stock insuffisant pour ${product.name}: ${product.stock} < ${qty}`,
               error: 'INSUFFICIENT_STOCK'
             })
           }
 
           subtotal += product.price * qty
-          validProducts.push({ productId, quantity: qty, product })
-          console.log(`✅ ${product.name}: OK (stock: ${product.stock})`)
+          productsToOrder.push({ productId, quantity: qty, product })
+          console.log(`✅ ${product.name}: OK`)
         }
 
       } else if (userId) {
+        // 🛒 MODE PANIER - Cherche automatiquement dans Cart et CartItems
         console.log('🛒 Mode: PANIER pour userId:', userId)
 
         const cart = await Cart.query()
@@ -123,38 +121,65 @@ export default class PayQRCodeController {
         if (!cart || !cart.items || cart.items.length === 0) {
           return response.status(400).json({
             success: false,
-            message: 'Votre panier est vide',
+            message: 'Votre panier est vide. Ajoutez des articles avant de payer.',
             error: 'EMPTY_CART'
           })
         }
 
+        console.log(`🛒 Panier trouvé avec ${cart.items.length} articles`)
+
         for (const cartItem of cart.items) {
           const product = await Product.findBy('id', cartItem.product_id)
 
-          if (!product || product.isArchived || product.stock < cartItem.quantity) {
+          console.log(`🔍 Produit ${cartItem.product_id}:`, product ? `${product.name} (stock: ${product.stock})` : 'INTROUVABLE')
+
+          if (!product) {
             return response.status(400).json({
               success: false,
-              message: 'Produit indisponible',
-              error: 'PRODUCT_UNAVAILABLE'
+              message: `Produit ${cartItem.product_id} introuvable dans votre panier`,
+              error: 'PRODUCT_NOT_FOUND'
+            })
+          }
+          if (product.isArchived) {
+            return response.status(400).json({
+              success: false,
+              message: `${product.name} n'est plus disponible`,
+              error: 'PRODUCT_ARCHIVED'
+            })
+          }
+          if (product.stock < cartItem.quantity) {
+            return response.status(400).json({
+              success: false,
+              message: `Stock insuffisant pour ${product.name}: ${product.stock} < ${cartItem.quantity}`,
+              error: 'INSUFFICIENT_STOCK'
             })
           }
 
           subtotal += product.price * cartItem.quantity
-          validProducts.push({ productId: cartItem.product_id, quantity: cartItem.quantity, product })
+          productsToOrder.push({ productId: cartItem.product_id, quantity: cartItem.quantity, product })
+          console.log(`✅ ${product.name}: OK`)
         }
 
-        await CartItem.query().where('cart_id', cart.id).delete()
-        console.log('🛒 Panier vidé')
+        cartToClear = cart
 
       } else {
+        // ❌ RIEN
         return response.status(400).json({
           success: false,
-          message: 'Aucun article à commander',
+          message: 'Aucun article à commander. Ajoutez des produits au panier.',
           error: 'NO_ITEMS'
         })
       }
 
-      console.log(`✅ ${validProducts.length} produits validés, Sous-total: ${subtotal} FCFA`)
+      console.log(`✅ ${productsToOrder.length} produits validés, Sous-total: ${subtotal} FCFA`)
+
+      // ============================================================
+      // VIDER LE PANIER SI NÉCESSAIRE
+      // ============================================================
+      if (cartToClear) {
+        await CartItem.query().where('cart_id', cartToClear.id).delete()
+        console.log('🛒 Panier vidé')
+      }
 
       // ============================================================
       // GÉRER L'UTILISATEUR
@@ -175,6 +200,7 @@ export default class PayQRCodeController {
           })
         }
         finalUserId = user.id
+        console.log('👤 Utilisateur créé:', finalUserId)
       }
 
       // ============================================================
@@ -205,7 +231,7 @@ export default class PayQRCodeController {
       // ============================================================
       // CRÉER LES ORDER ITEMS
       // ============================================================
-      for (const item of validProducts) {
+      for (const item of productsToOrder) {
         await OrderItem.create({
           order_id: order.id,
           product_id: item.productId,
@@ -214,6 +240,7 @@ export default class PayQRCodeController {
           quantity: item.quantity,
           subtotal: item.product.price * item.quantity
         })
+        console.log(`➕ ${item.product.name} x${item.quantity}`)
       }
 
       // ============================================================
@@ -222,7 +249,7 @@ export default class PayQRCodeController {
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
-        description: `📷 QR Code GIMAC - ${validProducts.length} articles`,
+        description: `📷 QR Code GIMAC - ${productsToOrder.length} articles`,
         tracked_at: DateTime.now(),
       })
 
@@ -270,7 +297,7 @@ export default class PayQRCodeController {
           orderNumber: order.order_number,
           total,
           status: 'pending_payment',
-          itemsCount: validProducts.length,
+          itemsCount: productsToOrder.length,
           qr_code: {
             data: qrResult.data,
             reference_id: qrResult.reference_id,
