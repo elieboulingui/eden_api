@@ -36,11 +36,12 @@ export default class PayQRCodeController {
 
   private detectOperatorGabon(phoneNumber?: string): { name: string; code: string; accountCode: string } {
     if (!phoneNumber) {
-      console.log('⚠️ Pas de numéro, utilisation MOOV par défaut')
+      // 🏦 Par défaut : GIMAC
+      console.log('⚠️ Pas de numéro, utilisation GIMAC par défaut')
       return {
-        name: 'MOOV_MONEY',
-        code: 'MOOV_MONEY',
-        accountCode: 'ACC_69EFB143D4F54'
+        name: 'GIMAC',
+        code: 'GIMAC_PAY',
+        accountCode: 'ACC_69FE0E1BC34B4'
       }
     }
 
@@ -57,7 +58,8 @@ export default class PayQRCodeController {
     console.log('📱 Numéro nettoyé:', local)
     console.log('🔢 Premier chiffre:', local.charAt(0))
 
-    if (local.startsWith('6')) {
+    // 📱 MOOV MONEY (06xxxxxxxx)
+    if (local.startsWith('06') || local.startsWith('6')) {
       console.log('✅ MOOV_MONEY détecté')
       return {
         name: 'MOOV_MONEY',
@@ -66,7 +68,8 @@ export default class PayQRCodeController {
       }
     }
     
-    if (local.startsWith('7')) {
+    // 📱 AIRTEL MONEY (07xxxxxxxx)
+    if (local.startsWith('07') || local.startsWith('7')) {
       console.log('✅ AIRTEL_MONEY détecté')
       return {
         name: 'AIRTEL_MONEY',
@@ -75,11 +78,12 @@ export default class PayQRCodeController {
       }
     }
     
-    console.log('⚠️ Opérateur non reconnu, utilisation MOOV par défaut')
+    // 🏦 GIMAC (par défaut : numéros fixes, autres formats, cartes bancaires)
+    console.log('✅ GIMAC détecté (par défaut)')
     return {
-      name: 'MOOV_MONEY',
-      code: 'MOOV_MONEY',
-      accountCode: 'ACC_69EFB143D4F54'
+      name: 'GIMAC',
+      code: 'GIMAC_PAY',
+      accountCode: 'ACC_69FE0E1BC34B4'
     }
   }
 
@@ -183,28 +187,8 @@ export default class PayQRCodeController {
     }
   }
 
-  // ❌ SUPPRIMER - Le stock est géré uniquement par le CallbackController
-  // private async updateProductStock(productId: string, quantity: number): Promise<void> {
-  //   const product = await Product.findBy('id', productId)
-  //   if (product) {
-  //     product.stock = Math.max(0, product.stock - quantity)
-  //     if (product.stock === 0) product.isArchived = true
-  //     await product.save()
-  //   }
-  // }
-
-  // ❌ SUPPRIMER - Le stock est géré uniquement par le CallbackController
-  // private async restoreProductStock(orderId: string): Promise<void> {
-  //   const orderItems = await OrderItem.query().where('order_id', orderId)
-  //   for (const item of orderItems) {
-  //     const product = await Product.findBy('id', item.product_id)
-  //     if (product) {
-  //       product.stock += item.quantity
-  //       if (product.isArchived && product.stock > 0) product.isArchived = false
-  //       await product.save()
-  //     }
-  //   }
-  // }
+  // ✅ STOCK GÉRÉ UNIQUEMENT PAR LE CALLBACK
+  // Les méthodes updateProductStock et restoreProductStock ont été supprimées
 
   private async createOrderItems(order: Order, items: any[]): Promise<{ subtotal: number; itemsCount: number }> {
     console.log('🏗️ Création items QR directs')
