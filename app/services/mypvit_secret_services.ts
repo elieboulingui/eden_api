@@ -1,4 +1,4 @@
-// app/services/mypvit_secret_services.ts
+// app/services/mypvit_secret_services.ts - Version avec plus de débogage
 import axios from 'axios'
 import { DateTime } from 'luxon'
 
@@ -24,9 +24,10 @@ export class MypvitSecretService {
     this.httpClient = axios.create({
       baseURL: this.BASE_URL,
       timeout: 30000,
-      // 🔥 Ajouter un User-Agent
       headers: {
-        'User-Agent': 'EdenApp/1.0'
+        'User-Agent': 'EdenApp/1.0',
+        'Accept': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
       }
     })
   }
@@ -40,23 +41,30 @@ export class MypvitSecretService {
     console.log('🔑 === RENOUVELLEMENT SECRET ===')
     console.log('🔑 URL complète:', `${this.BASE_URL}${url}`)
     console.log('🔑 Code compte:', this.GIMAC_CONFIG.code)
-    console.log('🔑 Password présent:', !!this.GIMAC_CONFIG.password)
+    console.log('🔑 Code URL:', this.GIMAC_CONFIG.codeUrl)
     console.log('🔑 Body:', body.toString())
+
+    // TEST: Vérifier si l'API est accessible
+    try {
+      console.log('📡 Test de connexion à l\'API...')
+      const testResponse = await this.httpClient.get('/')
+      console.log('✅ API accessible:', testResponse.status)
+    } catch (testError: any) {
+      console.error('❌ API inaccessible:', testError.message)
+    }
 
     for (let i = 1; i <= 3; i++) {
       try {
         console.log(`📡 Tentative ${i}/3...`)
 
-        const response = await this.httpClient.post(url, body.toString(), {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
-        })
+        const response = await this.httpClient.post(url, body.toString())
 
         console.log('✅ Statut HTTP:', response.status)
-        console.log('✅ Réponse brute:', JSON.stringify(response.data))
+        console.log('✅ Headers réponse:', JSON.stringify(response.headers))
+        console.log('✅ Données réponse:', JSON.stringify(response.data))
 
         if (!response.data?.secret) {
+          console.error('❌ Pas de secret dans la réponse:', response.data)
           throw new Error('Secret non reçu dans la réponse')
         }
 
@@ -72,17 +80,30 @@ export class MypvitSecretService {
 
       } catch (error: any) {
         console.error(`❌ Erreur tentative ${i}/3:`)
-        console.error('❌ Status HTTP:', error.response?.status)
-        console.error('❌ Headers:', JSON.stringify(error.response?.headers))
-        console.error('❌ Data:', JSON.stringify(error.response?.data))
-        console.error('❌ Message:', error.message)
-
-        if (error.response?.status === 403 || error.response?.status === 401) {
-          console.error('🔴 ERREUR AUTHENTIFICATION - Vérifie le password et le codeUrl')
+        
+        if (error.response) {
+          console.error('❌ Status:', error.response.status)
+          console.error('❌ Status Text:', error.response.statusText)
+          console.error('❌ Headers:', JSON.stringify(error.response.headers))
+          console.error('❌ Data:', JSON.stringify(error.response.data))
+          
+          // Gérer les erreurs spécifiques
+          if (error.response.status === 404) {
+            console.error('🔴 URL introuvable - Vérifiez le codeUrl:', this.GIMAC_CONFIG.codeUrl)
+          } else if (error.response.status === 401 || error.response.status === 403) {
+            console.error('🔴 Erreur auth - Vérifiez le password et accountOperationCode')
+          } else if (error.response.status === 400) {
+            console.error('🔴 Mauvaise requête - Vérifiez les paramètres')
+          }
+        } else if (error.request) {
+          console.error('❌ Pas de réponse reçue')
+          console.error('❌ Request:', error.request)
+        } else {
+          console.error('❌ Erreur config:', error.message)
         }
 
         if (i < 3) {
-          const waitTime = 2000 * i
+          const waitTime = 3000 * i
           console.log(`⏳ Nouvelle tentative dans ${waitTime}ms...`)
           await new Promise(resolve => setTimeout(resolve, waitTime))
         }
