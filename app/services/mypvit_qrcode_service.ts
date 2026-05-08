@@ -48,7 +48,6 @@ export class MypvitQRCodeService {
       console.log('✅ [QRCodeService] Secret récupéré avec succès')
 
       // ✅ Construction de l'URL avec les paramètres en query string (GET)
-      const codeUrl = options.callbackUrlCode // Le codeUrl du marchand
       const url = `/4XWLIAKA5UFSIIYZ/generate-qr-code`
       
       // ✅ Paramètres query (comme dans la doc)
