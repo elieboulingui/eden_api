@@ -1,6 +1,6 @@
 // app/services/mypvit_qrcode_service.ts
 import axios from 'axios'
-import MypvitSecretService from './mypvit_secret_service.js'
+import MypvitSecretService from './mypvit_secret_services.js'
 
 interface QRCodeOptions {
   accountOperationCode: string
