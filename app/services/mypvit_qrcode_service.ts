@@ -18,19 +18,22 @@ export class MypvitQRCodeService {
   constructor() {
     this.httpClient = axios.create({
       baseURL: this.BASE_URL,
-      timeout: 30000
+      timeout: 30000,
+      headers: {
+        'User-Agent': 'EdenApp/1.0'
+      }
     })
   }
 
   async generateQRCode(options: QRCodeOptions): Promise<any> {
     try {
-      // Récupérer le secret pour GIMAC
-      const secret = await MypvitSecretService.getSecret(options.phoneNumber)
+      // ✅ Utiliser getQRCodeSecret() au lieu de getSecret()
+      const secret = await MypvitSecretService.getQRCodeSecret()
       
-      console.log('📱 [QRCodeService] Génération QR Code pour:', {
-        operator: 'GIMAC',
+      console.log('📱 [QRCodeService] Génération QR Code GIMAC:', {
         accountCode: options.accountOperationCode,
-        amount: options.amount
+        amount: options.amount,
+        reference: options.reference
       })
 
       const response = await this.httpClient.post('/generate-qr-code', {
@@ -44,6 +47,8 @@ export class MypvitQRCodeService {
         currency: 'XAF'
       })
 
+      console.log('✅ [QRCodeService] Réponse reçue')
+
       if (!response.data || !response.data.qr_code) {
         throw new Error('QR Code non généré')
       }
@@ -56,6 +61,10 @@ export class MypvitQRCodeService {
 
     } catch (error: any) {
       console.error('❌ [QRCodeService] Erreur:', error.message)
+      if (error.response) {
+        console.error('❌ Status:', error.response.status)
+        console.error('❌ Data:', error.response.data)
+      }
       throw error
     }
   }
