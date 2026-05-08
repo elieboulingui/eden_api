@@ -1,4 +1,4 @@
-// app/controllers/SubscriptionQRController.ts - GIMAC UNIQUEMENT
+// app/controllers/SubscriptionQRController.ts - GIMAC UNIQUEMENT AVEC IMAGE PNG
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import Product from '#models/Product'
@@ -129,16 +129,20 @@ export default class SubscriptionQRController {
       await MypvitSecretService.forceRenewal()
       await new Promise(resolve => setTimeout(resolve, 1000))
 
+      // ✅ Générer le QR Code EN IMAGE PNG
       const qrResult = await MypvitQRCodeService.generateQRCode({
         accountOperationCode: GIMAC_ACCOUNT,
         terminalId: terminalId,
         callbackUrlCode: SUBSCRIPTION_CALLBACK_URL_CODE,
         amount: planConfig.price,
         reference: reference,
-        phoneNumber: phoneNumber
+        phoneNumber: phoneNumber,
+        returnAsImage: true  // ✅ RETOURNE L'IMAGE PNG EN BASE64
       })
 
-      console.log('✅ QR Code généré:', qrResult.reference_id)
+      console.log('✅ QR Code généré (image PNG base64)')
+      console.log('✅ Format:', qrResult.format)
+      console.log('✅ Reference ID:', qrResult.reference_id)
 
       // Mettre à jour l'abonnement
       if (qrResult.reference_id) {
@@ -162,20 +166,31 @@ export default class SubscriptionQRController {
           userId,
           operator: { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: GIMAC_ACCOUNT },
           qr_code: {
-            data: qrResult.data,
+            data: qrResult.data,  // ✅ Base64 de l'image PNG
+            format: qrResult.format,  // 'png_base64'
             reference_id: qrResult.reference_id || reference,
             amount: planConfig.price,
             expires_in: 600,
+            mime_type: 'image/png'  // ✅ Pour l'affichage frontend
           },
         },
       })
 
     } catch (error: any) {
       console.error('🔴 Erreur QR Code Abonnement:', error.message)
+      console.error('🔴 Stack:', error.stack)
+      
+      let errorMessage = "Erreur lors de la génération du QR Code"
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
       return response.status(500).json({
         success: false,
-        message: "Erreur lors de la génération du QR Code",
-        error: error.response?.data?.message || error.message
+        message: errorMessage,
+        error: error.response?.data?.error || error.message
       })
     }
   }
