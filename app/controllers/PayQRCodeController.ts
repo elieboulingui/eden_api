@@ -1,4 +1,4 @@
-// app/controllers/PayQRCodeController.ts - CORRIGÉ FINAL
+// app/controllers/PayQRCodeController.ts - SANS VÉRIFICATION STATUS
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -46,9 +46,8 @@ export default class PayQRCodeController {
     console.log('📷 ========== PAIEMENT QR CODE ==========')
 
     try {
-      // 🔥 Utiliser request.body() pour avoir TOUTES les données
       const rawBody = request.body() as Record<string, any>
-      console.log('📦 BODY BRUT:', JSON.stringify(rawBody, null, 2))
+      console.log('📦 BODY:', JSON.stringify(rawBody, null, 2))
 
       const {
         userId,
@@ -68,7 +67,6 @@ export default class PayQRCodeController {
 
       console.log(`📱 Téléphone: ${phoneNumber || 'N/A'}`)
       console.log(`📦 Items: ${hasDirectItems ? items.length : 'NON'}`)
-      console.log(`👤 userId: ${userId || 'NON'}`)
 
       // ============================================================
       // VALIDATION DES PRODUITS
@@ -78,7 +76,7 @@ export default class PayQRCodeController {
 
       if (hasDirectItems) {
         console.log('📦 Mode: ITEMS DIRECTS')
-        
+
         for (const item of items) {
           const productId = item.productId || item.id
           const qty = item.quantity || 1
@@ -92,18 +90,18 @@ export default class PayQRCodeController {
           }
 
           const product = await Product.findBy('id', productId)
-          
+
           console.log(`🔍 Produit ${productId}:`, product ? {
             name: product.name,
             stock: product.stock,
-            isArchived: product.isArchived,
-            status: product.status
+            isArchived: product.isArchived
           } : 'INTROUVABLE')
 
+          // ✅ VÉRIFIE UNIQUEMENT : existe, pas archivé, stock suffisant
           if (!product) {
             return response.status(400).json({
               success: false,
-              message: `Produit ${productId} introuvable`,
+              message: `Produit introuvable`,
               error: 'PRODUCT_NOT_FOUND'
             })
           }
@@ -114,20 +112,7 @@ export default class PayQRCodeController {
               error: 'PRODUCT_ARCHIVED'
             })
           }
-          if (product.status !== 'active') {
-            return response.status(400).json({
-              success: false,
-              message: `${product.name} n'est pas actif`,
-              error: 'PRODUCT_INACTIVE'
-            })
-          }
-          if (product.stock <= 0) {
-            return response.status(400).json({
-              success: false,
-              message: `${product.name} est en rupture de stock`,
-              error: 'OUT_OF_STOCK'
-            })
-          }
+          // ❌ NE VÉRIFIE PLUS LE STATUS
           if (product.stock < qty) {
             return response.status(400).json({
               success: false,
@@ -138,13 +123,12 @@ export default class PayQRCodeController {
 
           subtotal += product.price * qty
           validProducts.push({ productId, quantity: qty, product })
-          console.log(`✅ ${product.name}: OK (stock: ${product.stock}, demandé: ${qty})`)
+          console.log(`✅ ${product.name}: OK (stock: ${product.stock})`)
         }
 
       } else if (userId) {
-        // Mode panier
         console.log('🛒 Mode: PANIER pour userId:', userId)
-        
+
         const cart = await Cart.query()
           .where('user_id', userId)
           .preload('items')
@@ -160,11 +144,11 @@ export default class PayQRCodeController {
 
         for (const cartItem of cart.items) {
           const product = await Product.findBy('id', cartItem.product_id)
-          
-          if (!product || product.isArchived || product.status !== 'active' || product.stock < cartItem.quantity) {
+
+          if (!product || product.isArchived || product.stock < cartItem.quantity) {
             return response.status(400).json({
               success: false,
-              message: `Produit ${cartItem.product_id} indisponible`,
+              message: `Produit indisponible`,
               error: 'PRODUCT_UNAVAILABLE'
             })
           }
@@ -173,10 +157,9 @@ export default class PayQRCodeController {
           validProducts.push({ productId: cartItem.product_id, quantity: cartItem.quantity, product })
         }
 
-        // Vider le panier
         await CartItem.query().where('cart_id', cart.id).delete()
         console.log('🛒 Panier vidé')
-        
+
       } else {
         return response.status(400).json({
           success: false,
@@ -206,7 +189,6 @@ export default class PayQRCodeController {
           })
         }
         finalUserId = user.id
-        console.log('👤 Utilisateur créé/existant:', finalUserId)
       }
 
       // ============================================================
@@ -231,8 +213,6 @@ export default class PayQRCodeController {
         shipping_address: shippingAddress || 'Retrait en magasin',
         payment_operator_simple: operatorInfo.name
       })
-
-      console.log('✅ Commande créée:', order.id)
 
       // ============================================================
       // CRÉER LES ORDER ITEMS
@@ -262,14 +242,12 @@ export default class PayQRCodeController {
       // GÉNÉRER LE QR CODE
       // ============================================================
       const terminalId = `T${Date.now().toString(36).toUpperCase()}`
-      
-      console.log('🔑 Génération QR Code...')
-      
+
       try {
         await MypvitSecretService.forceRenewal(phoneNumber)
         await new Promise(resolve => setTimeout(resolve, 1000))
       } catch (e: any) {
-        console.error('⚠️ Erreur renouvellement secret:', e.message)
+        console.error('⚠️ Erreur secret:', e.message)
       }
 
       const qrResult = await MypvitQRCodeService.generateQRCode({
@@ -281,8 +259,6 @@ export default class PayQRCodeController {
         phoneNumber
       })
 
-      console.log('✅ QR Code généré:', qrResult.reference_id)
-
       if (qrResult.reference_id) {
         order.payment_reference_id = qrResult.reference_id
         order.status = 'pending_payment'
@@ -292,7 +268,7 @@ export default class PayQRCodeController {
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending_payment',
-        description: `📱 QR Code ${operatorInfo.name} - Réf: ${qrResult.reference_id || order.order_number}`,
+        description: `📱 QR Code - Réf: ${qrResult.reference_id || order.order_number}`,
         tracked_at: DateTime.now(),
       })
 
@@ -300,35 +276,26 @@ export default class PayQRCodeController {
 
       return response.status(201).json({
         success: true,
-        message: `✅ QR Code ${operatorInfo.name} généré ! Scannez pour payer.`,
+        message: `✅ QR Code généré !`,
         data: {
           orderId: order.id,
           orderNumber: order.order_number,
           total,
           status: 'pending_payment',
-          customerName: order.customer_name,
-          paymentMethod: `qr_code_${operatorInfo.name.toLowerCase()}`,
           itemsCount: validProducts.length,
-          userId: finalUserId,
-          operator: {
-            name: operatorInfo.name,
-            code: operatorInfo.code,
-            accountCode: operatorInfo.accountCode
-          },
           qr_code: {
             data: qrResult.data,
-            reference_id: qrResult.reference_id || order.order_number,
+            reference_id: qrResult.reference_id,
             amount: total,
-            expires_in: 600,
-          },
-        },
+          }
+        }
       })
 
     } catch (error: any) {
-      console.error('🔴 ERREUR QR:', error.message, error.stack)
+      console.error('🔴 ERREUR:', error.message)
       return response.status(500).json({
         success: false,
-        message: 'Erreur interne QR Code',
+        message: 'Erreur interne',
         error: error.message
       })
     }
