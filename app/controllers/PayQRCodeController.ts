@@ -1,14 +1,12 @@
-// app/controllers/PayQRCodeController.ts - PANIER UNIQUEMENT
+// app/controllers/PayQRCodeController.ts - PANIER UNIQUEMENT (SANS ERREURS TS)
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
 import OrderTracking from '#models/order_tracking'
 import Cart from '#models/Cart'
 import CartItem from '#models/CartItem'
-import User from '#models/user'
 import Product from '#models/Product'
 import { DateTime } from 'luxon'
-import crypto from 'node:crypto'
 import MypvitSecretService from '../services/mypvit_secret_service.js'
 import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
 
@@ -16,10 +14,6 @@ const CALLBACK_URL_CODE = '9ZOXW'
 
 function generateOrderNumber(): string {
   return `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-}
-
-function generateRandomPassword(): string {
-  return crypto.randomBytes(16).toString('hex')
 }
 
 export default class PayQRCodeController {
@@ -33,7 +27,7 @@ export default class PayQRCodeController {
 
     try {
       const rawBody = request.body() as Record<string, any>
-      console.log('📦 BODY:', JSON.stringify(rawBody, null, 2))
+      console.log('📦 BODY:', JSON.stringify(rawBody))
 
       const {
         userId,
@@ -46,25 +40,21 @@ export default class PayQRCodeController {
         deliveryPrice,
       } = rawBody
 
-      // ❌ IGNORE complètement rawBody.items
       const phoneNumber = customerAccountNumber || customerPhone || '060000000'
       const operatorInfo = this.getOperatorInfo()
 
-      console.log(`📱 Téléphone: ${phoneNumber}`)
       console.log(`👤 userId: ${userId || 'NON'}`)
 
       // ============================================================
-      // 🛒 TOUJOURS CHERCHER DANS LE PANIER
+      // 🛒 userId OBLIGATOIRE - TOUJOURS LE PANIER
       // ============================================================
       if (!userId) {
         return response.status(400).json({
           success: false,
-          message: 'userId requis pour récupérer le panier',
+          message: 'userId requis',
           error: 'USER_ID_REQUIRED'
         })
       }
-
-      console.log('🛒 Recherche du panier pour userId:', userId)
 
       const cart = await Cart.query()
         .where('user_id', userId)
@@ -74,23 +64,21 @@ export default class PayQRCodeController {
       if (!cart || !cart.items || cart.items.length === 0) {
         return response.status(400).json({
           success: false,
-          message: 'Votre panier est vide. Ajoutez des articles avant de payer.',
+          message: 'Votre panier est vide',
           error: 'EMPTY_CART'
         })
       }
 
-      console.log(`🛒 Panier trouvé avec ${cart.items.length} articles`)
+      console.log(`🛒 ${cart.items.length} articles dans le panier`)
 
       // ============================================================
-      // VALIDER LES PRODUITS DU PANIER
+      // VALIDER LES PRODUITS
       // ============================================================
       let subtotal = 0
       const productsToOrder: { productId: string; quantity: number; product: Product }[] = []
 
       for (const cartItem of cart.items) {
         const product = await Product.findBy('id', cartItem.product_id)
-
-        console.log(`🔍 ${cartItem.product_id}:`, product ? `${product.name} (stock: ${product.stock})` : 'INTROUVABLE')
 
         if (!product) {
           return response.status(400).json({
@@ -116,10 +104,10 @@ export default class PayQRCodeController {
 
         subtotal += product.price * cartItem.quantity
         productsToOrder.push({ productId: cartItem.product_id, quantity: cartItem.quantity, product })
-        console.log(`✅ ${product.name}: OK`)
+        console.log(`✅ ${product.name} (stock: ${product.stock})`)
       }
 
-      console.log(`✅ ${productsToOrder.length} produits validés, Sous-total: ${subtotal} FCFA`)
+      console.log(`✅ ${productsToOrder.length} produits, Sous-total: ${subtotal} FCFA`)
 
       // ============================================================
       // VIDER LE PANIER
@@ -132,11 +120,10 @@ export default class PayQRCodeController {
       // ============================================================
       const shippingCost = deliveryPrice || 0
       const total = subtotal + shippingCost
-      const orderNumber = generateOrderNumber()
 
       const order = await Order.create({
         user_id: userId,
-        order_number: orderNumber,
+        order_number: generateOrderNumber(),
         status: 'pending',
         total,
         subtotal,
@@ -150,10 +137,10 @@ export default class PayQRCodeController {
         payment_operator_simple: 'GIMAC'
       })
 
-      console.log('✅ Commande créée:', order.id)
+      console.log('✅ Commande:', order.id)
 
       // ============================================================
-      // CRÉER LES ORDER ITEMS
+      // ORDER ITEMS
       // ============================================================
       for (const item of productsToOrder) {
         await OrderItem.create({
@@ -167,7 +154,7 @@ export default class PayQRCodeController {
       }
 
       // ============================================================
-      // TRACKING + QR CODE
+      // TRACKING
       // ============================================================
       await OrderTracking.create({
         order_id: order.id,
@@ -176,18 +163,19 @@ export default class PayQRCodeController {
         tracked_at: DateTime.now(),
       })
 
-      const terminalId = `T${Date.now().toString(36).toUpperCase()}`
-
+      // ============================================================
+      // QR CODE
+      // ============================================================
       try {
         await MypvitSecretService.forceRenewal(phoneNumber)
         await new Promise(resolve => setTimeout(resolve, 1000))
       } catch (e: any) {
-        console.error('⚠️ Erreur secret:', e.message)
+        console.error('⚠️ Secret:', e.message)
       }
 
       const qrResult = await MypvitQRCodeService.generateQRCode({
         accountOperationCode: operatorInfo.accountCode,
-        terminalId,
+        terminalId: `T${Date.now().toString(36).toUpperCase()}`,
         callbackUrlCode: CALLBACK_URL_CODE,
         amount: total,
         reference: order.order_number,
@@ -203,7 +191,7 @@ export default class PayQRCodeController {
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending_payment',
-        description: `📱 QR Code GIMAC - Réf: ${qrResult.reference_id || order.order_number}`,
+        description: `📱 QR Code - Réf: ${qrResult.reference_id || order.order_number}`,
         tracked_at: DateTime.now(),
       })
 
