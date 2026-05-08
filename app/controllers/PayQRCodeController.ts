@@ -1,4 +1,4 @@
-// app/controllers/PayQRCodeController.ts - DEBUG
+// app/controllers/PayQRCodeController.ts - GIMAC UNIQUEMENT
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -7,15 +7,16 @@ import Cart from '#models/Cart'
 import CartItem from '#models/CartItem'
 import Product from '#models/Product'
 import { DateTime } from 'luxon'
-import MypvitSecretService from '../services/mypvit_secret_service.js'
+import MypvitSecretService from '../services/mypvit_secret_services.js'
 import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
 
 const CALLBACK_URL_CODE = '9ZOXW'
+const GIMAC_ACCOUNT = 'ACC_69FE0E1BC34B4'
 
 export default class PayQRCodeController {
 
   async pay({ request, response }: HttpContext) {
-    console.log('📷 ========== START ==========')
+    console.log('📷 ========== PAIEMENT QR CODE GIMAC ==========')
     
     try {
       const rawBody = request.body() as Record<string, any>
@@ -33,86 +34,93 @@ export default class PayQRCodeController {
       const cart = await Cart.query().where('user_id', userId).preload('items').first()
       console.log('🛒 Cart trouvé:', cart ? 'OUI' : 'NON')
 
-      if (!cart) {
-        return response.status(400).json({ success: false, message: 'Aucun panier' })
-      }
-
-      console.log('🛒 Items:', cart.items?.length || 0)
-
-      if (!cart.items || cart.items.length === 0) {
+      if (!cart || !cart.items || cart.items.length === 0) {
         return response.status(400).json({ success: false, message: 'Panier vide' })
       }
 
+      // Sauvegarder les items avant de vider le panier
+      const cartItems = cart.items.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+      }))
+      console.log('🛒 Items:', cartItems.length)
+
       // ÉTAPE 2 : Produits
       let subtotal = 0
-      for (const item of cart.items) {
-        console.log('🔍 ÉTAPE 2: Produit', item.product_id)
-        const product = await Product.find(item.product_id)
+      const validProducts: { product: Product; quantity: number }[] = []
+
+      for (const cartItem of cartItems) {
+        console.log('🔍 Produit:', cartItem.product_id)
+        const product = await Product.find(cartItem.product_id)
         console.log('🔍 Trouvé:', product ? product.name : 'NON')
-        if (product) {
-          subtotal += product.price * item.quantity
+        
+        if (!product) {
+          return response.status(400).json({
+            success: false,
+            message: `Produit ${cartItem.product_id} introuvable`
+          })
         }
+
+        subtotal += product.price * cartItem.quantity
+        validProducts.push({ product, quantity: cartItem.quantity })
       }
 
       console.log('💰 Sous-total:', subtotal)
 
-      // ÉTAPE 3 : Vider panier
-      console.log('🗑️ ÉTAPE 3: Vidage panier...')
-      await CartItem.query().where('cart_id', cart.id).delete()
-      console.log('🗑️ Panier vidé')
-
-      // ÉTAPE 4 : Commande
-      console.log('📝 ÉTAPE 4: Création commande...')
+      // ÉTAPE 3 : Commande
+      console.log('📝 ÉTAPE 3: Création commande...')
       const order = await Order.create({
         user_id: userId,
         order_number: `CMD-${Date.now()}`,
         status: 'pending',
         total: subtotal,
         subtotal,
-        shipping_cost: 0,
-        delivery_method: 'pickup',
-        customer_name: 'Client',
-        customer_phone: rawBody.customerPhone || '060000000',
+        shipping_cost: rawBody.deliveryPrice || 0,
+        delivery_method: rawBody.deliveryMethod || 'pickup',
+        customer_name: rawBody.customerName || 'Client',
+        customer_phone: rawBody.customerPhone || rawBody.customerAccountNumber || '060000000',
         payment_method: 'qr_code_gimac',
-        customer_email: 'invite@email.com',
-        shipping_address: 'Retrait en magasin',
+        customer_email: rawBody.customerEmail || 'invite@email.com',
+        shipping_address: rawBody.shippingAddress || 'Retrait en magasin',
         payment_operator_simple: 'GIMAC'
       })
       console.log('📝 Commande:', order.id)
 
-      // ÉTAPE 5 : OrderItems
-      console.log('📦 ÉTAPE 5: OrderItems...')
-      for (const item of cart.items) {
-        const product = await Product.find(item.product_id)
-        if (product) {
-          await OrderItem.create({
-            order_id: order.id,
-            product_id: product.id,
-            product_name: product.name,
-            price: product.price,
-            quantity: item.quantity,
-            subtotal: product.price * item.quantity
-          })
-        }
+      // ÉTAPE 4 : OrderItems
+      console.log('📦 ÉTAPE 4: OrderItems...')
+      for (const item of validProducts) {
+        await OrderItem.create({
+          order_id: order.id,
+          product_id: item.product.id,
+          product_name: item.product.name,
+          price: item.product.price,
+          quantity: item.quantity,
+          subtotal: item.product.price * item.quantity
+        })
       }
       console.log('📦 OrderItems OK')
+
+      // ÉTAPE 5 : Vider panier (APRÈS les OrderItems !)
+      console.log('🗑️ ÉTAPE 5: Vidage panier...')
+      await CartItem.query().where('cart_id', cart.id).delete()
+      console.log('🗑️ Panier vidé')
 
       // ÉTAPE 6 : Tracking
       console.log('📊 ÉTAPE 6: Tracking...')
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
-        description: 'QR Code GIMAC',
+        description: `QR Code GIMAC - ${validProducts.length} articles`,
         tracked_at: DateTime.now(),
       })
       console.log('📊 Tracking OK')
 
-      // ÉTAPE 7 : QR Code
-      console.log('🔑 ÉTAPE 7: QR Code...')
-      await MypvitSecretService.forceRenewal('060000000').catch(() => {})
+      // ÉTAPE 7 : QR Code GIMAC
+      console.log('🔑 ÉTAPE 7: QR Code GIMAC...')
+      await MypvitSecretService.forceRenewal()
       
       const qrResult = await MypvitQRCodeService.generateQRCode({
-        accountOperationCode: 'ACC_69FE0E1BC34B4',
+        accountOperationCode: GIMAC_ACCOUNT,
         terminalId: `T${Date.now().toString(36).toUpperCase()}`,
         callbackUrlCode: CALLBACK_URL_CODE,
         amount: subtotal,
@@ -121,14 +129,37 @@ export default class PayQRCodeController {
       })
       console.log('🔑 QR Code OK')
 
+      // ÉTAPE 8 : Sauvegarder la référence
+      if (qrResult.reference_id) {
+        order.payment_reference_id = qrResult.reference_id
+        order.status = 'pending_payment'
+        await order.save()
+      }
+
+      await OrderTracking.create({
+        order_id: order.id,
+        status: 'pending_payment',
+        description: `QR Code GIMAC - Réf: ${qrResult.reference_id || order.order_number}`,
+        tracked_at: DateTime.now(),
+      })
+
+      await order.load('items')
+
       return response.status(201).json({
         success: true,
-        message: '✅ OK',
+        message: '✅ QR Code GIMAC généré !',
         data: {
           orderId: order.id,
           orderNumber: order.order_number,
           total: subtotal,
-          qr_code: { data: qrResult.data, reference_id: qrResult.reference_id, amount: subtotal }
+          status: 'pending_payment',
+          itemsCount: validProducts.length,
+          qr_code: {
+            data: qrResult.data,
+            reference_id: qrResult.reference_id,
+            amount: subtotal,
+            expires_in: 600,
+          }
         }
       })
 
