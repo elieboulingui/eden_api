@@ -23,39 +23,41 @@ export class MypvitSecretService {
   constructor() {
     this.httpClient = axios.create({
       baseURL: this.BASE_URL,
-      timeout: 30000
+      timeout: 30000,
+      // 🔥 Ajouter un User-Agent
+      headers: {
+        'User-Agent': 'EdenApp/1.0'
+      }
     })
   }
 
   async renewForQRCode(): Promise<StoredSecret> {
-    console.log('🔑 Renouvellement secret GIMAC...')
+    const url = `/${this.GIMAC_CONFIG.codeUrl}/renew-secret`
+    const body = new URLSearchParams()
+    body.append('accountOperationCode', this.GIMAC_CONFIG.code)
+    body.append('password', this.GIMAC_CONFIG.password)
+
+    console.log('🔑 === RENOUVELLEMENT SECRET ===')
+    console.log('🔑 URL complète:', `${this.BASE_URL}${url}`)
+    console.log('🔑 Code compte:', this.GIMAC_CONFIG.code)
+    console.log('🔑 Password présent:', !!this.GIMAC_CONFIG.password)
+    console.log('🔑 Body:', body.toString())
 
     for (let i = 1; i <= 3; i++) {
       try {
         console.log(`📡 Tentative ${i}/3...`)
 
-        // 🔥 Utiliser URLSearchParams pour x-www-form-urlencoded
-        const body = new URLSearchParams()
-        body.append('accountOperationCode', this.GIMAC_CONFIG.code)
-        body.append('password', this.GIMAC_CONFIG.password)
-
-        const response = await this.httpClient.post(
-          `/${this.GIMAC_CONFIG.codeUrl}/renew-secret`,
-          body.toString(),
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded'
-            }
+        const response = await this.httpClient.post(url, body.toString(), {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
           }
-        )
-
-        console.log('✅ Réponse:', {
-          account: response.data?.operation_account_code,
-          expiresIn: response.data?.expires_in
         })
 
+        console.log('✅ Statut HTTP:', response.status)
+        console.log('✅ Réponse brute:', JSON.stringify(response.data))
+
         if (!response.data?.secret) {
-          throw new Error('Secret non reçu')
+          throw new Error('Secret non reçu dans la réponse')
         }
 
         this.qrCodeSecret = {
@@ -65,30 +67,37 @@ export class MypvitSecretService {
           renewedAt: DateTime.now(),
         }
 
-        console.log('✅ Secret GIMAC renouvelé')
+        console.log('✅ Secret GIMAC renouvelé avec succès')
         return this.qrCodeSecret
 
       } catch (error: any) {
-        console.error(`❌ Tentative ${i}/3:`, {
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message
-        })
+        console.error(`❌ Erreur tentative ${i}/3:`)
+        console.error('❌ Status HTTP:', error.response?.status)
+        console.error('❌ Headers:', JSON.stringify(error.response?.headers))
+        console.error('❌ Data:', JSON.stringify(error.response?.data))
+        console.error('❌ Message:', error.message)
+
+        if (error.response?.status === 403 || error.response?.status === 401) {
+          console.error('🔴 ERREUR AUTHENTIFICATION - Vérifie le password et le codeUrl')
+        }
 
         if (i < 3) {
-          await new Promise(resolve => setTimeout(resolve, 2000 * i))
+          const waitTime = 2000 * i
+          console.log(`⏳ Nouvelle tentative dans ${waitTime}ms...`)
+          await new Promise(resolve => setTimeout(resolve, waitTime))
         }
       }
     }
-    throw new Error('Échec renouvellement secret GIMAC')
+    throw new Error('Échec renouvellement secret GIMAC après 3 tentatives')
   }
 
   async getQRCodeSecret(): Promise<string> {
     if (this.qrCodeSecret && this.qrCodeSecret.expiresAt > DateTime.now()) {
-      console.log('🔐 Secret GIMAC valide')
+      const remaining = Math.floor(this.qrCodeSecret.expiresAt.diff(DateTime.now(), 'seconds').seconds)
+      console.log(`🔐 Secret GIMAC valide, expire dans ${remaining}s`)
       return this.qrCodeSecret.key
     }
-    console.log('⚠️ Secret expiré, renouvellement...')
+    console.log('⚠️ Secret expiré ou inexistant, renouvellement...')
     const newSecret = await this.renewForQRCode()
     return newSecret.key
   }
