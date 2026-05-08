@@ -1,4 +1,4 @@
-// app/services/mypvit_qrcode_service.ts - Version GIMAC uniquement
+// app/services/mypvit_qrcode_service.ts - Version corrigée avec le bon endpoint
 import axios from 'axios'
 import MypvitSecretService from './mypvit_secret_service.js'
 
@@ -28,7 +28,6 @@ export class MypvitQRCodeService {
 
   async generateQRCode(options: QRCodeOptions): Promise<any> {
     try {
-      // Récupérer le secret GIMAC
       const secret = await MypvitSecretService.getSecret()
       
       console.log('📱 [QRCodeService] Génération QR Code GIMAC:', {
@@ -37,20 +36,25 @@ export class MypvitQRCodeService {
         reference: options.reference
       })
 
-      const response = await this.httpClient.post('/generate-qr-code', {
+      // ✅ Utiliser le callbackUrlCode dans l'URL (comme pour renew-secret)
+      const url = `/${options.callbackUrlCode}/generate-qr-code`
+      
+      console.log(`📡 URL complète: ${this.BASE_URL}${url}`)
+
+      const response = await this.httpClient.post(url, {
         secret: secret,
         operation_account_code: options.accountOperationCode,
         terminal_id: options.terminalId,
-        callback_url_code: options.callbackUrlCode,
         amount: options.amount,
         reference: options.reference,
         phone_number: options.phoneNumber || '060000000',
         currency: 'XAF'
       })
 
-      console.log('✅ [QRCodeService] QR Code généré avec succès')
+      console.log('✅ [QRCodeService] Réponse reçue, status:', response.status)
 
       if (!response.data || !response.data.qr_code) {
+        console.error('❌ Pas de QR code dans la réponse:', response.data)
         throw new Error('QR Code non généré')
       }
 
@@ -64,7 +68,7 @@ export class MypvitQRCodeService {
       console.error('❌ [QRCodeService] Erreur:', error.message)
       if (error.response) {
         console.error('❌ Status:', error.response.status)
-        console.error('❌ Data:', error.response.data)
+        console.error('❌ Data:', JSON.stringify(error.response.data))
       }
       throw error
     }
