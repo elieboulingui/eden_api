@@ -1,6 +1,6 @@
-// app/services/mypvit_qrcode_service.ts
+// app/services/mypvit_qrcode_service.ts - Version GIMAC uniquement
 import axios from 'axios'
-import MypvitSecretService from './mypvit_secret_services.js'
+import MypvitSecretService from './mypvit_secret_service.js'
 
 interface QRCodeOptions {
   accountOperationCode: string
@@ -20,15 +20,16 @@ export class MypvitQRCodeService {
       baseURL: this.BASE_URL,
       timeout: 30000,
       headers: {
-        'User-Agent': 'EdenApp/1.0'
+        'User-Agent': 'EdenApp/1.0',
+        'Content-Type': 'application/json'
       }
     })
   }
 
   async generateQRCode(options: QRCodeOptions): Promise<any> {
     try {
-      // ✅ Utiliser getQRCodeSecret() au lieu de getSecret()
-      const secret = await MypvitSecretService.getQRCodeSecret()
+      // Récupérer le secret GIMAC
+      const secret = await MypvitSecretService.getSecret()
       
       console.log('📱 [QRCodeService] Génération QR Code GIMAC:', {
         accountCode: options.accountOperationCode,
@@ -47,7 +48,7 @@ export class MypvitQRCodeService {
         currency: 'XAF'
       })
 
-      console.log('✅ [QRCodeService] Réponse reçue')
+      console.log('✅ [QRCodeService] QR Code généré avec succès')
 
       if (!response.data || !response.data.qr_code) {
         throw new Error('QR Code non généré')
