@@ -36,13 +36,8 @@ export default class PayQRCodeController {
 
   private detectOperatorGabon(phoneNumber?: string): { name: string; code: string; accountCode: string } {
     if (!phoneNumber) {
-      // 🏦 Par défaut : GIMAC
       console.log('⚠️ Pas de numéro, utilisation GIMAC par défaut')
-      return {
-        name: 'GIMAC',
-        code: 'GIMAC_PAY',
-        accountCode: 'ACC_69FE0E1BC34B4'
-      }
+      return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
     }
 
     console.log('🔍 Détection opérateur QR pour:', phoneNumber)
@@ -58,33 +53,18 @@ export default class PayQRCodeController {
     console.log('📱 Numéro nettoyé:', local)
     console.log('🔢 Premier chiffre:', local.charAt(0))
 
-    // 📱 MOOV MONEY (06xxxxxxxx)
     if (local.startsWith('06') || local.startsWith('6')) {
       console.log('✅ MOOV_MONEY détecté')
-      return {
-        name: 'MOOV_MONEY',
-        code: 'MOOV_MONEY',
-        accountCode: 'ACC_69EFB143D4F54'
-      }
+      return { name: 'MOOV_MONEY', code: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
     }
     
-    // 📱 AIRTEL MONEY (07xxxxxxxx)
     if (local.startsWith('07') || local.startsWith('7')) {
       console.log('✅ AIRTEL_MONEY détecté')
-      return {
-        name: 'AIRTEL_MONEY',
-        code: 'AIRTEL_MONEY',
-        accountCode: 'ACC_69EFB0E02FCA3'
-      }
+      return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
     }
     
-    // 🏦 GIMAC (par défaut : numéros fixes, autres formats, cartes bancaires)
     console.log('✅ GIMAC détecté (par défaut)')
-    return {
-      name: 'GIMAC',
-      code: 'GIMAC_PAY',
-      accountCode: 'ACC_69FE0E1BC34B4'
-    }
+    return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
   }
 
   private async getOrCreateUser(payload: {
@@ -121,153 +101,169 @@ export default class PayQRCodeController {
     return user
   }
 
-  private async checkStockAvailability(items: any[], isCart: boolean = false, userId?: string): Promise<{
-    available: boolean
-    outOfStockProducts: string[]
-    message?: string
+  // ✅ NOUVELLE MÉTHODE : Récupère et valide les produits du panier
+  private async getCartWithValidatedItems(userId: string): Promise<{
+    valid: boolean
+    cart?: any
+    productsToCheck: any[]
+    errors: string[]
+    subtotal: number
   }> {
-    console.log('📦 Vérification stock QR...')
-    const outOfStockProducts: string[] = []
-    let productsToCheck: any[] = []
+    console.log('🛒 Récupération du panier pour userId:', userId)
+    
+    const cart = await Cart.query()
+      .where('user_id', userId)
+      .preload('items')
+      .first()
 
-    if (isCart && userId) {
-      const cart = await Cart.query().where('user_id', userId).preload('items').first()
-      if (cart) {
-        productsToCheck = cart.items.map((item: any) => ({
-          productId: item.product_id,
-          quantity: item.quantity
-        }))
-        console.log(`🛒 ${productsToCheck.length} articles du panier`)
+    if (!cart || !cart.items || cart.items.length === 0) {
+      return { 
+        valid: false, 
+        productsToCheck: [], 
+        errors: ['Votre panier est vide'],
+        subtotal: 0
       }
-    } else if (items && items.length > 0) {
-      productsToCheck = items.map((item: any) => ({
-        productId: item.productId || item.id,
-        quantity: item.quantity
-      }))
-      console.log(`📦 ${productsToCheck.length} articles directs`)
     }
 
-    if (productsToCheck.length === 0) {
-      console.log('❌ Aucun produit à vérifier')
-      return { available: false, outOfStockProducts: ['Aucun produit'], message: 'Aucun produit' }
+    console.log(`🛒 Panier trouvé avec ${cart.items.length} articles`)
+
+    const productsToCheck: any[] = []
+    const errors: string[] = []
+    let subtotal = 0
+
+    for (const cartItem of cart.items) {
+      const product = await Product.findBy('id', cartItem.product_id)
+      
+      if (!product) {
+        errors.push(`Produit ${cartItem.product_id} introuvable`)
+        continue
+      }
+      
+      if (product.isArchived) {
+        errors.push(`${product.name} - Archivé`)
+        continue
+      }
+      
+      if (product.status !== 'active') {
+        errors.push(`${product.name} - Produit inactif`)
+        continue
+      }
+      
+      if (product.stock <= 0) {
+        errors.push(`${product.name} - Rupture de stock`)
+        continue
+      }
+      
+      if (product.stock < cartItem.quantity) {
+        errors.push(`${product.name}: stock ${product.stock} < ${cartItem.quantity} demandé`)
+        continue
+      }
+
+      // ✅ Tout est OK
+      productsToCheck.push({
+        productId: cartItem.product_id,
+        quantity: cartItem.quantity,
+        product: product
+      })
+      
+      subtotal += product.price * cartItem.quantity
+      console.log(`✅ ${product.name}: ${product.stock} en stock, ${cartItem.quantity} demandé`)
     }
 
-    console.log(`📦 Vérification de ${productsToCheck.length} produit(s)...`)
-
-    for (const item of productsToCheck) {
-      if (!item.productId) continue
-      const product = await Product.findBy('id', item.productId)
-      if (!product) { 
-        outOfStockProducts.push(`Produit ${item.productId} introuvable`)
-        continue 
-      }
-      if (product.isArchived) { 
-        outOfStockProducts.push(`${product.name} - Archivé`)
-        continue 
-      }
-      if (product.stock <= 0) { 
-        outOfStockProducts.push(`${product.name} - RUPTURE`)
-        continue 
-      }
-      if (product.stock < item.quantity) { 
-        outOfStockProducts.push(`${product.name}: stock ${product.stock} < ${item.quantity} demandé`)
-        continue 
-      }
-      console.log(`✅ ${product.name}: stock ${product.stock} ≥ ${item.quantity}`)
-    }
-
-    const available = outOfStockProducts.length === 0
-    console.log(`📊 Stock QR: ${available ? 'OK' : 'PROBLÈME'}`)
-    if (!available) console.log('❌ Produits problématiques:', outOfStockProducts)
-
-    return {
-      available,
-      outOfStockProducts,
-      message: outOfStockProducts.length > 0 ? `Indisponible: ${outOfStockProducts.join(' | ')}` : undefined
-    }
+    const valid = errors.length === 0
+    console.log(`📊 Panier valide: ${valid ? 'OUI' : 'NON'} | ${productsToCheck.length} produits OK | ${errors.length} erreurs`)
+    
+    return { valid, cart, productsToCheck, errors, subtotal }
   }
 
-  // ✅ STOCK GÉRÉ UNIQUEMENT PAR LE CALLBACK
-  // Les méthodes updateProductStock et restoreProductStock ont été supprimées
-
-  private async createOrderItems(order: Order, items: any[]): Promise<{ subtotal: number; itemsCount: number }> {
-    console.log('🏗️ Création items QR directs')
+  // ✅ NOUVELLE MÉTHODE : Valide les items directs
+  private async validateDirectItems(items: any[]): Promise<{
+    valid: boolean
+    productsToCheck: any[]
+    errors: string[]
+    subtotal: number
+  }> {
+    console.log('📦 Validation des items directs...')
+    
+    const productsToCheck: any[] = []
+    const errors: string[] = []
     let subtotal = 0
-    let itemsCount = 0
 
     for (const item of items) {
       const productId = item.productId || item.id
+      
       if (!productId) {
-        console.log('⚠️ Item sans ID, ignoré')
+        errors.push('Item sans ID produit')
         continue
       }
 
       const product = await Product.findBy('id', productId)
+      
       if (!product) {
-        console.log(`⚠️ Produit ${productId} non trouvé, ignoré`)
+        errors.push(`Produit ${productId} introuvable`)
+        continue
+      }
+      
+      if (product.isArchived) {
+        errors.push(`${product.name} - Archivé`)
+        continue
+      }
+      
+      if (product.status !== 'active') {
+        errors.push(`${product.name} - Produit inactif`)
+        continue
+      }
+      
+      const qty = item.quantity || 1
+      
+      if (product.stock <= 0) {
+        errors.push(`${product.name} - Rupture de stock`)
+        continue
+      }
+      
+      if (product.stock < qty) {
+        errors.push(`${product.name}: stock ${product.stock} < ${qty} demandé`)
         continue
       }
 
-      const qty = item.quantity || 1
-      const itemTotal = product.price * qty
-      subtotal += itemTotal
-
-      await OrderItem.create({
-        order_id: order.id,
-        product_id: product.id,
-        product_name: product.name,
-        price: product.price,
+      // ✅ Tout est OK
+      productsToCheck.push({
+        productId: productId,
         quantity: qty,
-        subtotal: itemTotal
+        product: product
       })
-
-      console.log(`➕ ${product.name} x${qty} = ${itemTotal} FCFA`)
-      // ✅ STOCK N'EST PLUS DÉCRÉMENTÉ ICI
-      // Le stock sera décrémenté par le CallbackController après confirmation du paiement
-      itemsCount++
+      
+      subtotal += product.price * qty
+      console.log(`✅ ${product.name}: ${product.stock} en stock, ${qty} demandé`)
     }
 
-    console.log(`💰 Sous-total QR: ${subtotal} FCFA | ${itemsCount} articles`)
-    return { subtotal, itemsCount }
+    const valid = errors.length === 0
+    console.log(`📊 Items valides: ${valid ? 'OUI' : 'NON'} | ${productsToCheck.length} produits OK | ${errors.length} erreurs`)
+    
+    return { valid, productsToCheck, errors, subtotal }
   }
 
-  private async createOrderItemsFromCart(cart: any, order: Order): Promise<{ subtotal: number; itemsCount: number }> {
-    console.log('🛒 Création items QR depuis panier')
-    let subtotal = 0
+  // ✅ CRÉATION DES ORDER ITEMS (version simplifiée)
+  private async createOrderItemsFromValidated(order: Order, productsToCheck: any[]): Promise<number> {
+    console.log('🏗️ Création des OrderItems...')
     let itemsCount = 0
 
-    for (const cartItem of cart.items) {
-      if (!cartItem.product_id) {
-        console.log('⚠️ Item panier sans product_id, ignoré')
-        continue
-      }
-
-      const product = await Product.findBy('id', cartItem.product_id)
-      if (!product) {
-        console.log(`⚠️ Produit ${cartItem.product_id} non trouvé, ignoré`)
-        continue
-      }
-
-      const qty = cartItem.quantity || 1
-      const itemTotal = product.price * qty
-      subtotal += itemTotal
-
+    for (const item of productsToCheck) {
       await OrderItem.create({
         order_id: order.id,
-        product_id: product.id,
-        product_name: product.name,
-        price: product.price,
-        quantity: qty,
-        subtotal: itemTotal
+        product_id: item.productId,
+        product_name: item.product.name,
+        price: item.product.price,
+        quantity: item.quantity,
+        subtotal: item.product.price * item.quantity
       })
 
-      console.log(`➕ ${product.name} x${qty} = ${itemTotal} FCFA`)
-      // ✅ STOCK N'EST PLUS DÉCRÉMENTÉ ICI
+      console.log(`➕ ${item.product.name} x${item.quantity} = ${item.product.price * item.quantity} FCFA`)
       itemsCount++
     }
 
-    console.log(`💰 Sous-total panier QR: ${subtotal} FCFA | ${itemsCount} articles`)
-    return { subtotal, itemsCount }
+    console.log(`✅ ${itemsCount} OrderItems créés`)
+    return itemsCount
   }
 
   // ==================== PAIEMENT QR CODE ====================
@@ -286,64 +282,103 @@ export default class PayQRCodeController {
 
       const isGuest = payload.isGuest === true || !payload.userId || payload.userId === 'guest'
       const phoneNumber = payload.customerAccountNumber || payload.customerPhone
+      const hasDirectItems = payload.items && payload.items.length > 0
 
       console.log(`👤 Mode: ${isGuest ? 'INVITÉ' : 'CONNECTÉ'}`)
       console.log(`📱 Téléphone: ${phoneNumber || 'N/A'}`)
-      console.log(`📦 Items: ${payload.items?.length || 0}`)
+      console.log(`📦 Items directs: ${hasDirectItems ? payload.items.length : 'NON'}`)
 
       const operatorInfo = this.detectOperatorGabon(phoneNumber)
-      console.log('📡 Opérateur QR détecté:')
-      console.log(`   Nom: ${operatorInfo.name}`)
-      console.log(`   Code: ${operatorInfo.code}`)
-      console.log(`   Compte: ${operatorInfo.accountCode}`)
+      console.log(`📡 Opérateur QR: ${operatorInfo.name} | Compte: ${operatorInfo.accountCode}`)
 
-      const useCart = !isGuest && payload.userId && (!payload.items || payload.items.length === 0)
-      console.log('🛒 Mode panier:', useCart)
-      
-      const stockCheck = await this.checkStockAvailability(payload.items || [], useCart, payload.userId)
+      // ============================================================
+      // ✅ ÉTAPE 1 : VALIDER LES PRODUITS
+      // ============================================================
+      let subtotal = 0
+      let validProducts: any[] = []
+      let cart: any = null
 
-      if (!stockCheck.available) {
-        console.log('❌ Échec vérification stock QR')
+      if (hasDirectItems) {
+        // 📦 MODE ITEMS DIRECTS
+        console.log('📦 Mode: ITEMS DIRECTS')
+        const validation = await this.validateDirectItems(payload.items)
+        
+        if (!validation.valid) {
+          return response.status(400).json({
+            success: false,
+            message: 'Produits indisponibles',
+            error: 'STOCK_INSUFFISANT',
+            details: {
+              errors: validation.errors,
+              message: validation.errors.join(' | ')
+            }
+          })
+        }
+        
+        subtotal = validation.subtotal
+        validProducts = validation.productsToCheck
+        
+      } else if (!isGuest && payload.userId) {
+        // 🛒 MODE PANIER (utilisateur connecté)
+        console.log('🛒 Mode: PANIER')
+        const cartValidation = await this.getCartWithValidatedItems(payload.userId)
+        
+        if (!cartValidation.valid) {
+          return response.status(400).json({
+            success: false,
+            message: cartValidation.errors.includes('Votre panier est vide') 
+              ? 'Votre panier est vide' 
+              : 'Produits indisponibles dans votre panier',
+            error: 'CART_ERROR',
+            details: {
+              errors: cartValidation.errors,
+              message: cartValidation.errors.join(' | ')
+            }
+          })
+        }
+        
+        subtotal = cartValidation.subtotal
+        validProducts = cartValidation.productsToCheck
+        cart = cartValidation.cart
+        
+      } else {
+        // ❌ AUCUN PRODUIT
+        console.log('❌ Aucun produit à commander')
         return response.status(400).json({
           success: false,
-          message: 'Produits indisponibles',
-          error: 'STOCK_INSUFFISANT',
-          details: {
-            outOfStockProducts: stockCheck.outOfStockProducts,
-            message: stockCheck.message
-          }
+          message: 'Aucun article à commander',
+          error: 'NO_ITEMS'
         })
       }
 
-      console.log('✅ Stock QR disponible')
+      console.log(`✅ Validation OK - ${validProducts.length} produits, Sous-total: ${subtotal} FCFA`)
 
+      // ============================================================
+      // ✅ ÉTAPE 2 : RENOUVELER LE SECRET
+      // ============================================================
       await this.renewSecretIfNeeded(phoneNumber)
 
+      // ============================================================
+      // ✅ ÉTAPE 3 : GÉRER L'UTILISATEUR
+      // ============================================================
       let userId = payload.userId
 
       if (!userId) {
         console.log('👤 Création utilisateur QR nécessaire...')
-        try {
-          const newUser = await this.getOrCreateUser({
-            customerName: payload.customerName || 'Client',
-            customerEmail: payload.customerEmail || '',
-            customerPhone: phoneNumber || '',
-          })
-          userId = newUser.id
-          console.log('✅ Utilisateur QR créé:', userId)
-        } catch (error: any) {
-          console.error('❌ Erreur création utilisateur QR:', error)
-          return response.status(500).json({
-            success: false,
-            message: 'Erreur lors de la création du compte utilisateur',
-            error: error.message
-          })
-        }
-      } else {
-        console.log('👤 Utilisation ID existant:', userId)
+        const newUser = await this.getOrCreateUser({
+          customerName: payload.customerName || 'Client',
+          customerEmail: payload.customerEmail || '',
+          customerPhone: phoneNumber || '',
+        })
+        userId = newUser.id
+        console.log('✅ Utilisateur QR créé:', userId)
       }
 
+      // ============================================================
+      // ✅ ÉTAPE 4 : CRÉER LA COMMANDE
+      // ============================================================
       const deliveryPrice = payload.deliveryPrice || 1
+      const total = subtotal + deliveryPrice
       const orderNumber = generateOrderNumber()
 
       console.log('📝 Création commande QR...')
@@ -351,8 +386,8 @@ export default class PayQRCodeController {
         user_id: userId,
         order_number: orderNumber,
         status: 'pending',
-        total: 0,
-        subtotal: 0,
+        total: total,
+        subtotal: subtotal,
         shipping_cost: deliveryPrice,
         delivery_method: payload.deliveryMethod || 'standard',
         customer_name: payload.customerName || 'Client',
@@ -365,49 +400,22 @@ export default class PayQRCodeController {
 
       console.log('✅ Commande QR créée:', order.id, order.order_number)
 
-      let subtotal = 0
-      let itemsCount = 0
+      // ============================================================
+      // ✅ ÉTAPE 5 : CRÉER LES ORDER ITEMS
+      // ============================================================
+      const itemsCount = await this.createOrderItemsFromValidated(order, validProducts)
 
-      if (payload.items && payload.items.length > 0) {
-        console.log('📦 Traitement items directs...')
-        const r = await this.createOrderItems(order, payload.items)
-        subtotal = r.subtotal
-        itemsCount = r.itemsCount
-        console.log('📦 Items directs utilisés')
-      } else if (!isGuest && payload.userId) {
-        console.log('🛒 Traitement depuis le panier...')
-        const cart = await Cart.query().where('user_id', payload.userId).preload('items').first()
-        if (cart && cart.items.length > 0) {
-          const r = await this.createOrderItemsFromCart(cart, order)
-          subtotal = r.subtotal
-          itemsCount = r.itemsCount
-          await CartItem.query().where('cart_id', cart.id).delete()
-          console.log('🛒 Panier utilisé et vidé')
-        } else {
-          console.log('❌ Panier vide')
-          // ✅ Pas besoin de restoreStock car stock jamais touché
-          order.status = 'cancelled'
-          await order.save()
-          return response.status(400).json({
-            success: false,
-            message: 'Panier vide'
-          })
-        }
-      } else {
-        console.log('❌ Aucun article')
-        return response.status(400).json({
-          success: false,
-          message: 'Aucun article'
-        })
+      // ============================================================
+      // ✅ ÉTAPE 6 : VIDER LE PANIER (si mode panier)
+      // ============================================================
+      if (cart) {
+        await CartItem.query().where('cart_id', cart.id).delete()
+        console.log('🛒 Panier vidé après création commande')
       }
 
-      const total = subtotal + deliveryPrice
-      order.subtotal = subtotal
-      order.total = total
-      await order.save()
-
-      console.log(`💰 Commande QR mise à jour - Sous-total: ${subtotal}, Total: ${total}`)
-
+      // ============================================================
+      // ✅ ÉTAPE 7 : TRACKING INITIAL
+      // ============================================================
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
@@ -415,122 +423,85 @@ export default class PayQRCodeController {
         tracked_at: DateTime.now(),
       })
 
+      // ============================================================
+      // ✅ ÉTAPE 8 : GÉNÉRER LE QR CODE
+      // ============================================================
       const terminalId = `T${Date.now().toString(36).toUpperCase()}${operatorInfo.code.substring(0, 3)}`
 
-      console.log('🔑 ========== GÉNÉRATION QR CODE ==========')
-      console.log(`📡 Opérateur: ${operatorInfo.name}`)
-      console.log(`🔑 Compte utilisé: ${operatorInfo.accountCode}`)
-      console.log(`🏷️ Terminal ID: ${terminalId}`)
-      console.log(`💰 Montant: ${total}`)
-      console.log(`📱 Téléphone pour secret: ${phoneNumber || 'non fourni'}`)
+      console.log('🔑 Génération QR Code...')
+      console.log(`📡 Opérateur: ${operatorInfo.name} | Compte: ${operatorInfo.accountCode}`)
+      console.log(`💰 Montant: ${total} | Terminal: ${terminalId}`)
 
+      // Renouvellement forcé du secret
       try {
-        console.log('🔐 Renouvellement forcé du secret avant QR Code...')
-        try {
-          const freshSecret = await MypvitSecretService.forceRenewal(phoneNumber)
-          console.log('✅ Secret frais obtenu:', freshSecret.key.substring(0, 20) + '...')
-          await new Promise(resolve => setTimeout(resolve, 1000))
-        } catch (secretError: any) {
-          console.error('⚠️ Erreur renouvellement secret:', secretError.message)
-        }
-
-        const qrResult = await MypvitQRCodeService.generateQRCode({
-          accountOperationCode: operatorInfo.accountCode,
-          terminalId: terminalId,
-          callbackUrlCode: CALLBACK_URL_CODE,
-          amount: total,
-          reference: order.order_number,
-          phoneNumber: phoneNumber
-        })
-
-        console.log('✅ QR Code généré avec succès')
-        console.log('📊 Résultat QR:', JSON.stringify(qrResult, null, 2))
-
-        if (qrResult.reference_id) {
-          order.payment_reference_id = qrResult.reference_id
-          order.payment_operator_simple = operatorInfo.name
-          order.status = 'pending_payment'
-          await order.save()
-          
-          console.log('✅ Référence paiement sauvegardée:', qrResult.reference_id)
-        }
-
-        await OrderTracking.create({
-          order_id: order.id,
-          status: 'pending_payment',
-          description: `📱 QR Code ${operatorInfo.name} - Réf: ${qrResult.reference_id || order.order_number}`,
-          tracked_at: DateTime.now(),
-        })
-
-        await order.load('items')
-        console.log(`✅ Paiement QR ${operatorInfo.name} terminé`)
-
-        const responseData = {
-          success: true,
-          message: `✅ QR Code ${operatorInfo.name} généré ! Scannez pour payer.`,
-          data: {
-            orderId: order.id,
-            orderNumber: order.order_number,
-            total: order.total,
-            status: 'pending_payment',
-            customerName: order.customer_name,
-            paymentMethod: `qr_code_${operatorInfo.name.toLowerCase()}`,
-            isGuest,
-            itemsCount,
-            userId,
-            operator: {
-              name: operatorInfo.name,
-              code: operatorInfo.code,
-              accountCode: operatorInfo.accountCode
-            },
-            qr_code: {
-              data: qrResult.data,
-              reference_id: qrResult.reference_id || order.order_number,
-              amount: total,
-              expires_in: 600,
-            },
-          },
-        }
-
-        console.log('📤 Réponse QR envoyée au client:')
-        console.log(JSON.stringify(responseData, null, 2))
-
-        return response.status(201).json(responseData)
-        
-      } catch (qrError: any) {
-        console.error('❌ ERREUR GÉNÉRATION QR CODE')
-        console.error('❌ Message:', qrError.message)
-        
-        if (qrError.response) {
-          console.error('❌ Status HTTP:', qrError.response.status)
-          console.error('❌ Données erreur:', JSON.stringify(qrError.response.data, null, 2))
-        }
-
-        // ✅ Pas besoin de restoreStock car stock jamais touché
-        order.status = 'payment_failed'
-        
-        const errorMessage = qrError.message || 'Erreur génération QR'
-        const errorDetails = qrError.response?.data 
-          ? ` | Détails: ${JSON.stringify(qrError.response.data)}` 
-          : ''
-        order.payment_error_message = errorMessage + errorDetails
-        await order.save()
-
-        await OrderTracking.create({
-          order_id: order.id,
-          status: 'payment_failed',
-          description: `❌ Échec QR ${operatorInfo.name}: ${errorMessage}`,
-          tracked_at: DateTime.now(),
-        })
-
-        return response.status(500).json({
-          success: false,
-          message: 'Erreur lors de la génération du QR Code',
-          error: qrError.message,
-          details: qrError.response?.data || null,
-          operator: operatorInfo.name
-        })
+        await MypvitSecretService.forceRenewal(phoneNumber)
+        console.log('✅ Secret frais obtenu pour QR Code')
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      } catch (secretError: any) {
+        console.error('⚠️ Erreur renouvellement secret:', secretError.message)
       }
+
+      const qrResult = await MypvitQRCodeService.generateQRCode({
+        accountOperationCode: operatorInfo.accountCode,
+        terminalId: terminalId,
+        callbackUrlCode: CALLBACK_URL_CODE,
+        amount: total,
+        reference: order.order_number,
+        phoneNumber: phoneNumber
+      })
+
+      console.log('✅ QR Code généré avec succès')
+
+      // ============================================================
+      // ✅ ÉTAPE 9 : SAUVEGARDER LA RÉFÉRENCE
+      // ============================================================
+      if (qrResult.reference_id) {
+        order.payment_reference_id = qrResult.reference_id
+        order.payment_operator_simple = operatorInfo.name
+        order.status = 'pending_payment'
+        await order.save()
+        console.log('✅ Référence paiement sauvegardée:', qrResult.reference_id)
+      }
+
+      await OrderTracking.create({
+        order_id: order.id,
+        status: 'pending_payment',
+        description: `📱 QR Code ${operatorInfo.name} - Réf: ${qrResult.reference_id || order.order_number}`,
+        tracked_at: DateTime.now(),
+      })
+
+      await order.load('items')
+      console.log(`✅ Paiement QR ${operatorInfo.name} terminé`)
+
+      // ============================================================
+      // ✅ ÉTAPE 10 : RÉPONSE SUCCÈS
+      // ============================================================
+      return response.status(201).json({
+        success: true,
+        message: `✅ QR Code ${operatorInfo.name} généré ! Scannez pour payer.`,
+        data: {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          total: order.total,
+          status: 'pending_payment',
+          customerName: order.customer_name,
+          paymentMethod: `qr_code_${operatorInfo.name.toLowerCase()}`,
+          isGuest,
+          itemsCount,
+          userId,
+          operator: {
+            name: operatorInfo.name,
+            code: operatorInfo.code,
+            accountCode: operatorInfo.accountCode
+          },
+          qr_code: {
+            data: qrResult.data,
+            reference_id: qrResult.reference_id || order.order_number,
+            amount: total,
+            expires_in: 600,
+          },
+        },
+      })
 
     } catch (error: any) {
       console.error('🔴 ========== ERREUR GÉNÉRALE QR ==========')
