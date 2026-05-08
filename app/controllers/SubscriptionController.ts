@@ -22,9 +22,19 @@ export default class SubscriptionController {
     let local = clean
     if (clean.startsWith('241')) local = clean.substring(3)
     if (local.startsWith('0')) local = local.substring(1)
-    if (local.startsWith('06') || local.startsWith('6')) return { name: 'LIBERTIS', code: 'LIBERTIS', accountCode: 'ACC_69EA59CBC7495' }
-    if (local.startsWith('07') || local.startsWith('7')) return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
-    return { name: 'MOOV_MONEY', code: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
+    
+    // 📱 MOOV MONEY (06xxxxxxxx)
+    if (local.startsWith('06') || local.startsWith('6')) {
+      return { name: 'MOOV_MONEY', code: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
+    }
+    
+    // 📱 AIRTEL MONEY (07xxxxxxxx)
+    if (local.startsWith('07') || local.startsWith('7')) {
+      return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
+    }
+    
+    // 🏦 GIMAC (par défaut : numéros fixes, autres formats, cartes bancaires)
+    return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
   }
 
   async getPlans({ response }: HttpContext) {
@@ -234,10 +244,10 @@ export default class SubscriptionController {
         paymentRef: subscription.paymentReferenceId
       })
 
-      // ✅ Vérification du statut avec l'accountCode du metadata
+      // ✅ Vérification du statut avec l'accountCode du metadata (GIMAC par défaut)
       const paymentStatus: any = await MypvitTransactionService.checkTransactionStatus(
         subscription.paymentReferenceId,
-        subscription.metadata?.accountCode || 'ACC_69EFB0E02FCA3'
+        subscription.metadata?.accountCode || 'ACC_69FE0E1BC34B4'  // ✅ GIMAC par défaut
       )
       
       const status = paymentStatus?.status || 'PENDING'
