@@ -3,21 +3,16 @@ import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import Product from '#models/Product'
 import Subscription, { SUBSCRIPTION_PLANS } from '#models/Subscription'
-import MypvitSecretService from '../services/mypvit_secret_service.js'
+import MypvitSecretService from '../services/mypvit_secret_services.js'
 import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
 
 const SUBSCRIPTION_CALLBACK_URL_CODE = 'T2D7X'
+const GIMAC_ACCOUNT = 'ACC_69FE0E1BC34B4'
 
 export default class SubscriptionQRController {
 
-  // 🏦 GIMAC uniquement
-  private getOperatorInfo(): { name: string; code: string; accountCode: string } {
-    return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
-  }
-
-  // ==================== PAIEMENT ABONNEMENT PAR QR CODE ====================
   async pay({ request, response }: HttpContext) {
-    console.log('💎📱 ========== PAIEMENT ABONNEMENT PAR QR CODE ==========')
+    console.log('💎📱 ========== PAIEMENT ABONNEMENT QR CODE GIMAC ==========')
 
     try {
       const payload = request.only([
@@ -31,47 +26,30 @@ export default class SubscriptionQRController {
       const userId = payload.userId
       const phoneNumber = payload.customerAccountNumber || payload.customerPhone || '060000000'
       const plan = payload.plan
-      const operatorInfo = this.getOperatorInfo()
 
       // Validations
       if (!userId) {
-        return response.status(400).json({
-          success: false,
-          message: 'userId requis'
-        })
+        return response.status(400).json({ success: false, message: 'userId requis' })
       }
 
       if (!plan) {
-        return response.status(400).json({
-          success: false,
-          message: "Plan d'abonnement requis"
-        })
+        return response.status(400).json({ success: false, message: "Plan d'abonnement requis" })
       }
 
       // Vérifier le plan
       const planConfig = SUBSCRIPTION_PLANS[plan as keyof typeof SUBSCRIPTION_PLANS]
       if (!planConfig) {
-        return response.status(400).json({
-          success: false,
-          message: 'Plan invalide'
-        })
+        return response.status(400).json({ success: false, message: 'Plan invalide' })
       }
 
       // Vérifier l'utilisateur
       const user = await User.findBy('id', userId)
       if (!user) {
-        return response.status(404).json({
-          success: false,
-          message: 'Utilisateur introuvable'
-        })
+        return response.status(404).json({ success: false, message: 'Utilisateur introuvable' })
       }
 
-      // Vérifier si l'utilisateur est un marchand
       if (!user.isMerchant) {
-        return response.status(403).json({
-          success: false,
-          message: 'Seuls les marchands peuvent souscrire à un abonnement'
-        })
+        return response.status(403).json({ success: false, message: 'Seuls les marchands peuvent souscrire' })
       }
 
       // Vérifier le produit si single_product
@@ -79,23 +57,14 @@ export default class SubscriptionQRController {
       
       if (subscriptionType === 'single_product') {
         if (!payload.productId) {
-          return response.status(400).json({
-            success: false,
-            message: "Un produit est requis pour ce type d'abonnement"
-          })
+          return response.status(400).json({ success: false, message: "Un produit est requis" })
         }
         const product = await Product.find(payload.productId)
         if (!product) {
-          return response.status(404).json({
-            success: false,
-            message: 'Produit introuvable'
-          })
+          return response.status(404).json({ success: false, message: 'Produit introuvable' })
         }
         if (product.user_id !== user.id) {
-          return response.status(403).json({
-            success: false,
-            message: 'Ce produit ne vous appartient pas'
-          })
+          return response.status(403).json({ success: false, message: 'Ce produit ne vous appartient pas' })
         }
       }
 
@@ -112,24 +81,22 @@ export default class SubscriptionQRController {
           return response.status(400).json({
             success: false,
             message: 'Vous avez déjà un abonnement global actif',
-            data: {
-              remainingDays: existingGlobal.remainingDays
-            }
+            data: { remainingDays: existingGlobal.remainingDays }
           })
         }
       }
 
-      console.log(`🏦 Opérateur: ${operatorInfo.name} | Compte: ${operatorInfo.accountCode}`)
+      console.log(`🏦 GIMAC | Compte: ${GIMAC_ACCOUNT}`)
       console.log(`💎 Plan: ${planConfig.name} | Prix: ${planConfig.price} FCFA | Durée: ${planConfig.duration} jours`)
 
-      // Préparer le nom du produit pour les métadonnées
+      // Préparer le nom du produit
       let productName = 'Tous les produits'
       if (subscriptionType === 'single_product' && payload.productId) {
         const product = await Product.find(payload.productId)
         productName = product?.name || 'Produit'
       }
 
-      // Créer l'abonnement en statut "pending"
+      // Créer l'abonnement
       const subscription = await Subscription.create({
         userId: user.id,
         plan,
@@ -143,9 +110,9 @@ export default class SubscriptionQRController {
         autoRenew: payload.autoRenew || false,
         metadata: {
           productName,
-          operator: operatorInfo.name,
-          operatorCode: operatorInfo.code,
-          accountCode: operatorInfo.accountCode,
+          operator: 'GIMAC',
+          operatorCode: 'GIMAC_PAY',
+          accountCode: GIMAC_ACCOUNT,
           phoneNumber: phoneNumber.replace(/\s/g, '')
         }
       })
@@ -156,21 +123,14 @@ export default class SubscriptionQRController {
       const terminalId = `T${Date.now().toString(36).toUpperCase()}SUB`
       const reference = `SUB-${subscription.id.substring(0, 8)}`
 
-      console.log('🔑 Génération QR Code abonnement...')
-      console.log(`🏷️ Terminal ID: ${terminalId}`)
-      console.log(`💰 Montant: ${planConfig.price}`)
+      console.log('🔑 Génération QR Code GIMAC...')
 
-      // Renouvellement forcé du secret avant QR Code
-      try {
-        await MypvitSecretService.forceRenewal(phoneNumber)
-        console.log('✅ Secret frais obtenu pour QR Code')
-        await new Promise(resolve => setTimeout(resolve, 1000))
-      } catch (secretError: any) {
-        console.error('⚠️ Erreur renouvellement secret QR:', secretError.message)
-      }
+      // ✅ Renouvellement secret GIMAC
+      await MypvitSecretService.forceRenewal()
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
       const qrResult = await MypvitQRCodeService.generateQRCode({
-        accountOperationCode: operatorInfo.accountCode,
+        accountOperationCode: GIMAC_ACCOUNT,
         terminalId: terminalId,
         callbackUrlCode: SUBSCRIPTION_CALLBACK_URL_CODE,
         amount: planConfig.price,
@@ -178,25 +138,18 @@ export default class SubscriptionQRController {
         phoneNumber: phoneNumber
       })
 
-      console.log('✅ QR Code généré avec succès')
+      console.log('✅ QR Code généré:', qrResult.reference_id)
 
-      // Mettre à jour l'abonnement avec la référence de paiement
+      // Mettre à jour l'abonnement
       if (qrResult.reference_id) {
         subscription.paymentReferenceId = qrResult.reference_id
         subscription.paymentStatus = 'PENDING'
         await subscription.save()
       }
 
-      console.log('✅ QR Code abonnement généré avec succès:', {
-        subscriptionId: subscription.id,
-        plan: planConfig.name,
-        amount: planConfig.price,
-        reference_id: qrResult.reference_id
-      })
-
       return response.status(201).json({
         success: true,
-        message: `✅ QR Code généré pour l'abonnement ${planConfig.name} ! Scannez pour payer.`,
+        message: `✅ QR Code GIMAC généré pour ${planConfig.name} !`,
         data: {
           subscriptionId: subscription.id,
           type: subscriptionType,
@@ -207,11 +160,7 @@ export default class SubscriptionQRController {
           customerName: user.full_name || payload.customerName || 'Client',
           paymentMethod: 'qr_code_gimac',
           userId,
-          operator: {
-            name: operatorInfo.name,
-            code: operatorInfo.code,
-            accountCode: operatorInfo.accountCode
-          },
+          operator: { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: GIMAC_ACCOUNT },
           qr_code: {
             data: qrResult.data,
             reference_id: qrResult.reference_id || reference,
@@ -222,15 +171,10 @@ export default class SubscriptionQRController {
       })
 
     } catch (error: any) {
-      console.error('🔴 Erreur QR Code Abonnement:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      })
-
+      console.error('🔴 Erreur QR Code Abonnement:', error.message)
       return response.status(500).json({
         success: false,
-        message: "Erreur lors de la génération du QR Code pour l'abonnement",
+        message: "Erreur lors de la génération du QR Code",
         error: error.response?.data?.message || error.message
       })
     }
