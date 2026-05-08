@@ -117,6 +117,9 @@ export default class PayQRCodeController {
 
       // ÉTAPE 7 : QR Code GIMAC
       console.log('🔑 ÉTAPE 7: QR Code GIMAC...')
+      
+      // Optionnel: Forcer un renouvellement pour être sûr d'avoir un secret frais
+      // Mais le generateQRCode le fera automatiquement si nécessaire
       await MypvitSecretService.forceRenewal()
       
       const qrResult = await MypvitQRCodeService.generateQRCode({
@@ -125,15 +128,16 @@ export default class PayQRCodeController {
         callbackUrlCode: CALLBACK_URL_CODE,
         amount: subtotal,
         reference: order.order_number,
-        phoneNumber: '060000000'
+        phoneNumber: rawBody.customerPhone || '060000000'  // Utiliser le vrai numéro si dispo
       })
-      console.log('🔑 QR Code OK')
+      console.log('🔑 QR Code généré, reference_id:', qrResult.reference_id)
 
       // ÉTAPE 8 : Sauvegarder la référence
       if (qrResult.reference_id) {
         order.payment_reference_id = qrResult.reference_id
         order.status = 'pending_payment'
         await order.save()
+        console.log('💾 Référence sauvegardée:', qrResult.reference_id)
       }
 
       await OrderTracking.create({
