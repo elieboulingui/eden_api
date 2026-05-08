@@ -1,4 +1,4 @@
-// app/services/mypvit_qrcode_service.ts - Version corrigée avec GET
+// app/services/mypvit_qrcode_service.ts - Version avec gestion d'image PNG
 import axios from 'axios'
 import MypvitSecretService from './mypvit_secret_services.js'
 
@@ -9,6 +9,7 @@ interface QRCodeOptions {
   amount: number
   reference: string
   phoneNumber?: string
+  returnAsImage?: boolean // ✅ Si true, retourne l'image PNG en base64
 }
 
 export class MypvitQRCodeService {
@@ -23,8 +24,7 @@ export class MypvitQRCodeService {
       baseURL: this.BASE_URL,
       timeout: 30000,
       headers: {
-        'User-Agent': 'EdenApp/1.0',
-        'Accept': 'application/json'
+        'User-Agent': 'EdenApp/1.0'
       }
     })
     
@@ -39,7 +39,7 @@ export class MypvitQRCodeService {
       callbackUrlCode: options.callbackUrlCode,
       amount: options.amount,
       reference: options.reference,
-      phoneNumber: options.phoneNumber || 'non fourni'
+      returnAsImage: options.returnAsImage || false
     })
     
     try {
@@ -47,22 +47,17 @@ export class MypvitQRCodeService {
       const secret = await MypvitSecretService.getSecret()
       console.log('✅ [QRCodeService] Secret récupéré avec succès')
 
-      // ✅ Construction de l'URL avec les paramètres en query string (GET)
       const url = `/4XWLIAKA5UFSIIYZ/generate-qr-code`
       
-      // ✅ Paramètres query (comme dans la doc)
       const params: Record<string, string> = {
         accountOperationCode: options.accountOperationCode,
         terminalId: options.terminalId,
         callbackUrlCode: options.callbackUrlCode,
       }
       
-      // Ajouter amount et reference si fournis (QR Code dynamique)
       if (options.amount && options.amount > 0) {
         params.amount = options.amount.toString()
-        console.log(`💰 [QRCodeService] QR Code dynamique avec montant: ${options.amount} FCFA`)
-      } else {
-        console.log('📦 [QRCodeService] QR Code statique (sans montant)')
+        console.log(`💰 [QRCodeService] Montant: ${options.amount} FCFA`)
       }
       
       if (options.reference) {
@@ -70,119 +65,91 @@ export class MypvitQRCodeService {
         console.log(`🔖 [QRCodeService] Référence: ${options.reference}`)
       }
       
+      // ✅ Choix du format selon returnAsImage
+      const acceptFormat = options.returnAsImage ? 'image/png' : 'application/json'
+      
       console.log(`📡 [QRCodeService] URL: ${this.BASE_URL}${url}`)
-      console.log(`📡 [QRCodeService] Méthode: GET`)
+      console.log(`📡 [QRCodeService] Format demandé: ${acceptFormat}`)
       console.log(`📡 [QRCodeService] Headers:`, {
         'X-Secret': '***MASQUÉ***',
-        'Accept': 'application/json'
+        'Accept': acceptFormat
       })
-      console.log(`📡 [QRCodeService] Query params:`, params)
       
-      // ✅ Utilisation de GET avec headers et params
-      const response = await this.httpClient.get(url, {
+      // ✅ Configuration selon le format attendu
+      const requestConfig: any = {
         headers: {
           'X-Secret': secret,
-          'Accept': 'application/json'
+          'Accept': acceptFormat
         },
         params: params
-      })
+      }
+      
+      // Si on veut l'image, on dit à axios de retourner un buffer
+      if (options.returnAsImage) {
+        requestConfig.responseType = 'arraybuffer'
+      }
+      
+      const response = await this.httpClient.get(url, requestConfig)
 
       console.log('✅ [QRCodeService] Réponse reçue - Status:', response.status)
+      console.log('✅ [QRCodeService] Content-Type:', response.headers['content-type'])
       
-      if (!response.data) {
-        console.error('❌ [QRCodeService] Pas de data dans la réponse')
-        throw new Error('Réponse vide de l\'API Mypvit')
-      }
-
-      console.log('📦 [QRCodeService] Structure de la réponse:', {
-        status: response.data.status,
-        hasData: !!response.data.data,
-        hasReferenceId: !!response.data.reference_id,
-        dataLength: response.data.data?.length || 0
-      })
-
-      if (response.data.status !== 'SUCCESS') {
-        console.error('❌ [QRCodeService] Statut non SUCCESS:', response.data.status)
-        throw new Error(`Mypvit error: ${response.data.status}`)
-      }
-
-      if (!response.data.data) {
-        console.error('❌ [QRCodeService] Pas de QR code dans la réponse:', JSON.stringify(response.data, null, 2))
-        throw new Error('QR Code non généré - champ data manquant')
-      }
-
-      console.log('✅ [QRCodeService] QR Code généré avec succès')
-      console.log('📊 [QRCodeService] Informations retournées:', {
-        qr_code_length: response.data.data?.length || 0,
-        reference_id: response.data.reference_id,
-        merchant_reference_id: response.data.merchant_reference_id,
-        status: response.data.status
-      })
-      
-      console.log('🎉 [QRCodeService] ========== FIN GÉNÉRATION QR CODE ==========\n')
-      
-      return {
-        data: response.data.data,
-        reference_id: response.data.reference_id,
-        merchant_reference_id: response.data.merchant_reference_id,
-        status: response.data.status
+      // ✅ Traitement selon le format
+      if (options.returnAsImage) {
+        // Convertir le buffer PNG en base64
+        const base64Image = Buffer.from(response.data).toString('base64')
+        console.log('✅ [QRCodeService] Image PNG convertie en base64')
+        console.log(`📊 [QRCodeService] Taille image: ${response.data.length} bytes`)
+        console.log(`📊 [QRCodeService] Taille base64: ${base64Image.length} chars`)
+        
+        console.log('🎉 [QRCodeService] ========== FIN (IMAGE) ==========\n')
+        
+        return {
+          data: base64Image,
+          format: 'png_base64',
+          content_type: 'image/png',
+          reference_id: response.headers['x-reference-id'] || null
+        }
+      } else {
+        // Format JSON
+        if (!response.data || !response.data.data) {
+          console.error('❌ [QRCodeService] Pas de QR code dans la réponse')
+          throw new Error('QR Code non généré')
+        }
+        
+        console.log('✅ [QRCodeService] QR Code JSON reçu')
+        console.log('🎉 [QRCodeService] ========== FIN (JSON) ==========\n')
+        
+        return {
+          data: response.data.data,
+          reference_id: response.data.reference_id,
+          merchant_reference_id: response.data.merchant_reference_id,
+          format: 'json'
+        }
       }
 
     } catch (error: any) {
-      console.error('\n❌ [QRCodeService] ========== ERREUR GÉNÉRATION QR CODE ==========')
-      console.error('❌ [QRCodeService] Message d\'erreur:', error.message)
+      console.error('\n❌ [QRCodeService] ========== ERREUR ==========')
+      console.error('❌ Message:', error.message)
       
       if (error.response) {
-        console.error('❌ [QRCodeService] Status HTTP:', error.response.status)
-        console.error('❌ [QRCodeService] Data de réponse:', JSON.stringify(error.response.data, null, 2))
+        console.error('❌ Status:', error.response.status)
         
-        // Analyser l'erreur selon la doc Mypvit
-        const errorCode = error.response.data?.code
-        const errorMessage = error.response.data?.message
-        
-        if (errorCode) {
-          console.error(`📋 [QRCodeService] Code erreur Mypvit: ${errorCode} - ${errorMessage}`)
-          
-          // Mapping des erreurs selon la doc
-          const errorMap: Record<string, string> = {
-            '1002': 'Callback URL invalide',
-            '2000': 'Solde insuffisant sur le compte',
-            '3004': 'Service non actif',
-            '3018': 'Montant trop bas',
-            '3019': 'Montant trop élevé',
-            '4002': 'Compte d\'opération non trouvé',
-            '4003': 'Service non trouvé',
-            '4006': 'Transaction non trouvée',
-            '5000': 'Référence déjà existante',
-            '6000': 'Transaction expirée'
-          }
-          
-          if (errorMap[errorCode]) {
-            console.error(`💡 [QRCodeService] Explication: ${errorMap[errorCode]}`)
+        // Si c'est une erreur avec du contenu (peut-être JSON d'erreur même en demandant PNG)
+        if (error.response.data && !options.returnAsImage) {
+          console.error('❌ Data:', JSON.stringify(error.response.data, null, 2))
+        } else if (error.response.data && options.returnAsImage) {
+          // Tenter de parser l'erreur même en mode binaire
+          try {
+            const errorText = Buffer.from(error.response.data).toString('utf8')
+            console.error('❌ Error text:', errorText)
+          } catch (e) {
+            console.error('❌ Binary error response')
           }
         }
-        
-        if (error.response.status === 400) {
-          console.error('⚠️ [QRCodeService] Erreur 400 - Vérifiez les paramètres:')
-          console.error('   - accountOperationCode doit être valide')
-          console.error('   - terminalId doit être valide')
-          console.error('   - callbackUrlCode doit être actif')
-          console.error('   - amount doit être un nombre positif')
-        } else if (error.response.status === 401) {
-          console.error('🔐 [QRCodeService] Erreur 401 - Secret invalide')
-        } else if (error.response.status === 403) {
-          console.error('🚫 [QRCodeService] Erreur 403 - Permission refusée')
-        } else if (error.response.status === 404) {
-          console.error('🔍 [QRCodeService] Erreur 404 - API ou ressource non trouvée')
-        }
-      } else if (error.request) {
-        console.error('❌ [QRCodeService] Pas de réponse reçue')
-        console.error('⏱️ [QRCodeService] Timeout ou problème réseau')
-      } else {
-        console.error('❌ [QRCodeService] Erreur de configuration:', error.message)
       }
       
-      console.error('❌ [QRCodeService] ========== FIN ERREUR ==========\n')
+      console.error('❌ ========== FIN ERREUR ==========\n')
       throw error
     }
   }
