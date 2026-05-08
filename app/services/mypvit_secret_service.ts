@@ -9,8 +9,8 @@ interface StoredSecret {
 }
 
 interface AccountConfig {
-  code: string        // ACC_... pour operationAccountCode dans le body
-  codeUrl: string     // CODE_URL pour l'URL
+  code: string
+  codeUrl: string
   password: string
   operator: string
 }
@@ -23,17 +23,24 @@ export class MypvitSecretService {
 
   // Configuration des comptes
   private readonly ACCOUNTS: Record<string, AccountConfig> = {
-    '07': { // AIRTEL
+    '07': {
       code: 'ACC_69EFB0E02FCA3',
       codeUrl: '6JN5J6U0NBJGKDAQ',
       password: 'Boulinguisanduku@1',
       operator: 'AIRTEL_MONEY'
     },
-    '06': { // MOOV/LIBERTIS
+    '06': {
       code: 'ACC_69EFB143D4F54',
       codeUrl: '6JN5J6U0NBJGKDAQ',
       password: 'Boulinguisanduku@1',
       operator: 'MOOV_MONEY'
+    },
+    // ✅ AJOUTER GIMAC
+    'gimac': {
+      code: 'ACC_69FE0E1BC34B4',
+      codeUrl: '6JN5J6U0NBJGKDAQ',
+      password: 'Boulinguisanduku@1',
+      operator: 'GIMAC_PAY'
     }
   }
 
@@ -44,39 +51,28 @@ export class MypvitSecretService {
     })
   }
 
-  /**
-   * Détecte l'opérateur selon le numéro de téléphone
-   */
   private detectOperator(phoneNumber?: string): string {
-    if (!phoneNumber) return '06' // MOOV par défaut
+    if (!phoneNumber) return 'gimac'  // ✅ GIMAC par défaut
 
-    // Nettoyer le numéro
     const cleanNumber = phoneNumber.replace(/\D/g, '')
-    
-    // Enlever le préfixe international
     let local = cleanNumber
     if (local.startsWith('241')) local = local.substring(3)
     if (local.startsWith('0')) local = local.substring(1)
 
-    if (local.startsWith('7')) return '07'  // AIRTEL
-    if (local.startsWith('6')) return '06'  // MOOV
+    if (local.startsWith('07') || local.startsWith('7')) return '07'  // AIRTEL
+    if (local.startsWith('06') || local.startsWith('6')) return '06'  // MOOV
     
-    return '06' // MOOV par défaut
+    return 'gimac'  // ✅ GIMAC pour tout le reste
   }
 
-  /**
-   * Récupère la configuration du compte selon l'opérateur
-   */
   private getAccountConfig(phoneNumber?: string): AccountConfig {
     const operator = this.detectOperator(phoneNumber)
-    const config = this.ACCOUNTS[operator]
-    if (!config) return this.ACCOUNTS['06']
-    return config
+    return this.ACCOUNTS[operator] || this.ACCOUNTS['gimac']
   }
 
   async renewSecret(phoneNumber?: string): Promise<StoredSecret> {
     if (this.renewalPromise) {
-      console.log('⏳ [SecretService] Renouvellement déjà en cours, attente...')
+      console.log('⏳ [SecretService] Renouvellement déjà en cours...')
       return this.renewalPromise
     }
     this.renewalPromise = this.performRenewal(phoneNumber)
@@ -90,16 +86,15 @@ export class MypvitSecretService {
   private async performRenewal(phoneNumber?: string): Promise<StoredSecret> {
     const accountConfig = this.getAccountConfig(phoneNumber)
 
-    console.log(`📱 [SecretService] Opérateur détecté: ${accountConfig.operator}`)
+    console.log(`📱 [SecretService] Opérateur: ${accountConfig.operator}`)
     console.log(`🔑 [SecretService] Compte: ${accountConfig.code}`)
     console.log(`🔗 [SecretService] CODE_URL: ${accountConfig.codeUrl}`)
 
     for (let i = 1; i <= 3; i++) {
       try {
-        console.log(`📡 [SecretService] Tentative ${i}/3 - Renouvellement pour ${accountConfig.operator}...`)
+        console.log(`📡 [SecretService] Tentative ${i}/3...`)
 
         const url = `/${accountConfig.codeUrl}/renew-secret`
-
         const body = new URLSearchParams()
         body.append('operationAccountCode', accountConfig.code)
         body.append('password', accountConfig.password)
@@ -110,14 +105,13 @@ export class MypvitSecretService {
           }
         })
 
-        console.log('✅ [SecretService] Réponse reçue:', {
+        console.log('✅ [SecretService] Réponse:', {
           operator: accountConfig.operator,
-          hasSecret: !!response.data?.secret,
-          expiresIn: response.data?.expires_in
+          hasSecret: !!response.data?.secret
         })
 
         if (!response.data?.secret) {
-          throw new Error('Secret non reçu dans la réponse')
+          throw new Error('Secret non reçu')
         }
 
         const secret: StoredSecret = {
@@ -128,16 +122,12 @@ export class MypvitSecretService {
         }
 
         this.currentSecret = secret
-        console.log(`✅ [SecretService] Secret renouvelé avec succès pour ${accountConfig.operator}`)
-        console.log('📅 Expire le:', secret.expiresAt.toFormat('dd/MM/yyyy HH:mm:ss'))
-
+        console.log(`✅ Secret renouvelé pour ${accountConfig.operator}`)
         return secret
 
       } catch (error: any) {
-        console.error(`❌ [SecretService] Erreur tentative ${i}/3 pour ${accountConfig.operator}:`, {
+        console.error(`❌ Erreur tentative ${i}/3:`, {
           status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
           message: error.message
         })
 
@@ -148,36 +138,30 @@ export class MypvitSecretService {
         }
       }
     }
-    throw new Error(`Secret renewal failed pour ${accountConfig.operator} après 3 tentatives`)
+    throw new Error(`Secret renewal failed pour ${accountConfig.operator}`)
   }
 
   async getSecret(phoneNumber?: string): Promise<string> {
     try {
       if (this.currentSecret && this.currentSecret.expiresAt > DateTime.now()) {
-        const remaining = Math.floor(this.currentSecret.expiresAt.diff(DateTime.now(), 'seconds').seconds)
-        console.log(`🔐 [SecretService] Secret valide, expire dans ${remaining} secondes`)
         return this.currentSecret.key
       }
-
-      console.log('⚠️ [SecretService] Secret expiré ou inexistant, renouvellement...')
+      console.log('⚠️ Secret expiré, renouvellement...')
       const newSecret = await this.renewSecret(phoneNumber)
       return newSecret.key
     } catch (error: any) {
-      console.error('❌ [SecretService] Erreur getSecret:', error.message)
+      console.error('❌ Erreur getSecret:', error.message)
       throw error
     }
   }
 
   async forceRenewal(phoneNumber?: string): Promise<StoredSecret> {
-    console.log('🔄 [SecretService] Renouvellement forcé...')
+    console.log('🔄 Renouvellement forcé...')
     this.currentSecret = null
     this.renewalPromise = null
     return this.renewSecret(phoneNumber)
   }
 
-  /**
-   * Récupère les informations de l'opérateur pour un numéro donné
-   */
   getOperatorInfo(phoneNumber: string): { operator: string, accountCode: string, codeUrl: string } {
     const config = this.getAccountConfig(phoneNumber)
     return {
