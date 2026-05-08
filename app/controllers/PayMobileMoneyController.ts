@@ -44,7 +44,18 @@ export default class PayMobileMoneyController {
     console.log('📱 Numéro nettoyé:', local)
     console.log('🔢 Premier chiffre:', local.charAt(0))
 
-    if (local.startsWith('7')) {
+    // 📱 MOOV MONEY (06xxxxxxxx)
+    if (local.startsWith('06') || local.startsWith('6')) {
+      console.log('✅ MOOV_MONEY détecté')
+      return {
+        name: 'MOOV_MONEY',
+        code: 'MOOV_MONEY',
+        accountCode: 'ACC_69EFB143D4F54'
+      }
+    }
+
+    // 📱 AIRTEL MONEY (07xxxxxxxx)
+    if (local.startsWith('07') || local.startsWith('7')) {
       console.log('✅ AIRTEL_MONEY détecté')
       return {
         name: 'AIRTEL_MONEY',
@@ -53,11 +64,12 @@ export default class PayMobileMoneyController {
       }
     }
     
-    console.log('✅ MOOV_MONEY détecté')
+    // 🏦 GIMAC (par défaut : numéros fixes, autres formats, cartes bancaires)
+    console.log('✅ GIMAC détecté (par défaut)')
     return {
-      name: 'MOOV_MONEY',
-      code: 'MOOV_MONEY',
-      accountCode: 'ACC_69EFB143D4F54'
+      name: 'GIMAC',
+      code: 'GIMAC_PAY',
+      accountCode: 'ACC_69FE0E1BC34B4'
     }
   }
 
