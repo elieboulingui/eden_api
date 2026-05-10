@@ -1327,103 +1327,103 @@ export default class MerchantDashboardController {
     }
   }
 
-  async createProduct({ params, request, response }: HttpContext) {
-    try {
-      const { userId } = params
-      const { name, description, price, stock, category_name, image_url } = request.only([
-        'name', 'description', 'price', 'stock', 'category_name', 'image_url',
-      ])
+ async createProduct({ params, request, response }: HttpContext) {
+  try {
+    const { userId } = params
+    const { name, description, price, stock, category_name, image_url } = request.only([
+      'name', 'description', 'price', 'stock', 'category_name', 'image_url',
+    ])
 
-      if (!name || name.trim() === '') {
-        return response.badRequest({ success: false, message: 'Le nom du produit est requis' })
-      }
-
-      const user = await User.findBy('id', userId)
-      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-        return response.forbidden({ success: false, message: 'Non autorisé' })
-      }
-
-      let categoryId: string | null = null
-      if (category_name && category_name.trim() !== '') {
-        let category = await Category.query()
-          .where('name', category_name.trim())
-          .where('user_id', user.id)
-          .first()
-
-        if (!category) {
-          category = await Category.create({
-            name: category_name.trim(),
-            slug: category_name.trim().toLowerCase().replace(/\s+/g, '-'),
-            user_id: user.id,
-            is_active: true,
-          })
-        }
-        categoryId = category.id
-      }
-
-      const product = await Product.create({
-        name: name.trim(),
-        description: description || '',
-        price: parseFloat(price) || 0,
-        stock: parseInt(stock) || 0,
-        image_url: image_url || null,
-        user_id: user.id,
-        category_id: categoryId,
-        isNew: true,
-        isOnSale: false,
-        rating: 0,
-        isArchived: false,
-        sales: 0,
-        likes: 0,
-        reviews_count: 0,
-        status: 'active',
-        minOrderQuantity: 1,
-        isBoosted: false,
-        boostMultiplier: 1,
-        boostLevel: 'none',
-        boostPriority: 0,
-        boostViews: 0,
-        boostClicks: 0,
-        boostSales: 0,
-        isFeatured: false,
-        isTrending: false,
-      })
-
-      if (categoryId) {
-        const category = await Category.find(categoryId)
-        if (category) {
-          const ids = Array.isArray(category.product_ids) ? category.product_ids : []
-          if (!ids.includes(product.id)) {
-            ids.push(product.id)
-            category.product_ids = ids
-            category.product_count = ids.length
-            await category.save()
-          }
-        }
-      }
-
-      return response.created({
-        success: true,
-        data: {
-          id: product.id,
-          name: product.name,
-          price: product.price,
-          stock: product.stock,
-          category_id: product.category_id,
-          category_name: category_name || null,
-          image_url: product.image_url,
-        },
-        message: `Produit "${name}" créé avec succès`,
-      })
-
-    } catch (error: any) {
-      console.error('❌ Erreur createProduct:', error.message)
-      return response.internalServerError({
-        success: false,
-        message: error.message,
-      })
+    if (!name || name.trim() === '') {
+      return response.badRequest({ success: false, message: 'Le nom du produit est requis' })
     }
+
+    const user = await User.findBy('id', userId)
+    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+      return response.forbidden({ success: false, message: 'Non autorisé' })
+    }
+
+    let categoryId: string | null = null
+    if (category_name && category_name.trim() !== '') {
+      let category = await Category.query()
+        .where('name', category_name.trim())
+        .where('user_id', user.id)
+        .first()
+
+      if (!category) {
+        category = await Category.create({
+          name: category_name.trim(),
+          slug: category_name.trim().toLowerCase().replace(/\s+/g, '-'),
+          user_id: user.id,
+          is_active: true,
+        })
+      }
+      categoryId = category.id
+    }
+
+    const product = await Product.create({
+      name: name.trim(),
+      description: description || '',
+      price: parseFloat(price) || 0,
+      stock: parseInt(stock) || 0,
+      image_url: image_url || null,
+      user_id: user.id,
+      category_id: categoryId,
+      isNew: true,
+      isOnSale: false,
+      rating: 0,
+      isArchived: false,
+      sales: 0,
+      likes: 0,           // ✅ La colonne existe dans le modèle
+      reviews_count: 0,   // ✅ La colonne existe dans le modèle
+      status: 'active',
+      minOrderQuantity: 1,
+      isBoosted: false,
+      boostMultiplier: 1,
+      boostLevel: 'none',
+      boostPriority: 0,
+      boostViews: 0,
+      boostClicks: 0,
+      boostSales: 0,
+      isFeatured: false,
+      isTrending: false,
+    })
+
+    if (categoryId) {
+      const category = await Category.find(categoryId)
+      if (category) {
+        const ids = Array.isArray(category.product_ids) ? category.product_ids : []
+        if (!ids.includes(product.id)) {
+          ids.push(product.id)
+          category.product_ids = ids
+          category.product_count = ids.length
+          await category.save()
+        }
+      }
+    }
+
+    return response.created({
+      success: true,
+      data: {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        stock: product.stock,
+        category_id: product.category_id,
+        category_name: category_name || null,
+        image_url: product.image_url,
+      },
+      message: `Produit "${name}" créé avec succès`,
+    })
+
+  } catch (error: any) {
+    console.error('❌ Erreur createProduct:', error.message)
+    return response.internalServerError({
+      success: false,
+      message: error.message,
+    })
   }
+}
 
   async updateProduct({ params, request, response }: HttpContext) {
     try {
