@@ -53,6 +53,7 @@ const CouponsController = () => import('#controllers/coupons_controller')
 const GiveChangeController = () => import('#controllers/give_change_controller')
 const HotelsController = () => import('#controllers/hotels_controller')
 const RoomsController = () => import('#controllers/rooms_controller')
+const BlogCommentController = () => import('#controllers/blog_comment_controller')
 
 // ============================================================
 // ROUTES WEB (PAGES)
@@ -140,14 +141,48 @@ router.group(() => {
     router.delete('/:id', [KYCsController, 'destroy']).as('kyc.destroy')
   }).prefix('/kyc')
 
-  // ----------------------------------------------------------
-  // BLOG
-  // ----------------------------------------------------------
+  // ============================================================
+  // 🆕 BLOG - ROUTES COMPLÈTES (PUBLIQUES, MARCHAND, ADMIN)
+  // ============================================================
+
+  // --- Routes publiques ---
   router.get('/blog/posts', [BlogController, 'index']).as('blog.index')
   router.get('/blog/posts/featured', [BlogController, 'featured']).as('blog.featured')
   router.get('/blog/posts/:slug', [BlogController, 'show']).as('blog.show')
   router.post('/blog/posts/submit', [BlogController, 'publicStore']).as('blog.submit')
+  
+  // Commentaires publics
+  router.get('/blog/posts/:postId/comments', [BlogController, 'getComments']).as('blog.comments.public')
+  router.post('/blog/posts/:postId/comments', [BlogController, 'storeComment']).as('blog.comments.store')
 
+  // --- Routes marchand (CRUD de ses propres articles) ---
+  router.group(() => {
+    // Lister les articles du marchand
+    router.get('/:userId/posts', [BlogController, 'merchantPosts']).as('blog.merchant.posts')
+    
+    // Statistiques des articles du marchand
+    router.get('/:userId/stats', [BlogController, 'merchantStats']).as('blog.merchant.stats')
+    
+    // Créer un article
+    router.post('/:userId/posts', [BlogController, 'merchantStore']).as('blog.merchant.store')
+    
+    // Voir un article spécifique du marchand
+    router.get('/:userId/posts/:id', [BlogController, 'merchantShow']).as('blog.merchant.show')
+    
+    // Mettre à jour un article
+    router.put('/:userId/posts/:id', [BlogController, 'merchantUpdate']).as('blog.merchant.update')
+    
+    // Supprimer un article
+    router.delete('/:userId/posts/:id', [BlogController, 'merchantDestroy']).as('blog.merchant.destroy')
+    
+    // Publier/Dépublier un article
+    router.patch('/:userId/posts/:id/toggle-status', [BlogController, 'merchantToggleStatus']).as('blog.merchant.toggle-status')
+    
+    // Gérer les commentaires de ses articles
+    router.delete('/comments/:commentId', [BlogController, 'deleteComment']).as('blog.merchant.comments.delete')
+  }).prefix('/blog/merchant')
+
+  // --- Routes admin ---
   router.group(() => {
     router.get('/posts', [BlogController, 'adminIndex']).as('admin.posts.index')
     router.get('/posts/stats', [BlogController, 'stats']).as('admin.posts.stats')
@@ -361,18 +396,15 @@ router.group(() => {
   // HÔTELS (HOTELS)
   // ----------------------------------------------------------
   router.group(() => {
-    // Routes de recherche (AVANT les routes avec paramètres)
     router.get('/search/location', [HotelsController, 'searchByLocation']).as('hotels.search.location')
     router.get('/city/:city', [HotelsController, 'getByCity']).as('hotels.city')
     
-    // Routes CRUD standard
     router.get('/', [HotelsController, 'index']).as('hotels.index')
     router.post('/', [HotelsController, 'store']).as('hotels.store')
     router.get('/:id', [HotelsController, 'show']).as('hotels.show')
     router.put('/:id', [HotelsController, 'update']).as('hotels.update')
     router.delete('/:id', [HotelsController, 'destroy']).as('hotels.destroy')
     
-    // Routes pour les chambres d'un hôtel
     router.get('/:id/rooms', [HotelsController, 'getRooms']).as('hotels.rooms')
   }).prefix('/hotels')
 
@@ -441,19 +473,10 @@ router.group(() => {
   router.get('/subscriptions/history/:userId', (ctx) => Subscription.getHistory(ctx)).as('subscriptions.history')
   router.get('/subscriptions/stats/:userId', (ctx) => Subscription.getStats(ctx)).as('subscriptions.stats')
 
-  // Souscrire (Mobile Money)
   router.post('/subscriptions/subscribe', (ctx) => Subscription.subscribe(ctx)).as('subscriptions.subscribe')
-
-  // ✅ Souscrire par QR Code
   router.post('/subscriptions/pay/qr', (ctx) => SubscriptionQR.pay(ctx)).as('subscriptions.pay.qr')
-
-  // ✅ Souscrire par Lien
   router.post('/subscriptions/pay/link', [PayLinkSubscriptionController as any, 'paySubscription']).as('subscriptions.pay.link')
-
-  // ✅ Vérifier statut paiement abonnement (UN SEUL nom)
   router.get('/subscriptions/:id/payment-status', (ctx) => Subscription.checkPaymentStatus(ctx)).as('subscriptions.payment-status')
-
-  // Gestion des produits boostés
   router.post('/subscriptions/:id/add-product', (ctx) => Subscription.addProductToBoost(ctx)).as('subscriptions.add-product')
   router.post('/subscriptions/:id/remove-product', (ctx) => Subscription.removeProductFromBoost(ctx)).as('subscriptions.remove-product')
   router.post('/subscriptions/:id/cancel', (ctx) => Subscription.cancel(ctx)).as('subscriptions.cancel')
