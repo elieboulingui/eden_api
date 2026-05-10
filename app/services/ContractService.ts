@@ -15,7 +15,6 @@ export default class ContractService {
     })
 
     const APP_URL = env.get('APP_URL', 'https://eden-api-zklf.onrender.com')
-    const FRONTEND_URL = 'https://eden-azure-one.vercel.app'
 
     return `
 <!DOCTYPE html>
@@ -331,8 +330,6 @@ export default class ContractService {
 
   // Envoyer un email de confirmation après signature
   static async sendConfirmationEmail(merchant: User): Promise<void> {
-    const FRONTEND_URL = 'https://eden-azure-one.vercel.app'
-    
     const confirmationHTML = `
       <!DOCTYPE html>
       <html>
@@ -364,7 +361,7 @@ export default class ContractService {
             - Commission : 5% sur chaque vente
           </p>
           <div style="text-align: center;">
-            <a href="${FRONTEND_URL}/dashboard/merchant" class="btn">
+            <a href="https://eden-azure-one.vercel.app/dashboard/merchant" class="btn">
               Accéder à mon espace marchand
             </a>
           </div>
