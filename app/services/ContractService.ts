@@ -14,8 +14,8 @@ export default class ContractService {
       year: 'numeric'
     })
 
-    const APP_URL = env.get('APP_URL', 'http://localhost:3333')
-    const FRONTEND_URL = env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')
+    const APP_URL = env.get('APP_URL', 'https://eden-api-zklf.onrender.com')
+    const FRONTEND_URL = 'https://eden-azure-one.vercel.app'
 
     return `
 <!DOCTYPE html>
@@ -331,7 +331,7 @@ export default class ContractService {
 
   // Envoyer un email de confirmation après signature
   static async sendConfirmationEmail(merchant: User): Promise<void> {
-    const FRONTEND_URL = env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')
+    const FRONTEND_URL = 'https://eden-azure-one.vercel.app'
     
     const confirmationHTML = `
       <!DOCTYPE html>
