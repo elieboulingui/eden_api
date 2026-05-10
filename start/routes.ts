@@ -522,5 +522,12 @@ router.group(() => {
   // RETRAIT
   // ----------------------------------------------------------
   router.post('/retrait', [RetraitController, 'retrait']).as('retrait.process')
+  // Dans la section des routes API, après les routes produits
+router.get('/products/on-sale', [ProductController, 'onSale']).as('products.on-sale')
+router.get('/products/biggest-discounts', [ProductController, 'biggestDiscounts']).as('products.biggest-discounts')
+router.get('/products/black-friday', [ProductController, 'blackFriday']).as('products.black-friday')
+
+// Assurez-vous aussi que ces routes existent (dans votre routes.ts vous avez déjà)
+router.get('/promo', [PromotionsController, 'index']).as('promo.index')
 
 }).prefix('/api')
