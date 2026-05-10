@@ -3,12 +3,6 @@ import { DateTime } from 'luxon'
 import User from '#models/user'
 import mail from '@adonisjs/mail/services/main'
 import env from '#start/env'
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
 
 export default class ContractService {
   
@@ -19,6 +13,9 @@ export default class ContractService {
       month: 'long',
       year: 'numeric'
     })
+
+    const APP_URL = env.get('APP_URL', 'http://localhost:3333')
+    const FRONTEND_URL = env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')
 
     return `
 <!DOCTYPE html>
@@ -202,7 +199,6 @@ export default class ContractService {
                 <p>En cas de litige, les parties s'engagent à rechercher une solution amiable avant toute procédure judiciaire. À défaut, le Tribunal de Libreville sera seul compétent.</p>
             </div>
 
-            <!-- SECTION SIGNATURES -->
             <div class="signature-section">
                 <div class="signature-box">
                     <p><strong>POUR EDEN</strong></p>
@@ -225,10 +221,10 @@ export default class ContractService {
                 <div class="signature-box">
                     <p><strong>POUR LE MARCHAND</strong></p>
                     <p>${merchant.full_name || 'Merchant'}</p>
-                    <div class="stamp" id="merchantSignature">
+                    <div class="stamp">
                         ✍️ SIGNATURE DU MARCHAND<br>
                         <span style="font-size: 11px;">Je déclare avoir lu et accepté les conditions</span><br><br>
-                        <a href="${env.get('APP_URL', 'http://localhost:3333')}/api/merchant/contract/${merchant.id}/sign" 
+                        <a href="${APP_URL}/api/merchant/contract/${merchant.id}/sign" 
                            style="background: #2d6a4f; color: white; padding: 8px 20px; text-decoration: none; border-radius: 30px; display: inline-block; margin-top: 10px;">
                            📝 Signer le contrat
                         </a>
@@ -270,13 +266,8 @@ export default class ContractService {
           .to(merchant.email)
           .subject(`📄 Contrat de partenariat EDEN - ${merchant.full_name || 'Marchand'}`)
           .html(contractHTML)
-          .attach(Buffer.from(contractHTML, 'utf-8'), {
-            filename: `contrat_eden_${merchant.id}.html`,
-            contentType: 'text/html'
-          })
       })
 
-      // Marquer l'envoi
       merchant.contract_sent_at = DateTime.now()
       await merchant.save()
 
@@ -286,9 +277,10 @@ export default class ContractService {
       }
     } catch (error) {
       console.error('Erreur envoi contrat:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
       return {
         success: false,
-        message: error.message
+        message: errorMessage
       }
     }
   }
@@ -315,12 +307,11 @@ export default class ContractService {
       merchant.contract_signed_at = DateTime.now()
       merchant.contract_signed = true
       if (ipAddress) {
-        // @ts-ignore
+        // @ts-ignore - La propriété sera ajoutée par migration
         merchant.contract_signature_ip = ipAddress
       }
       await merchant.save()
 
-      // Envoyer un email de confirmation
       await this.sendConfirmationEmail(merchant)
 
       return {
@@ -330,15 +321,18 @@ export default class ContractService {
       }
     } catch (error) {
       console.error('Erreur signature contrat:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
       return {
         success: false,
-        message: error.message
+        message: errorMessage
       }
     }
   }
 
   // Envoyer un email de confirmation après signature
   static async sendConfirmationEmail(merchant: User): Promise<void> {
+    const FRONTEND_URL = env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')
+    
     const confirmationHTML = `
       <!DOCTYPE html>
       <html>
@@ -370,7 +364,7 @@ export default class ContractService {
             - Commission : 5% sur chaque vente
           </p>
           <div style="text-align: center;">
-            <a href="${env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')}/dashboard/merchant" class="btn">
+            <a href="${FRONTEND_URL}/dashboard/merchant" class="btn">
               Accéder à mon espace marchand
             </a>
           </div>
