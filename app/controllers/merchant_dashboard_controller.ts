@@ -1,4 +1,4 @@
-// app/controllers/merchant_dashboard_controller.ts
+
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import Product from '#models/Product'
