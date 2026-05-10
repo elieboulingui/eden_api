@@ -1,3 +1,4 @@
+// app/models/Product.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, beforeCreate, beforeSave, belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
@@ -19,8 +20,8 @@ export default class Product extends BaseModel {
   @column()
   declare price: number
 
-  @column()
-  declare old_price: number | null
+  @column({ columnName: 'old_price' })
+  declare oldPrice: number | null
 
   @column()
   declare description: string
@@ -31,17 +32,17 @@ export default class Product extends BaseModel {
   @column()
   declare rating: number
 
-  @column()
-  declare reviews_count: number
+  @column({ columnName: 'reviews_count' })
+  declare reviewsCount: number
 
-  @column()
-  declare user_id: string
+  @column({ columnName: 'user_id' })
+  declare userId: string
 
   @column({ columnName: 'category_id' })
-  declare category_id: string | null
+  declare categoryId: string | null
 
   @column({ columnName: 'image_url' })
-  declare image_url: string | null
+  declare imageUrl: string | null
 
   @column()
   declare category: string | null
@@ -77,7 +78,7 @@ export default class Product extends BaseModel {
   declare isArchived: boolean
 
   // ============================================================
-  // 🎯 COLONNES DE BOOST (ABONNEMENT)
+  // COLONNES DE BOOST (ABONNEMENT)
   // ============================================================
 
   @column({ columnName: 'is_boosted' })
@@ -175,7 +176,7 @@ export default class Product extends BaseModel {
   @column({ columnName: 'delivery_time' })
   declare deliveryTime: string | null
 
-  @column({ columnName: 'warranty' })
+  @column()
   declare warranty: string | null
 
   @column({ columnName: 'return_policy' })
@@ -205,7 +206,7 @@ export default class Product extends BaseModel {
     product.sales = product.sales ?? 0
     product.likes = product.likes ?? 0
     product.rating = product.rating ?? 0
-    product.reviews_count = product.reviews_count ?? 0
+    product.reviewsCount = product.reviewsCount ?? 0
     product.status = product.status ?? 'active'
     product.minOrderQuantity = product.minOrderQuantity ?? 1
     product.isBoosted = product.isBoosted ?? false
@@ -252,12 +253,12 @@ export default class Product extends BaseModel {
   declare orderItems: HasMany<typeof OrderItem>
 
   // ============================================================
-  // GETTERS - GÉNÉRAUX
+  // GETTERS
   // ============================================================
 
   get discountPercentage(): number | null {
-    if (this.old_price && this.old_price > this.price) {
-      return Math.round(((this.old_price - this.price) / this.old_price) * 100)
+    if (this.oldPrice && this.oldPrice > this.price) {
+      return Math.round(((this.oldPrice - this.price) / this.oldPrice) * 100)
     }
     return null
   }
@@ -267,19 +268,19 @@ export default class Product extends BaseModel {
   }
 
   get hasDiscount(): boolean {
-    return this.old_price !== null && this.old_price > this.price
+    return this.oldPrice !== null && this.oldPrice > this.price
   }
 
   get savings(): number | null {
-    if (this.old_price && this.old_price > this.price) {
-      return this.old_price - this.price
+    if (this.oldPrice && this.oldPrice > this.price) {
+      return this.oldPrice - this.price
     }
     return null
   }
 
   get allImages(): string[] {
     const images: string[] = []
-    if (this.image_url) images.push(this.image_url)
+    if (this.imageUrl) images.push(this.imageUrl)
     if (this.imageUrl2) images.push(this.imageUrl2)
     if (this.imageUrl3) images.push(this.imageUrl3)
     if (this.imageUrl4) images.push(this.imageUrl4)
@@ -295,10 +296,6 @@ export default class Product extends BaseModel {
     if (!this.tags) return []
     return this.tags.split(',').map(t => t.trim()).filter(Boolean)
   }
-
-  // ============================================================
-  // GETTERS - BOOST
-  // ============================================================
 
   get isBoostActive(): boolean {
     return this.isBoosted && this.boostEndDate !== null && this.boostEndDate > DateTime.now() && this.boostLevel !== 'none'
@@ -361,7 +358,7 @@ export default class Product extends BaseModel {
   }
 
   // ============================================================
-  // MÉTHODES - BOOST
+  // MÉTHODES
   // ============================================================
 
   async activateBoost(config: { multiplier: number; level: 'boosted' | 'premium' | 'premium_plus'; badge: string; priority: number; startDate: DateTime; endDate: DateTime }): Promise<void> {
@@ -414,10 +411,6 @@ export default class Product extends BaseModel {
     }
   }
 
-  // ============================================================
-  // MÉTHODES GÉNÉRALES
-  // ============================================================
-
   async archive(): Promise<void> {
     this.isArchived = true
     this.status = 'inactive'
@@ -445,10 +438,6 @@ export default class Product extends BaseModel {
     }
     await this.save()
   }
-
-  // ============================================================
-  // MÉTHODES STATIQUES
-  // ============================================================
 
   static async getBoostedProducts(limit: number = 20): Promise<Product[]> {
     return Product.query()
