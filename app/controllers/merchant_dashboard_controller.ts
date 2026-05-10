@@ -19,35 +19,22 @@ export default class MerchantDashboardController {
 
   // ============= WALLET =============
 
-  /**
-   * Récupère tous les produits archivés d'un marchand
-   * GET /api/merchant/:userId/archived-products
-   */
   async getArchivedProducts({ params, request, response }: HttpContext) {
     try {
       const { userId } = params
 
       if (!userId) {
-        return response.badRequest({ 
-          success: false, 
-          message: "ID utilisateur manquant" 
-        })
+        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
       }
 
       const user = await User.findBy('id', userId)
 
       if (!user) {
-        return response.notFound({ 
-          success: false, 
-          message: 'Utilisateur non trouvé' 
-        })
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
       }
 
       if (user.role !== 'marchant' && user.role !== 'merchant') {
-        return response.forbidden({ 
-          success: false, 
-          message: 'Seuls les marchands peuvent accéder à cette ressource' 
-        })
+        return response.forbidden({ success: false, message: 'Seuls les marchands peuvent accéder à cette ressource' })
       }
 
       const page = request.input('page', 1)
@@ -55,10 +42,10 @@ export default class MerchantDashboardController {
       const search = request.input('search', '')
 
       let query = Product.query()
-        .where('user_id', user.id)
-        .where('is_archived', true)
+        .where('userId', user.id)
+        .where('isArchived', true)
         .preload('categoryRelation')
-        .orderBy('updated_at', 'desc')
+        .orderBy('updatedAt', 'desc')
 
       if (search) {
         query = query.where((builder) => {
@@ -79,7 +66,7 @@ export default class MerchantDashboardController {
           categoryName = product.category
         }
 
-        const archivedDate = DateTime.fromJSDate(product.updated_at.toJSDate())
+        const archivedDate = DateTime.fromJSDate(product.updatedAt.toJSDate())
         const daysSinceArchived = Math.floor(DateTime.now().diff(archivedDate, 'days').days)
 
         return {
@@ -87,23 +74,23 @@ export default class MerchantDashboardController {
           name: product.name,
           description: product.description,
           price: product.price,
-          old_price: product.old_price,
+          old_price: product.oldPrice,
           stock: product.stock,
-          image_url: product.image_url,
+          image_url: product.imageUrl,
           category: categoryName,
-          category_id: product.category_id,
+          category_id: product.categoryId,
           origin: product.origin,
           weight: product.weight,
           packaging: product.packaging,
           conservation: product.conservation,
-          is_new: product.is_new,
-          is_on_sale: product.is_on_sale,
+          is_new: product.isNew,
+          is_on_sale: product.isOnSale,
           rating: product.rating,
           sales: product.sales || 0,
           status: product.status || 'archived',
-          created_at: product.created_at,
-          updated_at: product.updated_at,
-          archived_at: product.updated_at,
+          created_at: product.createdAt,
+          updated_at: product.updatedAt,
+          archived_at: product.updatedAt,
           days_since_archived: daysSinceArchived,
           can_be_restored: true,
           is_permanently_deleted: false
@@ -111,22 +98,22 @@ export default class MerchantDashboardController {
       })
 
       const totalArchivedProducts = await Product.query()
-        .where('user_id', user.id)
-        .where('is_archived', true)
+        .where('userId', user.id)
+        .where('isArchived', true)
         .count('* as total')
 
       const stats = {
         total_archived: parseInt(totalArchivedProducts[0].$extras.total) || 0,
         archived_this_month: await Product.query()
-          .where('user_id', user.id)
-          .where('is_archived', true)
-          .where('updated_at', '>=', DateTime.now().startOf('month').toSQL())
+          .where('userId', user.id)
+          .where('isArchived', true)
+          .where('updatedAt', '>=', DateTime.now().startOf('month').toSQL())
           .count('* as total')
           .then(result => parseInt(result[0].$extras.total) || 0),
         oldest_archived: products.all().length > 0 
           ? products.all().reduce((oldest, p) => 
-              p.updated_at < oldest.updated_at ? p : oldest
-            ).updated_at
+              p.updatedAt < oldest.updatedAt ? p : oldest
+            ).updatedAt
           : null
       }
 
@@ -163,58 +150,42 @@ export default class MerchantDashboardController {
     }
   }
 
-  /**
-   * Restaure un produit archivé (le remet en actif)
-   * POST /api/merchant/:userId/archived-products/:productId/restore
-   */
   async restoreArchivedProduct({ params, response }: HttpContext) {
     try {
       const { userId, productId } = params
 
       if (!userId || !productId) {
-        return response.badRequest({ 
-          success: false, 
-          message: "Paramètres manquants" 
-        })
+        return response.badRequest({ success: false, message: "Paramètres manquants" })
       }
 
       const user = await User.findBy('id', userId)
 
       if (!user) {
-        return response.notFound({ 
-          success: false, 
-          message: 'Utilisateur non trouvé' 
-        })
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
       }
 
       if (user.role !== 'marchant' && user.role !== 'merchant') {
-        return response.forbidden({ 
-          success: false, 
-          message: 'Non autorisé' 
-        })
+        return response.forbidden({ success: false, message: 'Non autorisé' })
       }
 
       const product = await Product.query()
         .where('id', productId)
-        .where('user_id', user.id)
+        .where('userId', user.id)
         .first()
 
       if (!product) {
-        return response.notFound({ 
-          success: false, 
-          message: 'Produit non trouvé' 
-        })
+        return response.notFound({ success: false, message: 'Produit non trouvé' })
       }
 
-      if (!product.is_archived) {
+      if (!product.isArchived) {
         return response.badRequest({
           success: false,
           message: 'Ce produit n\'est pas archivé'
         })
       }
 
-      product.is_archived = false
-      product.is_new = false
+      product.isArchived = false
+      product.isNew = false
       await product.save()
 
       await product.load('categoryRelation')
@@ -233,7 +204,7 @@ export default class MerchantDashboardController {
           price: product.price,
           stock: product.stock,
           category: categoryName,
-          is_archived: product.is_archived,
+          is_archived: product.isArchived,
           restored_at: DateTime.now().toISO()
         }
       })
@@ -248,50 +219,34 @@ export default class MerchantDashboardController {
     }
   }
 
-  /**
-   * Supprime définitivement un produit archivé
-   * DELETE /api/merchant/:userId/archived-products/:productId/permanent
-   */
   async permanentlyDeleteProduct({ params, response }: HttpContext) {
     try {
       const { userId, productId } = params
 
       if (!userId || !productId) {
-        return response.badRequest({ 
-          success: false, 
-          message: "Paramètres manquants" 
-        })
+        return response.badRequest({ success: false, message: "Paramètres manquants" })
       }
 
       const user = await User.findBy('id', userId)
 
       if (!user) {
-        return response.notFound({ 
-          success: false, 
-          message: 'Utilisateur non trouvé' 
-        })
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
       }
 
       if (user.role !== 'marchant' && user.role !== 'merchant') {
-        return response.forbidden({ 
-          success: false, 
-          message: 'Non autorisé' 
-        })
+        return response.forbidden({ success: false, message: 'Non autorisé' })
       }
 
       const product = await Product.query()
         .where('id', productId)
-        .where('user_id', user.id)
+        .where('userId', user.id)
         .first()
 
       if (!product) {
-        return response.notFound({ 
-          success: false, 
-          message: 'Produit non trouvé' 
-        })
+        return response.notFound({ success: false, message: 'Produit non trouvé' })
       }
 
-      if (!product.is_archived) {
+      if (!product.isArchived) {
         return response.badRequest({
           success: false,
           message: 'Seuls les produits archivés peuvent être supprimés définitivement. Archivez d\'abord le produit.'
@@ -340,12 +295,12 @@ export default class MerchantDashboardController {
       }
 
       let wallet = await Wallet.query()
-        .where('user_id', user.id)
+        .where('userId', user.id)
         .first()
 
       if (!wallet) {
         wallet = await Wallet.create({
-          user_id: user.id,
+          userId: user.id,
           balance: 0,
           currency: 'XAF',
           status: 'active'
@@ -356,12 +311,12 @@ export default class MerchantDashboardController {
         success: true,
         data: {
           id: wallet.id,
-          user_id: wallet.user_id,
+          user_id: wallet.userId,
           balance: wallet.balance,
           currency: wallet.currency,
           status: wallet.status,
-          created_at: wallet.created_at,
-          updated_at: wallet.updated_at
+          created_at: wallet.createdAt,
+          updated_at: wallet.updatedAt
         }
       })
 
@@ -433,12 +388,12 @@ export default class MerchantDashboardController {
       }
 
       let wallet = await Wallet.query()
-        .where('user_id', user.id)
+        .where('userId', user.id)
         .first()
 
       if (!wallet) {
         wallet = await Wallet.create({
-          user_id: user.id,
+          userId: user.id,
           balance: 0,
           currency: 'XAF',
           status: 'active'
@@ -609,23 +564,23 @@ export default class MerchantDashboardController {
       }
 
       const withdrawals = await Withdrawal.query()
-        .where('user_id', user.id)
-        .orderBy('created_at', 'desc')
+        .where('userId', user.id)
+        .orderBy('createdAt', 'desc')
 
       console.log(`📦 ${withdrawals.length} retrait(s) trouvé(s) pour l'utilisateur ${userId}`)
 
       const formattedWithdrawals = withdrawals.map(w => ({
         id: w.id,
-        amount: w.net_amount || w.amount,
+        amount: w.netAmount || w.amount,
         status: w.status,
-        payment_method: w.payment_method,
-        account_number: w.account_number,
-        account_name: w.account_name,
+        payment_method: w.paymentMethod,
+        account_number: w.accountNumber,
+        account_name: w.accountName,
         operator: w.operator,
         reference: w.reference,
-        created_at: w.created_at,
+        created_at: w.createdAt,
         fee: w.fee,
-        net_amount: w.net_amount
+        net_amount: w.netAmount
       }))
 
       const completed = formattedWithdrawals.filter(w => w.status === 'completed')
@@ -634,7 +589,7 @@ export default class MerchantDashboardController {
       
       const totalWithdrawn = completed.reduce((sum, w) => sum + Number(w.amount), 0)
 
-      const wallet = await Wallet.query().where('user_id', user.id).first()
+      const wallet = await Wallet.query().where('userId', user.id).first()
       const currentBalance = wallet ? wallet.balance : 0
 
       return response.ok({
@@ -660,9 +615,6 @@ export default class MerchantDashboardController {
     }
   }
 
-  /**
-   * Récupère les statistiques détaillées des retraits pour un marchand
-   */
   async getWithdrawalStats({ request, response }: HttpContext) {
     try {
       const userId = request.qs().userId || request.input('userId')
@@ -691,7 +643,7 @@ export default class MerchantDashboardController {
       }
 
       const wallet = await Wallet.query()
-        .where('user_id', user.id)
+        .where('userId', user.id)
         .first()
 
       const currentBalance = wallet ? wallet.balance : 0
@@ -825,9 +777,9 @@ export default class MerchantDashboardController {
       }
 
       const merchantProducts = await Product.query()
-        .where('user_id', user.id)
-        .where('is_archived', false)
-        .select('id', 'name', 'price', 'image_url')
+        .where('userId', user.id)
+        .where('isArchived', false)
+        .select('id', 'name', 'price', 'imageUrl')
 
       const productIds = merchantProducts.map(p => p.id)
 
@@ -852,13 +804,13 @@ export default class MerchantDashboardController {
       }
 
       const orderItems = await OrderItem.query()
-        .whereIn('product_id', productIds)
+        .whereIn('productId', productIds)
         .preload('order', (orderQuery) => {
           orderQuery
             .preload('user', (userQuery) => {
               userQuery.select('id', 'full_name', 'email')
             })
-            .orderBy('created_at', 'desc')
+            .orderBy('createdAt', 'desc')
         })
         .preload('product')
 
@@ -890,33 +842,33 @@ export default class MerchantDashboardController {
 
         if (!ordersMap.has(order.id)) {
           const tracking = await OrderTracking.query()
-            .where('order_id', order.id)
-            .orderBy('tracked_at', 'desc')
+            .where('orderId', order.id)
+            .orderBy('trackedAt', 'desc')
             .first()
 
           ordersMap.set(order.id, {
             id: order.id,
-            order_number: order.order_number,
+            order_number: order.orderNumber,
             status: order.status,
             total: order.total,
             subtotal: order.subtotal,
-            shipping_cost: order.shipping_cost,
-            customer_name: order.customer_name,
-            customer_email: order.customer_email,
-            customer_phone: order.customer_phone,
-            shipping_address: order.shipping_address,
-            payment_method: order.payment_method,
-            tracking_number: order.tracking_number,
-            created_at: order.created_at,
-            estimated_delivery: order.estimated_delivery,
-            delivered_at: order.delivered_at,
+            shipping_cost: order.shippingCost,
+            customer_name: order.customerName,
+            customer_email: order.customerEmail,
+            customer_phone: order.customerPhone,
+            shipping_address: order.shippingAddress,
+            payment_method: order.paymentMethod,
+            tracking_number: order.trackingNumber,
+            created_at: order.createdAt,
+            estimated_delivery: order.estimatedDelivery,
+            delivered_at: order.deliveredAt,
             notes: order.notes,
             items: [],
             tracking: tracking ? {
               status: tracking.status,
               description: tracking.description,
               location: tracking.location,
-              tracked_at: tracking.tracked_at
+              tracked_at: tracking.trackedAt
             } : null,
             user: order.user ? {
               id: order.user.id,
@@ -927,19 +879,19 @@ export default class MerchantDashboardController {
         }
 
         const orderData = ordersMap.get(order.id)
-        const productBelongsToMerchant = merchantProducts.some(p => p.id === item.product_id)
+        const productBelongsToMerchant = merchantProducts.some(p => p.id === item.productId)
 
         if (productBelongsToMerchant) {
           orderData.items.push({
             id: item.id,
-            product_id: item.product_id,
-            product_name: item.product_name || item.product?.name || 'Produit',
-            product_description: item.product_description || item.product?.description || null,
+            product_id: item.productId,
+            product_name: item.productName || item.product?.name || 'Produit',
+            product_description: item.productDescription || item.product?.description || null,
             price: item.price,
             quantity: item.quantity,
             subtotal: item.subtotal || (item.price * item.quantity),
             category: item.category,
-            image: item.image || item.product?.image_url || null
+            image: item.image || item.product?.imageUrl || null
           })
         }
       }
@@ -1004,8 +956,8 @@ export default class MerchantDashboardController {
       }
 
       const merchantProducts = await Product.query()
-        .where('user_id', user.id)
-        .where('is_archived', false)
+        .where('userId', user.id)
+        .where('isArchived', false)
         .select('id')
 
       const productIds = merchantProducts.map(p => p.id)
@@ -1019,7 +971,7 @@ export default class MerchantDashboardController {
       }
 
       const orderItems = await OrderItem.query()
-        .whereIn('product_id', productIds)
+        .whereIn('productId', productIds)
         .preload('order', (orderQuery) => {
           orderQuery
             .where('status', 'pending')
@@ -1035,19 +987,19 @@ export default class MerchantDashboardController {
         const order = item.order
         if (!order || order.status !== 'pending') continue
 
-        const productBelongsToMerchant = merchantProducts.some(p => p.id === item.product_id)
+        const productBelongsToMerchant = merchantProducts.some(p => p.id === item.productId)
         if (!productBelongsToMerchant) continue
 
         if (!ordersMap.has(order.id)) {
           ordersMap.set(order.id, {
             id: order.id,
-            order_number: order.order_number,
+            order_number: order.orderNumber,
             status: order.status,
             total: order.total,
-            customer_name: order.customer_name,
-            customer_email: order.customer_email,
-            customer_phone: order.customer_phone,
-            created_at: order.created_at,
+            customer_name: order.customerName,
+            customer_email: order.customerEmail,
+            customer_phone: order.customerPhone,
+            created_at: order.createdAt,
             items_count: 0,
             user: order.user ? {
               full_name: order.user.full_name,
@@ -1107,20 +1059,20 @@ export default class MerchantDashboardController {
       }
 
       const merchantProducts = await Product.query()
-        .where('user_id', user.id)
-        .where('is_archived', false)
+        .where('userId', user.id)
+        .where('isArchived', false)
         .select('id')
 
       const merchantProductIds = merchantProducts.map(p => p.id)
-      const hasMerchantProducts = order.items.some(item => merchantProductIds.includes(item.product_id))
+      const hasMerchantProducts = order.items.some(item => merchantProductIds.includes(item.productId))
 
       if (!hasMerchantProducts) {
         return response.forbidden({ success: false, message: 'Cette commande ne contient pas de vos produits' })
       }
 
       const tracking = await OrderTracking.query()
-        .where('order_id', order.id)
-        .orderBy('tracked_at', 'desc')
+        .where('orderId', order.id)
+        .orderBy('trackedAt', 'desc')
         .first()
 
       return response.ok({
@@ -1131,9 +1083,9 @@ export default class MerchantDashboardController {
             status: tracking.status,
             description: tracking.description,
             location: tracking.location,
-            tracked_at: tracking.tracked_at
+            tracked_at: tracking.trackedAt
           } : null,
-          merchant_items: order.items.filter(item => merchantProductIds.includes(item.product_id))
+          merchant_items: order.items.filter(item => merchantProductIds.includes(item.productId))
         }
       })
 
@@ -1158,26 +1110,26 @@ export default class MerchantDashboardController {
     }
 
     const products = await Product.query()
-      .where('user_id', user.id)
-      .where('is_archived', false)
+      .where('userId', user.id)
+      .where('isArchived', false)
       .preload('categoryRelation')
-      .orderBy('created_at', 'desc')
+      .orderBy('createdAt', 'desc')
 
     const categories = await Category.query()
-      .where('user_id', user.id)
+      .where('userId', user.id)
       .orderBy('name', 'asc')
 
     const coupons = await Coupon.query()
-      .where('user_id', user.id)
-      .orderBy('created_at', 'desc')
+      .where('userId', user.id)
+      .orderBy('createdAt', 'desc')
 
     let wallet = await Wallet.query()
-      .where('user_id', user.id)
+      .where('userId', user.id)
       .first()
 
     if (!wallet) {
       wallet = await Wallet.create({
-        user_id: user.id,
+        userId: user.id,
         balance: 0,
         currency: 'XAF',
         status: 'active'
@@ -1210,13 +1162,13 @@ export default class MerchantDashboardController {
     if (productIds.length > 0) {
       try {
         const orderItems = await OrderItem.query()
-          .whereIn('product_id', productIds)
-          .select('product_id')
+          .whereIn('productId', productIds)
+          .select('productId')
           .count('* as total')
-          .groupBy('product_id')
+          .groupBy('productId')
 
         salesCountMap = orderItems.reduce((acc: Record<string, number>, curr: any) => {
-          acc[curr.product_id] = parseInt(curr.$extras.total)
+          acc[curr.productId] = parseInt(curr.$extras.total)
           return acc
         }, {})
       } catch (error) {
@@ -1238,12 +1190,12 @@ export default class MerchantDashboardController {
         description: p.description,
         price: p.price,
         stock: p.stock,
-        image_url: p.image_url,
+        image_url: p.imageUrl,
         category: categoryName,
         likes: likesCountMap[p.id] || 0,
         sales: salesCountMap[p.id] || 0,
         status: p.status || 'active',
-        created_at: p.created_at
+        created_at: p.createdAt
       }
     })
 
@@ -1265,8 +1217,8 @@ export default class MerchantDashboardController {
           id: c.id,
           name: c.name,
           slug: c.slug,
-          image_url: c.image_url || null,
-          productCount: c.product_count || 0
+          image_url: c.imageUrl || null,
+          productCount: c.productCount || 0
         })),
         coupons: coupons,
         salesChart: [],
@@ -1301,10 +1253,10 @@ export default class MerchantDashboardController {
       const limit = request.input('limit', 10)
 
       const products = await Product.query()
-        .where('user_id', user.id)
-        .where('is_archived', false)
+        .where('userId', user.id)
+        .where('isArchived', false)
         .preload('categoryRelation')
-        .orderBy('created_at', 'desc')
+        .orderBy('createdAt', 'desc')
         .paginate(page, limit)
 
       const productArray = products.all()
@@ -1342,13 +1294,13 @@ export default class MerchantDashboardController {
           description: product.description,
           price: product.price,
           stock: product.stock,
-          image_url: product.image_url,
+          image_url: product.imageUrl,
           category: categoryName,
-          category_id: product.category_id,
+          category_id: product.categoryId,
           likes: favoritesCountMap[product.id] || 0,
           sales: product.sales || 0,
           status: product.status || 'active',
-          created_at: product.created_at
+          created_at: product.createdAt
         }
       })
 
@@ -1389,15 +1341,15 @@ export default class MerchantDashboardController {
       if (category_name && category_name.trim() !== '') {
         let category = await Category.query()
           .where('name', category_name.trim())
-          .where('user_id', user.id)
+          .where('userId', user.id)
           .first()
 
         if (!category) {
           category = await Category.create({
             name: category_name.trim(),
             slug: category_name.trim().toLowerCase().replace(/\s+/g, '-'),
-            user_id: user.id,
-            is_active: true,
+            userId: user.id,
+            isActive: true,
           })
         }
         categoryId = category.id
@@ -1408,37 +1360,37 @@ export default class MerchantDashboardController {
         description: description || '',
         price: parseFloat(price) || 0,
         stock: parseInt(stock) || 0,
-        image_url: image_url || null,
-        user_id: user.id,
-        category_id: categoryId,
-        is_new: true,
-        is_on_sale: false,
+        imageUrl: image_url || null,
+        userId: user.id,
+        categoryId: categoryId,
+        isNew: true,
+        isOnSale: false,
         rating: 0,
-        is_archived: false,
+        isArchived: false,
         sales: 0,
         likes: 0,
-        reviews_count: 0,
+        reviewsCount: 0,
         status: 'active',
-        min_order_quantity: 1,
-        is_boosted: false,
-        boost_multiplier: 1,
-        boost_level: 'none',
-        boost_priority: 0,
-        boost_views: 0,
-        boost_clicks: 0,
-        boost_sales: 0,
-        is_featured: false,
-        is_trending: false,
+        minOrderQuantity: 1,
+        isBoosted: false,
+        boostMultiplier: 1,
+        boostLevel: 'none',
+        boostPriority: 0,
+        boostViews: 0,
+        boostClicks: 0,
+        boostSales: 0,
+        isFeatured: false,
+        isTrending: false,
       })
 
       if (categoryId) {
         const category = await Category.find(categoryId)
         if (category) {
-          const ids = Array.isArray(category.product_ids) ? category.product_ids : []
+          const ids = Array.isArray(category.productIds) ? category.productIds : []
           if (!ids.includes(product.id)) {
             ids.push(product.id)
-            category.product_ids = ids
-            category.product_count = ids.length
+            category.productIds = ids
+            category.productCount = ids.length
             await category.save()
           }
         }
@@ -1451,9 +1403,9 @@ export default class MerchantDashboardController {
           name: product.name,
           price: product.price,
           stock: product.stock,
-          category_id: product.category_id,
+          category_id: product.categoryId,
           category_name: category_name || null,
-          image_url: product.image_url,
+          image_url: product.imageUrl,
         },
         message: `Produit "${name}" créé avec succès`,
       })
@@ -1482,7 +1434,7 @@ export default class MerchantDashboardController {
 
       const product = await Product.query()
         .where('id', productId)
-        .where('user_id', user.id)
+        .where('userId', user.id)
         .first()
 
       if (!product) {
@@ -1497,7 +1449,7 @@ export default class MerchantDashboardController {
       if (category_name && category_name.trim() !== '') {
         const category = await Category.query()
           .where('name', category_name)
-          .where('user_id', user.id)
+          .where('userId', user.id)
           .first()
 
         if (category) {
@@ -1506,7 +1458,7 @@ export default class MerchantDashboardController {
           const newCategory = await Category.create({
             name: category_name,
             slug: category_name.toLowerCase().replace(/\s+/g, '-'),
-            user_id: user.id,
+            userId: user.id,
           })
           categoryId = newCategory.id
         }
@@ -1519,8 +1471,8 @@ export default class MerchantDashboardController {
         product.price = newPrice
       }
       if (stock !== undefined) product.stock = parseInt(stock)
-      if (image_url !== undefined) product.image_url = image_url
-      if (categoryId) product.category_id = categoryId
+      if (image_url !== undefined) product.imageUrl = image_url
+      if (categoryId) product.categoryId = categoryId
 
       let promotionMessage = ''
       let promotionCreated: any = null
@@ -1528,11 +1480,11 @@ export default class MerchantDashboardController {
       if (price && newPrice < oldPrice) {
         const reductionPercent = ((oldPrice - newPrice) / oldPrice) * 100
         
-        product.is_on_sale = true
-        product.is_new = false
+        product.isOnSale = true
+        product.isNew = false
         
-        if ('old_price' in product) {
-          product.old_price = oldPrice
+        if ('oldPrice' in product) {
+          product.oldPrice = oldPrice
         }
 
         try {
@@ -1541,18 +1493,18 @@ export default class MerchantDashboardController {
           const promotion = await Promotion.create({
             title: `🔥 ${reductionPercent.toFixed(0)}% sur ${product.name}`,
             description: `Profitez de ${reductionPercent.toFixed(0)}% de réduction sur ${product.name} ! Ancien prix: ${oldPrice} FCFA, Nouveau prix: ${newPrice} FCFA. Offre limitée !`,
-            image_url: product.image_url,
-            banner_image: product.image_url,
+            imageUrl: product.imageUrl,
+            bannerImage: product.imageUrl,
             type: 'flash_sale',
-            discount_percentage: Math.round(reductionPercent),
-            discount_amount: oldPrice - newPrice,
+            discountPercentage: Math.round(reductionPercent),
+            discountAmount: oldPrice - newPrice,
             category: category_name || null,
-            product_ids: JSON.stringify([product.id]),
+            productIds: JSON.stringify([product.id]),
             link: `/product/${product.id}`,
-            button_text: '🌐 Voir le produit',
-            min_order_amount: null,
-            start_date: DateTime.now(),
-            end_date: promoEndDate,
+            buttonText: '🌐 Voir le produit',
+            minOrderAmount: null,
+            startDate: DateTime.now(),
+            endDate: promoEndDate,
             status: 'active',
             priority: Math.round(reductionPercent),
           })
@@ -1560,8 +1512,8 @@ export default class MerchantDashboardController {
           promotionCreated = {
             id: promotion.id,
             title: promotion.title,
-            discount_percentage: promotion.discount_percentage,
-            end_date: promotion.end_date
+            discount_percentage: promotion.discountPercentage,
+            end_date: promotion.endDate
           }
 
           promotionMessage = ` ✅ PROMO CRÉÉE : -${reductionPercent.toFixed(0)}% sur "${product.name}" ! Visible jusqu'au ${promoEndDate.toFormat('dd/MM/yyyy')}.`
@@ -1573,16 +1525,16 @@ export default class MerchantDashboardController {
         }
         
       } else if (price && newPrice >= oldPrice && oldPrice > 0) {
-        product.is_on_sale = false
+        product.isOnSale = false
         
         try {
           const existingPromos = await Promotion.query()
-            .where('product_ids', 'LIKE', `%${product.id}%`)
+            .where('productIds', 'LIKE', `%${product.id}%`)
             .where('status', 'active')
           
           for (const promo of existingPromos) {
             promo.status = 'expired'
-            promo.end_date = DateTime.now()
+            promo.endDate = DateTime.now()
             await promo.save()
             console.log(`🏁 Promotion expirée: ${promo.title}`)
           }
@@ -1624,14 +1576,14 @@ export default class MerchantDashboardController {
           price: product.price,
           old_price: oldPrice !== newPrice ? oldPrice : undefined,
           stock: product.stock,
-          image_url: product.image_url,
+          image_url: product.imageUrl,
           category: categoryNameResult,
-          category_id: product.category_id,
-          is_on_sale: product.is_on_sale,
-          is_new: product.is_new,
+          category_id: product.categoryId,
+          is_on_sale: product.isOnSale,
+          is_new: product.isNew,
           price_changed: oldPrice !== newPrice,
           reduction_percent: oldPrice > newPrice ? ((oldPrice - newPrice) / oldPrice) * 100 : 0,
-          promotion_active: product.is_on_sale,
+          promotion_active: product.isOnSale,
           promotion: promotionCreated
         }
       })
@@ -1655,21 +1607,21 @@ export default class MerchantDashboardController {
 
       const product = await Product.query()
         .where('id', productId)
-        .where('user_id', user.id)
+        .where('userId', user.id)
         .first()
 
       if (!product) {
         return response.notFound({ success: false, message: 'Produit non trouvé' })
       }
 
-      if (product.is_archived) {
+      if (product.isArchived) {
         return response.badRequest({
           success: false,
           message: 'Ce produit est déjà archivé'
         })
       }
 
-      product.is_archived = true
+      product.isArchived = true
       await product.save()
 
       return response.ok({
@@ -1677,8 +1629,8 @@ export default class MerchantDashboardController {
         message: 'Produit archivé avec succès',
         data: {
           id: product.id,
-          is_archived: product.is_archived,
-          archived_at: product.updated_at
+          is_archived: product.isArchived,
+          archived_at: product.updatedAt
         }
       })
     } catch (error: any) {
@@ -1705,15 +1657,15 @@ export default class MerchantDashboardController {
       }
 
       const categories = await Category.query()
-        .where('user_id', user.id)
+        .where('userId', user.id)
         .orderBy('name', 'asc')
 
       const categoriesWithCount = await Promise.all(
         categories.map(async (category) => {
           const productCountResult = await Product.query()
-            .where('category_id', category.id)
-            .where('user_id', user.id)
-            .where('is_archived', false)
+            .where('categoryId', category.id)
+            .where('userId', user.id)
+            .where('isArchived', false)
             .count('* as total')
 
           const realCount = parseInt(productCountResult[0].$extras.total) || 0
@@ -1722,11 +1674,11 @@ export default class MerchantDashboardController {
             id: category.id,
             name: category.name,
             slug: category.slug,
-            image_url: category.image_url || null,
-            icon_name: category.icon_name || null,
+            image_url: category.imageUrl || null,
+            icon_name: category.iconName || null,
             product_count: realCount,
-            sort_order: category.sort_order ?? 0,
-            is_active: category.is_active,
+            sort_order: category.sortOrder ?? 0,
+            is_active: category.isActive,
           }
         })
       )
@@ -1763,8 +1715,8 @@ export default class MerchantDashboardController {
       const category = await Category.create({
         name,
         slug: slugToUse,
-        user_id: user.id,
-        image_url: image_url || null,
+        userId: user.id,
+        imageUrl: image_url || null,
       })
 
       return response.created({
@@ -1773,7 +1725,7 @@ export default class MerchantDashboardController {
           id: category.id,
           name: category.name,
           slug: category.slug,
-          image_url: category.image_url,
+          image_url: category.imageUrl,
           productCount: 0,
         },
         message: 'Catégorie créée',
@@ -1800,7 +1752,7 @@ export default class MerchantDashboardController {
 
       const category = await Category.query()
         .where('id', categoryId)
-        .where('user_id', user.id)
+        .where('userId', user.id)
         .first()
 
       if (!category) {
@@ -1809,8 +1761,8 @@ export default class MerchantDashboardController {
 
       if (name) category.name = name
       if (slug) category.slug = slug
-      if (is_active !== undefined) category.is_active = is_active
-      if (image_url !== undefined) category.image_url = image_url
+      if (is_active !== undefined) category.isActive = is_active
+      if (image_url !== undefined) category.imageUrl = image_url
 
       await category.save()
 
@@ -1840,7 +1792,7 @@ export default class MerchantDashboardController {
 
       const category = await Category.query()
         .where('id', categoryId)
-        .where('user_id', user.id)
+        .where('userId', user.id)
         .first()
 
       if (!category) {
@@ -1848,7 +1800,7 @@ export default class MerchantDashboardController {
       }
 
       const productsCount = await Product.query()
-        .where('category_id', category.id)
+        .where('categoryId', category.id)
         .count('* as total')
 
       if (parseInt(productsCount[0].$extras.total) > 0) {
@@ -1883,8 +1835,8 @@ export default class MerchantDashboardController {
       }
 
       const coupons = await Coupon.query()
-        .where('user_id', user.id)
-        .orderBy('created_at', 'desc')
+        .where('userId', user.id)
+        .orderBy('createdAt', 'desc')
 
       return response.ok({ success: true, data: coupons })
     } catch (error: any) {
@@ -1909,11 +1861,11 @@ export default class MerchantDashboardController {
         code: code.toUpperCase(),
         discount: parseFloat(discount),
         type: type,
-        valid_until: validUntil ? DateTime.fromJSDate(new Date(validUntil)) : null,
-        usage_limit: usageLimit ? parseInt(usageLimit) : undefined,
-        used_count: 0,
-        user_id: user.id,
-        product_id: productId || null,
+        validUntil: validUntil ? DateTime.fromJSDate(new Date(validUntil)) : null,
+        usageLimit: usageLimit ? parseInt(usageLimit) : undefined,
+        usedCount: 0,
+        userId: user.id,
+        productId: productId || null,
         status: 'active'
       })
 
@@ -1946,7 +1898,7 @@ export default class MerchantDashboardController {
 
       const coupon = await Coupon.query()
         .where('id', couponId)
-        .where('user_id', user.id)
+        .where('userId', user.id)
         .first()
 
       if (!coupon) {
@@ -1956,8 +1908,8 @@ export default class MerchantDashboardController {
       if (code) coupon.code = code.toUpperCase()
       if (discount) coupon.discount = parseFloat(discount)
       if (type) coupon.type = type
-      if (validUntil) coupon.valid_until = DateTime.fromJSDate(new Date(validUntil))
-      if (usageLimit) coupon.usage_limit = parseInt(usageLimit)
+      if (validUntil) coupon.validUntil = DateTime.fromJSDate(new Date(validUntil))
+      if (usageLimit) coupon.usageLimit = parseInt(usageLimit)
       if (status) coupon.status = status
 
       await coupon.save()
@@ -1988,7 +1940,7 @@ export default class MerchantDashboardController {
 
       const coupon = await Coupon.query()
         .where('id', couponId)
-        .where('user_id', user.id)
+        .where('userId', user.id)
         .first()
 
       if (!coupon) {
@@ -2020,8 +1972,8 @@ export default class MerchantDashboardController {
       }
 
       const totalProducts = await Product.query()
-        .where('user_id', user.id)
-        .where('is_archived', false)
+        .where('userId', user.id)
+        .where('isArchived', false)
         .count('* as total')
 
       return response.ok({
@@ -2047,12 +1999,12 @@ export default class MerchantDashboardController {
       }
 
       const orders = await Order.query()
-        .where('merchant_id', user.id)
+        .where('merchantId', user.id)
         .where('status', 'pending')
         .preload('user', (query) => {
           query.select('id', 'full_name', 'email')
         })
-        .orderBy('created_at', 'desc')
+        .orderBy('createdAt', 'desc')
         .limit(10)
 
       const ordersData = orders.map(order => ({
@@ -2061,7 +2013,7 @@ export default class MerchantDashboardController {
         customerName: order.user?.full_name || 'Client',
         total: order.total,
         status: order.status,
-        created_at: order.created_at.toISO(),
+        created_at: order.createdAt.toISO(),
       }))
 
       return response.ok({ success: true, data: ordersData })
