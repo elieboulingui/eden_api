@@ -1,3 +1,4 @@
+// app/controllers/dashboard_view_controller.ts
 import { DateTime } from 'luxon'
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
@@ -46,76 +47,45 @@ const toNumber = (value: number | string | bigint | null | undefined) => {
 type CountRow = { total: number }
 
 const shortAddress = (value: string | null | undefined) => {
-  if (!value) {
-    return 'Adresse inconnue'
-  }
+  if (!value) return 'Adresse inconnue'
   return value.split(',')[0]
 }
 
-// Fonction utilitaire pour les initiales
 function getInitials(name: string): string {
-  if (!name || name === 'Client inconnu') {
-    return '👤'
-  }
-
+  if (!name || name === 'Client inconnu') return '👤'
   const parts = name.trim().split(' ')
-
   if (parts.length === 1) {
     const firstTwo = parts[0].substring(0, 2).toUpperCase()
     return firstTwo.length === 2 ? firstTwo : '👤'
   }
-
-  const firstInitial = parts[0][0]
-  const lastInitial = parts[parts.length - 1][0]
-
-  return (firstInitial + lastInitial).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-// Fonction pour récupérer une icône en fonction du statut
 function getStatusIcon(status: string): string {
   const icons: Record<string, string> = {
-    pending: '⏳',
-    processing: '🔧',
-    shipped: '🚚',
-    delivered: '✅',
-    cancelled: '❌',
-    pending_payment: '💳',
-    paid: '💰',
-    payment_failed: '⚠️',
+    pending: '⏳', processing: '🔧', shipped: '🚚', delivered: '✅', cancelled: '❌',
+    pending_payment: '💳', paid: '💰', payment_failed: '⚠️',
   }
   return icons[status] || '📦'
 }
 
-// Fonction pour le statut d'abonnement
 function getSubscriptionStatusIcon(status: string): string {
   const icons: Record<string, string> = {
-    active: '✅',
-    pending: '⏳',
-    cancelled: '❌',
-    expired: '⌛',
-    payment_failed: '⚠️',
+    active: '✅', pending: '⏳', cancelled: '❌', expired: '⌛', payment_failed: '⚠️',
   }
   return icons[status] || '📋'
 }
 
 function getSubscriptionStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    active: 'Actif',
-    pending: 'En attente',
-    cancelled: 'Annulé',
-    expired: 'Expiré',
-    payment_failed: 'Paiement échoué',
+    active: 'Actif', pending: 'En attente', cancelled: 'Annulé', expired: 'Expiré', payment_failed: 'Paiement échoué',
   }
   return labels[status] || status
 }
 
 function getSubscriptionStatusColor(status: string): string {
   const colors: Record<string, string> = {
-    active: '#10b981',
-    pending: '#f59e0b',
-    cancelled: '#ef4444',
-    expired: '#6b7280',
-    payment_failed: '#dc2626',
+    active: '#10b981', pending: '#f59e0b', cancelled: '#ef4444', expired: '#6b7280', payment_failed: '#dc2626',
   }
   return colors[status] || '#6b7280'
 }
@@ -124,13 +94,11 @@ export default class DashboardViewController {
 
   // ==================== ADMIN DASHBOARD ====================
   public async admin({ view }: HttpContext) {
-    // Récupérer les compteurs utilisateurs
     const totalUsersCount = await User.query().count('* as total')
     const clientsCount = await User.query().where('role', 'client').count('* as total')
     const merchantsCount = await User.query().whereIn('role', ['marchant', 'merchant', 'marchand']).count('* as total')
     const totalProductsCount = await Product.query().count('* as total')
 
-    // Récupérer les statistiques des abonnements
     const activeSubscriptionsCount = await Subscription.query()
       .where('status', 'active')
       .where('endDate', '>', DateTime.now().toSQL())
@@ -145,24 +113,18 @@ export default class DashboardViewController {
       .where('status', 'active')
       .sum('price as total')
 
-    // Extraire les valeurs utilisateurs
     const totalUsers = toNumber(totalUsersCount[0]?.$extras?.total)
     const totalClients = toNumber(clientsCount[0]?.$extras?.total)
     const activeMerchants = toNumber(merchantsCount[0]?.$extras?.total)
     const totalProducts = toNumber(totalProductsCount[0]?.$extras?.total)
-    
     const activeSubs = toNumber(activeSubscriptionsCount[0]?.$extras?.total)
     const totalSubs = toNumber(totalSubscriptionsCount[0]?.$extras?.total)
     const pendingSubs = toNumber(pendingSubscriptionsCount[0]?.$extras?.total)
     const subsRevenue = toNumber(totalRevenueSubscriptions[0]?.$extras?.total)
 
-    // Récupérer TOUTES les commandes pour calculer le total et les statuts
     const allOrders = await Order.query().select('status', 'total', 'id', 'order_number', 'customer_name', 'customer_email', 'created_at', 'estimated_delivery')
-
-    // Calculer le total des commandes
     const totalOrders = allOrders.length
 
-    // Calculer la répartition par statut
     const statusMap = new Map<string, number>()
     let totalRevenue = 0
     let totalPaidRevenue = 0
@@ -170,37 +132,23 @@ export default class DashboardViewController {
     for (const order of allOrders) {
       const count = statusMap.get(order.status) || 0
       statusMap.set(order.status, count + 1)
-
-      // Chiffre d'affaires total
       totalRevenue += Number(order.total) || 0
-
-      // Chiffre d'affaires des commandes payées
       if (['paid', 'delivered', 'processing', 'shipped'].includes(order.status)) {
         totalPaidRevenue += Number(order.total) || 0
       }
     }
 
-    // Construire le breakdown des statuts
     const statusBreakdown = Array.from(statusMap.entries()).map(([status, count]) => {
       const meta = STATUS_META[status] ?? DEFAULT_STATUS_META
       const percent = totalOrders > 0 ? Math.min(100, Math.round((count / totalOrders) * 100)) : 0
       const barColor = meta.barClass.replace('bg-', '#')
       return {
-        name: meta.label,
-        value: count,
-        percent,
-        borderColor: barColor,
-        badgeColor: barColor,
-        barBg: '#fef3c7',
-        progressStart: barColor,
-        progressEnd: barColor,
-        detailColor: '#713f12',
+        name: meta.label, value: count, percent,
+        borderColor: barColor, badgeColor: barColor, barBg: '#fef3c7',
+        progressStart: barColor, progressEnd: barColor, detailColor: '#713f12',
         icon: getStatusIcon(status),
       }
-    })
-
-    // Trier les statuts par ordre décroissant de valeur
-    statusBreakdown.sort((a, b) => b.value - a.value)
+    }).sort((a, b) => b.value - a.value)
 
     const adminStats = [
       { title: 'Utilisateurs inscrits', display: formatNumber(totalUsers), detail: 'Tous les rôles confondus', icon: '👥' },
@@ -213,51 +161,34 @@ export default class DashboardViewController {
       { title: 'Revenus abonnements', display: formatMoney(subsRevenue), detail: `${formatNumber(pendingSubs)} en attente`, icon: '💳' },
     ]
 
-    // Dernières commandes (10 dernières)
-    const recentOrdersRaw = allOrders.slice(0, 10)
-    const recentOrders = recentOrdersRaw.map((order) => {
+    const recentOrders = allOrders.slice(0, 10).map((order) => {
       const meta = STATUS_META[order.status] ?? DEFAULT_STATUS_META
       const barColor = meta.barClass.replace('bg-', '#')
       return {
-        id: order.id,
-        number: order.order_number,
+        id: order.id, number: order.order_number,
         customer: order.customer_name ?? order.customer_email ?? 'Client inconnu',
-        total: formatMoney(order.total),
-        statusLabel: meta.label,
-        status: order.status,
-        statusColor: barColor,
-        createdAt: order.created_at?.toFormat('dd LLL yyyy') ?? 'Date inconnue',
+        total: formatMoney(order.total), statusLabel: meta.label, status: order.status,
+        statusColor: barColor, createdAt: order.created_at?.toFormat('dd LLL yyyy') ?? 'Date inconnue',
         eta: order.estimated_delivery?.toFormat('dd LLL yyyy') ?? 'À planifier',
       }
     })
 
-    // Derniers abonnements (10 derniers)
-    const recentSubscriptions = await Subscription.query()
-      .orderBy('createdAt', 'desc')
-      .limit(10)
-      .preload('user')
-
+    const recentSubscriptions = await Subscription.query().orderBy('createdAt', 'desc').limit(10).preload('user')
     const recentSubsList = recentSubscriptions.map((sub) => ({
-      id: sub.id,
-      merchantName: sub.user?.full_name || sub.user?.email || 'Marchand inconnu',
-      merchantEmail: sub.user?.email || 'Email inconnu',
-      plan: SUBSCRIPTION_PLANS[sub.plan]?.name || sub.plan,
-      price: formatMoney(sub.price),
-      status: sub.status,
-      statusLabel: getSubscriptionStatusLabel(sub.status),
-      statusColor: getSubscriptionStatusColor(sub.status),
+      id: sub.id, merchantName: sub.user?.full_name || sub.user?.email || 'Marchand inconnu',
+      merchantEmail: sub.user?.email || 'Email inconnu', plan: SUBSCRIPTION_PLANS[sub.plan]?.name || sub.plan,
+      price: formatMoney(sub.price), status: sub.status,
+      statusLabel: getSubscriptionStatusLabel(sub.status), statusColor: getSubscriptionStatusColor(sub.status),
       statusIcon: getSubscriptionStatusIcon(sub.status),
       startDate: sub.startDate ? sub.startDate.toFormat('dd LLL yyyy') : 'Non démarré',
       endDate: sub.endDate ? sub.endDate.toFormat('dd LLL yyyy') : 'N/A',
       createdAt: sub.createdAt?.toFormat('dd LLL yyyy') ?? 'Date inconnue',
       subscriptionType: sub.subscriptionType === 'all_products' ? '🌍 Global' : '📦 Produit unique',
       daysRemaining: sub.endDate ? Math.max(0, Math.ceil(sub.endDate.diff(DateTime.now(), 'days').days)) : 0,
-      boostedProductsCount: sub.boostedProductsCount || 0,
-      maxProducts: sub.maxProducts || 0,
+      boostedProductsCount: sub.boostedProductsCount || 0, maxProducts: sub.maxProducts || 0,
       autoRenew: sub.autoRenew ? '✅ Oui' : '❌ Non',
     }))
 
-    // Catégories populaires
     const categoryCounts = (await Product.query()
       .select('category_id')
       .count('* as total')
@@ -273,103 +204,65 @@ export default class DashboardViewController {
         return {
           name: category?.name ?? 'Catégorie non référencée',
           description: category?.description ?? 'sans description spécifique',
-          products: formatNumber(productCount),
-          statusLabel: category?.is_active ? 'Active' : 'En pause',
-          icon: '📦',
-          titleColor: '#166534',
-          descColor: '#14532d',
-          badgeColor: '#dcfce7',
-          badgeTextColor: '#166534',
+          products: formatNumber(productCount), statusLabel: category?.is_active ? 'Active' : 'En pause',
+          icon: '📦', titleColor: '#166534', descColor: '#14532d', badgeColor: '#dcfce7', badgeTextColor: '#166534',
         }
       })
     )
 
-    // Derniers utilisateurs
     const latestUsers = await User.query().orderBy('created_at', 'desc').limit(10)
-
     const latestUserRows = latestUsers.map((user) => ({
-      id: user.id,
-      name: user.full_name ?? user.email,
-      email: user.email,
-      role: user.role,
-      createdAt: user.created_at?.toFormat('dd LLL yyyy') ?? 'Date inconnue',
+      id: user.id, name: user.full_name ?? user.email, email: user.email,
+      role: user.role, createdAt: user.created_at?.toFormat('dd LLL yyyy') ?? 'Date inconnue',
       initials: getInitials(user.full_name ?? user.email),
     }))
 
     return view.render('pages/dashboards/admin', {
-      adminStats,
-      statusBreakdown,
-      recentOrders,
-      recentSubscriptions: recentSubsList,
-      topCategories,
-      totalOrders,
-      latestUsers: latestUserRows,
+      adminStats, statusBreakdown, recentOrders, recentSubscriptions: recentSubsList,
+      topCategories, totalOrders, latestUsers: latestUserRows,
     })
   }
 
-  // ==================== GESTION DES ABONNEMENTS (ADMIN) ====================
-  
-  /**
-   * Page de gestion des abonnements pour l'admin
-   */
+  // ==================== GESTION DES ABONNEMENTS ====================
   public async subscriptions({ view }: HttpContext) {
-    // Récupérer tous les abonnements avec les utilisateurs
-    const allSubscriptions = await Subscription.query()
-      .orderBy('createdAt', 'desc')
-      .preload('user')
-
-    // Statistiques globales
+    const allSubscriptions = await Subscription.query().orderBy('createdAt', 'desc').preload('user')
     const totalSubscriptions = allSubscriptions.length
     const activeSubscriptions = allSubscriptions.filter(s => s.status === 'active' && s.endDate && s.endDate > DateTime.now())
     const pendingSubscriptions = allSubscriptions.filter(s => s.status === 'pending')
     const cancelledSubscriptions = allSubscriptions.filter(s => s.status === 'cancelled')
     const expiredSubscriptions = allSubscriptions.filter(s => s.status === 'expired' || (s.endDate && s.endDate <= DateTime.now()))
-
-    // Chiffre d'affaires des abonnements
     const totalRevenue = allSubscriptions.reduce((sum, sub) => sum + (sub.price || 0), 0)
     const activeRevenue = activeSubscriptions.reduce((sum, sub) => sum + (sub.price || 0), 0)
 
-    // Répartition par plan
     const planStats: Record<string, { count: number; revenue: number }> = {}
     for (const sub of allSubscriptions) {
-      if (!planStats[sub.plan]) {
-        planStats[sub.plan] = { count: 0, revenue: 0 }
-      }
+      if (!planStats[sub.plan]) planStats[sub.plan] = { count: 0, revenue: 0 }
       planStats[sub.plan].count++
       planStats[sub.plan].revenue += sub.price || 0
     }
 
     const planBreakdown = Object.entries(planStats).map(([plan, stats]) => ({
-      name: SUBSCRIPTION_PLANS[plan]?.name || plan,
-      count: stats.count,
-      revenue: formatMoney(stats.revenue),
-      percent: totalSubscriptions > 0 ? Math.round((stats.count / totalSubscriptions) * 100) : 0,
+      name: SUBSCRIPTION_PLANS[plan]?.name || plan, count: stats.count,
+      revenue: formatMoney(stats.revenue), percent: totalSubscriptions > 0 ? Math.round((stats.count / totalSubscriptions) * 100) : 0,
     }))
 
-    // Répartition par type d'abonnement
     const globalSubscriptions = allSubscriptions.filter(s => s.subscriptionType === 'all_products')
     const productSubscriptions = allSubscriptions.filter(s => s.subscriptionType === 'single_product')
 
-    // Construction de la liste des abonnements
     const subscriptionsList = allSubscriptions.map((sub) => ({
-      id: sub.id,
-      merchantId: sub.userId,
+      id: sub.id, merchantId: sub.userId,
       merchantName: sub.user?.full_name || sub.user?.email || 'Marchand inconnu',
       merchantEmail: sub.user?.email || 'Email inconnu',
-      plan: SUBSCRIPTION_PLANS[sub.plan]?.name || sub.plan,
-      planKey: sub.plan,
-      price: formatMoney(sub.price),
-      status: sub.status,
-      statusLabel: getSubscriptionStatusLabel(sub.status),
-      statusColor: getSubscriptionStatusColor(sub.status),
+      plan: SUBSCRIPTION_PLANS[sub.plan]?.name || sub.plan, planKey: sub.plan,
+      price: formatMoney(sub.price), status: sub.status,
+      statusLabel: getSubscriptionStatusLabel(sub.status), statusColor: getSubscriptionStatusColor(sub.status),
       statusIcon: getSubscriptionStatusIcon(sub.status),
       subscriptionType: sub.subscriptionType === 'all_products' ? '🌍 Global (tous les produits)' : '📦 Produit unique',
       startDate: sub.startDate ? sub.startDate.toFormat('dd LLL yyyy') : 'Non démarré',
       endDate: sub.endDate ? sub.endDate.toFormat('dd LLL yyyy') : 'N/A',
       createdAt: sub.createdAt?.toFormat('dd LLL yyyy HH:mm') ?? 'Date inconnue',
       autoRenew: sub.autoRenew ? '✅ Oui' : '❌ Non',
-      boostedProductsCount: sub.boostedProductsCount || 0,
-      maxProducts: sub.maxProducts || 0,
+      boostedProductsCount: sub.boostedProductsCount || 0, maxProducts: sub.maxProducts || 0,
       daysRemaining: sub.endDate ? Math.max(0, Math.ceil(sub.endDate.diff(DateTime.now(), 'days').days)) : 0,
     }))
 
@@ -383,49 +276,27 @@ export default class DashboardViewController {
     ]
 
     return view.render('pages/dashboards/subscriptions', {
-      statsCards,
-      subscriptions: subscriptionsList,
-      planBreakdown,
-      totalSubscriptions,
-      activeSubscriptionsCount: activeSubscriptions.length,
-      pendingSubscriptionsCount: pendingSubscriptions.length,
+      statsCards, subscriptions: subscriptionsList, planBreakdown, totalSubscriptions,
+      activeSubscriptionsCount: activeSubscriptions.length, pendingSubscriptionsCount: pendingSubscriptions.length,
     })
   }
 
-  /**
-   * Détails d'un abonnement spécifique
-   */
   public async subscriptionDetails({ params, view, response }: HttpContext) {
     try {
-      const subscriptionId = params.id
-      
-      const subscription = await Subscription.query()
-        .where('id', subscriptionId)
-        .preload('user')
-        .first()
+      const subscription = await Subscription.query().where('id', params.id).preload('user').first()
+      if (!subscription) return response.status(404).send('Abonnement non trouvé')
 
-      if (!subscription) {
-        return response.status(404).send('Abonnement non trouvé')
-      }
-
-      // Récupérer les produits boostés par cet abonnement (si single_product)
       let boostedProduct: any = null
       if (subscription.subscriptionType === 'single_product' && subscription.productId) {
         boostedProduct = await Product.find(subscription.productId)
       }
 
-      // Récupérer tous les produits boostés par ce marchand (si global)
       let boostedProducts: any[] = []
       if (subscription.subscriptionType === 'all_products' && subscription.userId) {
-        boostedProducts = await Product.query()
-          .where('user_id', subscription.userId)
-          .where('isBoosted', true)
-          .limit(20)
+        boostedProducts = await Product.query().where('user_id', subscription.userId).where('isBoosted', true).limit(20)
       }
 
-      // Calcul des jours restants
-      let daysRemaining = 0
-      let isExpired = false
+      let daysRemaining = 0, isExpired = false
       if (subscription.endDate) {
         const now = DateTime.now()
         daysRemaining = Math.max(0, Math.ceil(subscription.endDate.diff(now, 'days').days))
@@ -435,133 +306,98 @@ export default class DashboardViewController {
       const subscriptionDetails = {
         id: subscription.id,
         merchant: {
-          id: subscription.user?.id,
-          name: subscription.user?.full_name || subscription.user?.email || 'Marchand inconnu',
-          email: subscription.user?.email,
-          phone: subscription.user?.phone,
+          id: subscription.user?.id, name: subscription.user?.full_name || subscription.user?.email || 'Marchand inconnu',
+          email: subscription.user?.email, phone: subscription.user?.phone,
           shopName: subscription.user?.shop_name || subscription.user?.commercial_name,
         },
         plan: {
-          key: subscription.plan,
-          name: SUBSCRIPTION_PLANS[subscription.plan]?.name || subscription.plan,
-          price: formatMoney(subscription.price),
-          duration: SUBSCRIPTION_PLANS[subscription.plan]?.duration || 0,
+          key: subscription.plan, name: SUBSCRIPTION_PLANS[subscription.plan]?.name || subscription.plan,
+          price: formatMoney(subscription.price), duration: SUBSCRIPTION_PLANS[subscription.plan]?.duration || 0,
           boostMultiplier: SUBSCRIPTION_PLANS[subscription.plan]?.boostMultiplier || 1,
         },
         type: subscription.subscriptionType === 'all_products' ? 'Global (tous les produits)' : 'Produit unique',
-        status: subscription.status,
-        statusLabel: getSubscriptionStatusLabel(subscription.status),
+        status: subscription.status, statusLabel: getSubscriptionStatusLabel(subscription.status),
         statusColor: getSubscriptionStatusColor(subscription.status),
         startDate: subscription.startDate?.toFormat('dd LLL yyyy HH:mm') ?? 'Non démarré',
         endDate: subscription.endDate?.toFormat('dd LLL yyyy HH:mm') ?? 'N/A',
         createdAt: subscription.createdAt?.toFormat('dd LLL yyyy HH:mm') ?? 'Date inconnue',
-        autoRenew: subscription.autoRenew,
-        boostedProductsCount: subscription.boostedProductsCount || 0,
-        maxProducts: subscription.maxProducts || 0,
-        daysRemaining,
-        isExpired,
-        paymentReferenceId: subscription.paymentReferenceId,
-        paymentStatus: subscription.paymentStatus,
-        metadata: subscription.metadata,
-        totalViews: subscription.totalViews || 0,
-        totalClicks: subscription.totalClicks || 0,
+        autoRenew: subscription.autoRenew, boostedProductsCount: subscription.boostedProductsCount || 0,
+        maxProducts: subscription.maxProducts || 0, daysRemaining, isExpired,
+        paymentReferenceId: subscription.paymentReferenceId, paymentStatus: subscription.paymentStatus,
+        metadata: subscription.metadata, totalViews: subscription.totalViews || 0, totalClicks: subscription.totalClicks || 0,
       }
 
-      return view.render('pages/dashboards/subscription-details', {
-        subscription: subscriptionDetails,
-        boostedProduct,
-        boostedProducts,
-      })
+      return view.render('pages/dashboards/subscription-details', { subscription: subscriptionDetails, boostedProduct, boostedProducts })
     } catch (error) {
       console.error('Error loading subscription details:', error)
       return response.status(500).send('Erreur lors du chargement des détails')
     }
   }
 
-  /**
-   * API: Récupérer tous les abonnements (format JSON)
-   */
   public async apiGetAllSubscriptions({ response }: HttpContext) {
-    const subscriptions = await Subscription.query()
-      .orderBy('createdAt', 'desc')
-      .preload('user')
-
+    const subscriptions = await Subscription.query().orderBy('createdAt', 'desc').preload('user')
     const data = subscriptions.map((sub) => ({
-      id: sub.id,
-      merchantName: sub.user?.full_name || sub.user?.email,
-      merchantEmail: sub.user?.email,
-      plan: sub.plan,
-      planName: SUBSCRIPTION_PLANS[sub.plan]?.name,
-      price: sub.price,
-      status: sub.status,
-      subscriptionType: sub.subscriptionType,
-      startDate: sub.startDate,
-      endDate: sub.endDate,
-      createdAt: sub.createdAt,
-      autoRenew: sub.autoRenew,
+      id: sub.id, merchantName: sub.user?.full_name || sub.user?.email, merchantEmail: sub.user?.email,
+      plan: sub.plan, planName: SUBSCRIPTION_PLANS[sub.plan]?.name, price: sub.price,
+      status: sub.status, subscriptionType: sub.subscriptionType, startDate: sub.startDate,
+      endDate: sub.endDate, createdAt: sub.createdAt, autoRenew: sub.autoRenew,
     }))
-
     return response.json({ success: true, data })
   }
 
-  /**
-   * API: Récupérer les abonnements d'un marchand spécifique
-   */
   public async apiGetMerchantSubscriptions({ params, response }: HttpContext) {
-    const subscriptions = await Subscription.query()
-      .where('userId', params.userId)
-      .orderBy('createdAt', 'desc')
-      .preload('user')
-
+    const subscriptions = await Subscription.query().where('userId', params.userId).orderBy('createdAt', 'desc').preload('user')
     const data = subscriptions.map((sub) => ({
-      id: sub.id,
-      plan: sub.plan,
-      planName: SUBSCRIPTION_PLANS[sub.plan]?.name,
-      price: sub.price,
-      status: sub.status,
-      subscriptionType: sub.subscriptionType,
-      startDate: sub.startDate,
-      endDate: sub.endDate,
-      createdAt: sub.createdAt,
-      autoRenew: sub.autoRenew,
+      id: sub.id, plan: sub.plan, planName: SUBSCRIPTION_PLANS[sub.plan]?.name,
+      price: sub.price, status: sub.status, subscriptionType: sub.subscriptionType,
+      startDate: sub.startDate, endDate: sub.endDate, createdAt: sub.createdAt, autoRenew: sub.autoRenew,
     }))
-
     return response.json({ success: true, data })
   }
 
-  /**
-   * API: Statistiques globales des abonnements
-   */
   public async apiGetSubscriptionStats({ response }: HttpContext) {
     const allSubscriptions = await Subscription.query()
-    
     const total = allSubscriptions.length
     const active = allSubscriptions.filter(s => s.status === 'active' && s.endDate && s.endDate > DateTime.now()).length
     const pending = allSubscriptions.filter(s => s.status === 'pending').length
     const cancelled = allSubscriptions.filter(s => s.status === 'cancelled').length
     const expired = allSubscriptions.filter(s => s.status === 'expired' || (s.endDate && s.endDate <= DateTime.now())).length
-    
     const totalRevenue = allSubscriptions.reduce((sum, sub) => sum + (sub.price || 0), 0)
     const activeRevenue = allSubscriptions.filter(s => s.status === 'active').reduce((sum, sub) => sum + (sub.price || 0), 0)
-
     const planStats: Record<string, number> = {}
-    for (const sub of allSubscriptions) {
-      planStats[sub.plan] = (planStats[sub.plan] || 0) + 1
-    }
+    for (const sub of allSubscriptions) planStats[sub.plan] = (planStats[sub.plan] || 0) + 1
 
-    return response.json({
-      success: true,
-      data: {
-        total,
-        active,
-        pending,
-        cancelled,
-        expired,
-        totalRevenue,
-        activeRevenue,
-        planDistribution: planStats,
-      }
-    })
+    return response.json({ success: true, data: { total, active, pending, cancelled, expired, totalRevenue, activeRevenue, planDistribution: planStats } })
+  }
+
+  public async apiGetSubscriptionById({ params, response }: HttpContext) {
+    try {
+      const subscription = await Subscription.query().where('id', params.id).preload('user').first()
+      if (!subscription) return response.status(404).json({ success: false, message: 'Abonnement non trouvé' })
+      
+      let daysRemaining = 0
+      if (subscription.endDate) daysRemaining = Math.max(0, Math.ceil(subscription.endDate.diff(DateTime.now(), 'days').days))
+      
+      return response.json({
+        success: true, data: {
+          id: subscription.id, merchantName: subscription.user?.full_name || subscription.user?.email || 'Marchand inconnu',
+          merchantEmail: subscription.user?.email || 'Email inconnu', planName: SUBSCRIPTION_PLANS[subscription.plan]?.name || subscription.plan,
+          price: formatMoney(subscription.price), duration: SUBSCRIPTION_PLANS[subscription.plan]?.duration || 0,
+          boostMultiplier: SUBSCRIPTION_PLANS[subscription.plan]?.boostMultiplier || 1, status: subscription.status,
+          statusLabel: getSubscriptionStatusLabel(subscription.status), statusColor: getSubscriptionStatusColor(subscription.status),
+          statusIcon: getSubscriptionStatusIcon(subscription.status), subscriptionType: subscription.subscriptionType,
+          boostedProductsCount: subscription.boostedProductsCount || 0, maxProducts: subscription.maxProducts || 0,
+          autoRenew: subscription.autoRenew, startDate: subscription.startDate?.toFormat('dd LLL yyyy') || null,
+          endDate: subscription.endDate?.toFormat('dd LLL yyyy') || null, daysRemaining: daysRemaining,
+          totalViews: subscription.totalViews || 0, totalClicks: subscription.totalClicks || 0,
+          paymentReferenceId: subscription.paymentReferenceId, paymentStatus: subscription.paymentStatus,
+          createdAt: subscription.createdAt?.toFormat('dd LLL yyyy HH:mm') || null,
+        }
+      })
+    } catch (error) {
+      console.error('❌ Erreur API subscription details:', error)
+      return response.status(500).json({ success: false, message: 'Erreur serveur' })
+    }
   }
 
   // ==================== SECRETARY DASHBOARD ====================
@@ -573,11 +409,8 @@ export default class DashboardViewController {
     const [packagingRows, paymentRows, dailyDeliveryRows] = await Promise.all([
       Order.query().whereIn('status', ['pending', 'processing']).count('* as total') as unknown as CountRow[],
       Order.query().whereIn('status', ['pending_payment', 'payment_failed']).count('* as total') as unknown as CountRow[],
-      Order.query()
-        .whereNotNull('estimated_delivery')
-        .where('estimated_delivery', '>=', startOfDay.toISO({ includeOffset: false }))
-        .where('estimated_delivery', '<', endOfDay.toISO({ includeOffset: false }))
-        .count('* as total') as unknown as CountRow[],
+      Order.query().whereNotNull('estimated_delivery').where('estimated_delivery', '>=', startOfDay.toISO({ includeOffset: false }))
+        .where('estimated_delivery', '<', endOfDay.toISO({ includeOffset: false })).count('* as total') as unknown as CountRow[],
     ])
 
     const queueStats = [
@@ -590,60 +423,30 @@ export default class DashboardViewController {
     const followUps = followUpOrders.map((order) => {
       const meta = STATUS_META[order.status] ?? DEFAULT_STATUS_META
       return {
-        number: order.order_number,
-        customer: order.customer_name ?? order.customer_email ?? 'Client inconnu',
-        statusLabel: meta.label,
-        statusTone: meta.toneClass,
-        due: order.estimated_delivery?.toFormat('dd LLL') ?? 'Pas de date',
-        remark: order.admin_notes ?? 'Vérifier le paiement ou la disponibilité',
-        total: formatMoney(order.total),
+        number: order.order_number, customer: order.customer_name ?? order.customer_email ?? 'Client inconnu',
+        statusLabel: meta.label, statusTone: meta.toneClass, due: order.estimated_delivery?.toFormat('dd LLL') ?? 'Pas de date',
+        remark: order.admin_notes ?? 'Vérifier le paiement ou la disponibilité', total: formatMoney(order.total),
       }
     })
 
-    const upcomingDeliveriesRaw = await Order.query()
-      .whereNotNull('estimated_delivery')
-      .whereNotNull('shipping_carrier')
-      .where('status', '!=', 'cancelled')
-      .orderBy('estimated_delivery', 'asc')
-      .limit(20)
-
+    const upcomingDeliveriesRaw = await Order.query().whereNotNull('estimated_delivery').whereNotNull('shipping_carrier')
+      .where('status', '!=', 'cancelled').orderBy('estimated_delivery', 'asc').limit(20)
     const upcomingDeliveries = upcomingDeliveriesRaw.map((order) => ({
-      number: order.order_number,
-      carrier: order.shipping_carrier ?? 'Transport non précisé',
+      number: order.order_number, carrier: order.shipping_carrier ?? 'Transport non précisé',
       eta: order.estimated_delivery?.toFormat('dd LLL HH:mm') ?? 'À confirmer',
-      status: (STATUS_META[order.status] ?? DEFAULT_STATUS_META).label,
-      destination: shortAddress(order.shipping_address),
+      status: (STATUS_META[order.status] ?? DEFAULT_STATUS_META).label, destination: shortAddress(order.shipping_address),
     }))
 
-    return view.render('pages/dashboards/secretary', {
-      queueStats,
-      followUps,
-      upcomingDeliveries,
-      todayLabel: startOfDay.toFormat('dd LLL yyyy'),
-    })
+    return view.render('pages/dashboards/secretary', { queueStats, followUps, upcomingDeliveries, todayLabel: startOfDay.toFormat('dd LLL yyyy') })
   }
 
   // ==================== MANAGER DASHBOARD ====================
   public async manager({ view }: HttpContext) {
-    const [
-      preparing,
-      blocked,
-      delayed,
-      shippingRegions,
-      priorityOrders,
-    ] = await Promise.all([
+    const [preparing, blocked, delayed, shippingRegions, priorityOrders] = await Promise.all([
       Order.query().whereIn('status', ['pending', 'processing']).count('* as total') as unknown as CountRow[],
       Order.query().where('status', 'processing').count('* as total') as unknown as CountRow[],
-      Order.query()
-        .where('status', 'shipped')
-        .where('estimated_delivery', '<', DateTime.local().minus({ hours: 1 }).toISO())
-        .count('* as total') as unknown as CountRow[],
-      Order.query()
-        .select('shipping_carrier')
-        .count('id as total')
-        .groupBy('shipping_carrier')
-        .orderBy('total', 'desc')
-        .catch(() => [] as Array<{ shipping_carrier: string | null; total: number }>),
+      Order.query().where('status', 'shipped').where('estimated_delivery', '<', DateTime.local().minus({ hours: 1 }).toISO()).count('* as total') as unknown as CountRow[],
+      Order.query().select('shipping_carrier').count('id as total').groupBy('shipping_carrier').orderBy('total', 'desc').catch(() => [] as Array<{ shipping_carrier: string | null; total: number }>),
       Order.query().whereIn('status', ['pending', 'processing']).orderBy('created_at', 'desc').limit(10),
     ])
 
@@ -653,91 +456,52 @@ export default class DashboardViewController {
       { title: 'Livraisons retardées', value: formatNumber(toNumber(delayed[0]?.total)), detail: 'Destination prévue dépassée' },
     ]
 
-    const regionRows = (shippingRegions as Array<{ shipping_carrier: string | null; total: number }>).map(
-      (row) => ({ carrier: row.shipping_carrier ?? 'Transporteur inconnu', total: formatNumber(row.total) })
-    )
+    const regionRows = (shippingRegions as Array<{ shipping_carrier: string | null; total: number }>).map(row => ({ carrier: row.shipping_carrier ?? 'Transporteur inconnu', total: formatNumber(row.total) }))
+    const priorityRows = (priorityOrders as unknown as Order[]).map(order => ({ number: order.order_number, status: (STATUS_META[order.status] ?? DEFAULT_STATUS_META).label, total: formatMoney(order.total), customer: order.customer_name ?? order.customer_email ?? 'Client inconnu' }))
 
-    const priorityRows = (priorityOrders as unknown as Order[]).map((order) => ({
-      number: order.order_number,
-      status: (STATUS_META[order.status] ?? DEFAULT_STATUS_META).label,
-      total: formatMoney(order.total),
-      customer: order.customer_name ?? order.customer_email ?? 'Client inconnu',
-    }))
-
-    return view.render('pages/dashboards/manager', {
-      managerStats,
-      regionRows,
-      priorityRows,
-      timestamp: DateTime.local().toFormat('dd LLL yyyy HH:mm'),
-    })
+    return view.render('pages/dashboards/manager', { managerStats, regionRows, priorityRows, timestamp: DateTime.local().toFormat('dd LLL yyyy HH:mm') })
   }
 
   // ==================== SHOPS DASHBOARD ====================
   public async shops({ view }: HttpContext) {
     try {
-      const merchants = await User.query()
-        .where('role', 'marchant')
-        .orWhere('role', 'merchant')
-        .orWhere('role', 'marchand')
-
+      const merchants = await User.query().where('role', 'marchant').orWhere('role', 'merchant').orWhere('role', 'marchand')
       const totalMerchants = merchants.length
       const verifiedMerchants = merchants.filter(m => m.is_verified === true).length
       const pendingMerchants = merchants.filter(m => m.is_verified !== true).length
-      
       const allProducts = await Product.query().where('is_archived', false)
       const totalProducts = allProducts.length
 
       const formattedMerchants = merchants.map((merchant) => ({
-        id: merchant.id,
-        full_name: merchant.full_name || merchant.email,
-        email: merchant.email,
+        id: merchant.id, full_name: merchant.full_name || merchant.email, email: merchant.email,
         shop_name: merchant.shop_name || merchant.commercial_name || merchant.full_name || 'Boutique',
-        phone: merchant.phone || 'Non renseigné',
-        logo_url: merchant.logo_url || null,
-        is_verified: merchant.is_verified ?? false,
-        verification_status: merchant.verification_status || 'pending',
-        products_count: 0,
-        created_at: merchant.created_at?.toFormat('dd/MM/yyyy') || 'Date inconnue',
+        phone: merchant.phone || 'Non renseigné', logo_url: merchant.logo_url || null,
+        is_verified: merchant.is_verified ?? false, verification_status: merchant.verification_status || 'pending',
+        products_count: 0, created_at: merchant.created_at?.toFormat('dd/MM/yyyy') || 'Date inconnue',
       }))
 
-      return view.render('pages/dashboards/shops', {
-        merchants: formattedMerchants,
-        totalMerchants,
-        verifiedMerchants,
-        pendingMerchants,
-        totalProducts,
-      })
+      return view.render('pages/dashboards/shops', { merchants: formattedMerchants, totalMerchants, verifiedMerchants, pendingMerchants, totalProducts })
     } catch (error) {
       console.error('❌ ERREUR COMPLÈTE:', error)
-      return view.render('pages/dashboards/shops', {
-        merchants: [],
-        totalMerchants: 0,
-        verifiedMerchants: 0,
-        pendingMerchants: 0,
-        totalProducts: 0,
-      })
+      return view.render('pages/dashboards/shops', { merchants: [], totalMerchants: 0, verifiedMerchants: 0, pendingMerchants: 0, totalProducts: 0 })
     }
   }
 
   // ==================== PROMOTIONS DASHBOARD ====================
   public async promotions({ view }: HttpContext) {
-    const [
-      coupons,
-      couponUsages,
-      topUsers,
-    ] = await Promise.all([
+    const [coupons, couponUsages, topUsers] = await Promise.all([
       Coupon.query().where('status', 'active').orderBy('created_at', 'desc'),
-      Order.query().whereNotNull('coupon_id').orderBy('created_at', 'desc').limit(50).preload('user').preload('items', (query) => { query.preload('product') }),
+      Order.query().whereNotNull('coupon_id').orderBy('created_at', 'desc').limit(50).preload('user').preload('items', (q) => q.preload('product')),
       Order.query().whereNotNull('coupon_id').select('user_id').count('id as total_uses').groupBy('user_id').orderBy('total_uses', 'desc').limit(10).preload('user'),
     ])
 
     const couponMap = new Map()
-    for (const coupon of coupons) { couponMap.set(coupon.id, coupon) }
+    for (const coupon of coupons) couponMap.set(coupon.id, coupon)
 
     const totalCoupons = coupons.length
-    const totalUsed = coupons.reduce((acc, coupon) => acc + (coupon.used_count ?? 0), 0)
+    const totalUsed = coupons.reduce((acc, c) => acc + (c.used_count ?? 0), 0)
     const averageUsage = totalCoupons > 0 ? Math.round(totalUsed / totalCoupons) : 0
-    const averageDiscount = totalCoupons > 0 ? Math.round(coupons.reduce((acc, coupon) => acc + (coupon.discount ?? 0), 0) / totalCoupons) : 0
+    const averageDiscount = totalCoupons > 0 ? Math.round(coupons.reduce((acc, c) => acc + (c.discount ?? 0), 0) / totalCoupons) : 0
 
     const promoStats = [
       { title: 'Codes actifs', value: formatNumber(totalCoupons), detail: 'À jour', icon: '🎟️' },
@@ -747,13 +511,10 @@ export default class DashboardViewController {
     ]
 
     const couponRows = coupons.map((coupon) => ({
-      code: coupon.code,
-      type: coupon.type === 'percentage' ? 'Pourcentage' : 'Montant fixe',
+      code: coupon.code, type: coupon.type === 'percentage' ? 'Pourcentage' : 'Montant fixe',
       discount: coupon.type === 'percentage' ? `${coupon.discount}%` : formatMoney(coupon.discount ?? 0),
-      usage_count: coupon.used_count ?? 0,
-      max_uses: (coupon as any).max_uses ?? null,
-      status: coupon.status,
-      created_at: coupon.created_at?.toFormat('dd LLL yyyy') ?? 'Date inconnue',
+      usage_count: coupon.used_count ?? 0, max_uses: (coupon as any).max_uses ?? null,
+      status: coupon.status, created_at: coupon.created_at?.toFormat('dd LLL yyyy') ?? 'Date inconnue',
       expires_at: (coupon as any).expires_at?.toFormat('dd LLL yyyy') ?? 'Jamais',
     }))
 
@@ -761,10 +522,7 @@ export default class DashboardViewController {
     for (const order of couponUsages as any[]) {
       const coupon = couponMap.get(order.coupon_id)
       if (coupon) {
-        let discountAmount = 0
-        if (coupon.type === 'percentage') { discountAmount = (order.total * (coupon.discount ?? 0)) / 100 }
-        else { discountAmount = coupon.discount ?? 0 }
-
+        let discountAmount = coupon.type === 'percentage' ? (order.total * (coupon.discount ?? 0)) / 100 : coupon.discount ?? 0
         for (const item of order.items || []) {
           if (item.product) {
             couponUsagesList.push({
@@ -772,11 +530,9 @@ export default class DashboardViewController {
               user_name: order.user?.full_name ?? order.customer_name ?? 'Client inconnu',
               user_email: order.user?.email ?? order.customer_email ?? 'Email inconnu',
               user_initials: getInitials(order.user?.full_name ?? order.customer_name ?? 'Client'),
-              coupon_code: coupon.code,
-              product_name: item.product.name ?? 'Produit inconnu',
+              coupon_code: coupon.code, product_name: item.product.name ?? 'Produit inconnu',
               product_category: item.product.category?.name ?? 'Non catégorisé',
-              discount_amount: formatMoney(discountAmount),
-              order_total: formatMoney(order.total),
+              discount_amount: formatMoney(discountAmount), order_total: formatMoney(order.total),
             })
             break
           }
@@ -788,11 +544,9 @@ export default class DashboardViewController {
       const usedCount = coupon.used_count ?? 0
       const maxUses = (coupon as any).max_uses ?? 0
       return {
-        coupon_code: coupon.code,
-        type: coupon.type === 'percentage' ? 'Pourcentage' : 'Montant fixe',
+        coupon_code: coupon.code, type: coupon.type === 'percentage' ? 'Pourcentage' : 'Montant fixe',
         discount: coupon.type === 'percentage' ? `${coupon.discount}%` : formatMoney(coupon.discount ?? 0),
-        count: usedCount,
-        remaining: maxUses > 0 ? Math.max(0, maxUses - usedCount) : 'Illimité',
+        count: usedCount, remaining: maxUses > 0 ? Math.max(0, maxUses - usedCount) : 'Illimité',
         usage_percent: maxUses > 0 ? Math.min(100, Math.round((usedCount / maxUses) * 100)) : Math.min(100, Math.round((usedCount / 100) * 100)),
       }
     })
@@ -801,120 +555,52 @@ export default class DashboardViewController {
     for (const row of topUsers as any[]) {
       if (row.user) {
         topCouponUsers.push({
-          name: row.user.full_name ?? row.user.email,
-          email: row.user.email,
+          name: row.user.full_name ?? row.user.email, email: row.user.email,
           initials: getInitials(row.user.full_name ?? row.user.email),
-          coupons_used: Number(row.$extras.total_uses ?? 0),
-          total_saved: formatMoney(0),
-          last_product: 'Aucun achat',
+          coupons_used: Number(row.$extras.total_uses ?? 0), total_saved: formatMoney(0), last_product: 'Aucun achat',
         })
       }
     }
 
-    return view.render('pages/dashboards/promotions', {
-      promoStats,
-      couponRows,
-      redemptionStats,
-      couponUsages: couponUsagesList.slice(0, 50),
-      topCouponUsers,
-    })
+    return view.render('pages/dashboards/promotions', { promoStats, couponRows, redemptionStats, couponUsages: couponUsagesList.slice(0, 50), topCouponUsers })
   }
 
   // ==================== REFUND DASHBOARD ====================
   public async refund({ view }: HttpContext) {
     try {
-      const [
-        totalRefunds,
-        pendingRefunds,
-        approvedRefunds,
-        completedRefunds,
-        recentRefunds
-      ] = await Promise.all([
+      const [totalRefunds, pendingRefunds, approvedRefunds, completedRefunds, recentRefunds] = await Promise.all([
         Order.query().where('status', 'refunded').count('* as total'),
         Order.query().where('status', 'refund_requested').count('* as total'),
         Order.query().where('status', 'refund_approved').count('* as total'),
         Order.query().where('status', 'refund_completed').count('* as total'),
-        Order.query()
-          .whereIn('status', ['refund_requested', 'refund_approved', 'refunded'])
-          .orderBy('created_at', 'desc')
-          .limit(10)
-          .preload('user')
+        Order.query().whereIn('status', ['refund_requested', 'refund_approved', 'refunded']).orderBy('created_at', 'desc').limit(10).preload('user'),
       ])
 
       const refundStats = [
-        {
-          title: 'Total des remboursements',
-          value: formatNumber(toNumber((totalRefunds as any)[0]?.$extras?.total || 0)),
-          detail: 'Tous statuts confondus',
-          icon: '💰'
-        },
-        {
-          title: 'Remboursements en attente',
-          value: formatNumber(toNumber((pendingRefunds as any)[0]?.$extras?.total || 0)),
-          detail: 'À traiter',
-          icon: '⏳'
-        },
-        {
-          title: 'Remboursements approuvés',
-          value: formatNumber(toNumber((approvedRefunds as any)[0]?.$extras?.total || 0)),
-          detail: 'En cours de traitement',
-          icon: '✅'
-        },
-        {
-          title: 'Remboursements complétés',
-          value: formatNumber(toNumber((completedRefunds as any)[0]?.$extras?.total || 0)),
-          detail: 'Terminés',
-          icon: '🎉'
-        },
+        { title: 'Total des remboursements', value: formatNumber(toNumber((totalRefunds as any)[0]?.$extras?.total || 0)), detail: 'Tous statuts confondus', icon: '💰' },
+        { title: 'Remboursements en attente', value: formatNumber(toNumber((pendingRefunds as any)[0]?.$extras?.total || 0)), detail: 'À traiter', icon: '⏳' },
+        { title: 'Remboursements approuvés', value: formatNumber(toNumber((approvedRefunds as any)[0]?.$extras?.total || 0)), detail: 'En cours de traitement', icon: '✅' },
+        { title: 'Remboursements complétés', value: formatNumber(toNumber((completedRefunds as any)[0]?.$extras?.total || 0)), detail: 'Terminés', icon: '🎉' },
       ]
 
       const recentRefundRequests = (recentRefunds as Order[]).map((order) => ({
-        id: order.id,
-        order_number: order.order_number,
-        customer: order.customer_name ?? order.user?.full_name ?? 'Client inconnu',
-        total: formatMoney(order.total),
-        status: order.status,
-        statusLabel: this.getRefundStatusLabel(order.status),
-        statusColor: this.getRefundStatusColor(order.status),
-        requested_at: order.created_at?.toFormat('dd LLL yyyy HH:mm') ?? 'Date inconnue',
+        id: order.id, order_number: order.order_number, customer: order.customer_name ?? order.user?.full_name ?? 'Client inconnu',
+        total: formatMoney(order.total), status: order.status, statusLabel: this.getRefundStatusLabel(order.status),
+        statusColor: this.getRefundStatusColor(order.status), requested_at: order.created_at?.toFormat('dd LLL yyyy HH:mm') ?? 'Date inconnue',
       }))
 
-      return view.render('pages/dashboards/refund', {
-        refundStats,
-        recentRefunds: recentRefundRequests,
-        totalRefunds: toNumber((totalRefunds as any)[0]?.$extras?.total || 0)
-      })
+      return view.render('pages/dashboards/refund', { refundStats, recentRefunds: recentRefundRequests, totalRefunds: toNumber((totalRefunds as any)[0]?.$extras?.total || 0) })
     } catch (error) {
       console.error('Error loading refund dashboard:', error)
-      return view.render('pages/dashboards/refund', {
-        refundStats: [
-          { title: 'Total remboursements', value: '0', detail: 'Aucune donnée', icon: '💰' },
-          { title: 'En attente', value: '0', detail: 'Aucune donnée', icon: '⏳' },
-          { title: 'Approuvés', value: '0', detail: 'Aucune donnée', icon: '✅' },
-          { title: 'Complétés', value: '0', detail: 'Aucune donnée', icon: '🎉' },
-        ],
-        recentRefunds: [],
-        totalRefunds: 0
-      })
+      return view.render('pages/dashboards/refund', { refundStats: [], recentRefunds: [], totalRefunds: 0 })
     }
   }
 
   // ==================== REFUND DETAILS DASHBOARD ====================
   public async refundDetails({ view, params, response }: HttpContext) {
     try {
-      const orderId = params.id
-
-      const order = await Order.query()
-        .where('id', orderId)
-        .preload('user')
-        .preload('items', (query) => {
-          query.preload('product')
-        })
-        .first()
-
-      if (!order) {
-        return response.status(404).send('Commande non trouvée')
-      }
+      const order = await Order.query().where('id', params.id).preload('user').preload('items', (q) => q.preload('product')).first()
+      if (!order) return response.status(404).send('Commande non trouvée')
 
       const subtotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
       const tax = (order as any).tax_amount || 0
@@ -923,61 +609,41 @@ export default class DashboardViewController {
       const total = order.total || 0
 
       const refundInfo = {
-        is_refundable: this.isOrderRefundable(order),
-        refund_status: (order as any).refund_status || 'not_requested',
-        refund_amount: (order as any).refund_amount || 0,
-        refund_reason: (order as any).refund_reason || null,
-        refund_requested_at: (order as any).refund_requested_at,
-        refund_approved_at: (order as any).refund_approved_at,
-        refund_completed_at: (order as any).refund_completed_at,
-        refund_rejection_reason: (order as any).refund_rejection_reason || null
+        is_refundable: this.isOrderRefundable(order), refund_status: (order as any).refund_status || 'not_requested',
+        refund_amount: (order as any).refund_amount || 0, refund_reason: (order as any).refund_reason || null,
+        refund_requested_at: (order as any).refund_requested_at, refund_approved_at: (order as any).refund_approved_at,
+        refund_completed_at: (order as any).refund_completed_at, refund_rejection_reason: (order as any).refund_rejection_reason || null,
       }
 
       const customerDetails = {
-        name: order.user?.full_name || order.customer_name || 'Client inconnu',
-        email: order.user?.email || order.customer_email || 'Email inconnu',
-        phone: order.user?.phone || order.customer_phone || 'Non renseigné',
-        address: order.shipping_address || 'Adresse non renseignée'
+        name: order.user?.full_name || order.customer_name || 'Client inconnu', email: order.user?.email || order.customer_email || 'Email inconnu',
+        phone: order.user?.phone || order.customer_phone || 'Non renseigné', address: order.shipping_address || 'Adresse non renseignée',
       }
 
       const deliveryDetails = {
-        carrier: order.shipping_carrier || 'Non spécifié',
-        tracking_number: order.tracking_number || 'Non disponible',
+        carrier: order.shipping_carrier || 'Non spécifié', tracking_number: order.tracking_number || 'Non disponible',
         estimated_delivery: order.estimated_delivery?.toFormat('dd LLL yyyy HH:mm') || 'Non planifiée',
-        actual_delivery: (order as any).actual_delivery?.toFormat('dd LLL yyyy HH:mm') || 'Non livrée'
+        actual_delivery: (order as any).actual_delivery?.toFormat('dd LLL yyyy HH:mm') || 'Non livrée',
       }
 
       const refundEligibility = this.checkRefundEligibility(order)
 
       return view.render('pages/dashboards/refund-details', {
         order: {
-          id: order.id,
-          order_number: order.order_number,
-          status: order.status,
+          id: order.id, order_number: order.order_number, status: order.status,
           statusLabel: STATUS_META[order.status]?.label || 'Statut inconnu',
           statusColor: STATUS_META[order.status]?.barClass?.replace('bg-', '#') || '#6b7280',
           created_at: order.created_at?.toFormat('dd LLL yyyy HH:mm') ?? 'Date inconnue',
-          updated_at: order.updated_at?.toFormat('dd LLL yyyy HH:mm') ?? 'Date inconnue'
+          updated_at: order.updated_at?.toFormat('dd LLL yyyy HH:mm') ?? 'Date inconnue',
         },
         customer: customerDetails,
         items: order.items.map(item => ({
-          id: item.id,
-          product_name: item.product?.name || 'Produit inconnu',
-          product_image: item.product?.image_url || '/default-product.jpg',
-          quantity: item.quantity,
-          price: formatMoney(item.price),
-          total: formatMoney(item.price * item.quantity)
+          id: item.id, product_name: item.product?.name || 'Produit inconnu',
+          product_image: item.product?.image_url || '/default-product.jpg', quantity: item.quantity,
+          price: formatMoney(item.price), total: formatMoney(item.price * item.quantity),
         })),
-        totals: {
-          subtotal: formatMoney(subtotal),
-          tax: formatMoney(tax),
-          shipping: formatMoney(shipping),
-          discount: formatMoney(discount),
-          total: formatMoney(total)
-        },
-        delivery: deliveryDetails,
-        refund: refundInfo,
-        eligibility: refundEligibility,
+        totals: { subtotal: formatMoney(subtotal), tax: formatMoney(tax), shipping: formatMoney(shipping), discount: formatMoney(discount), total: formatMoney(total) },
+        delivery: deliveryDetails, refund: refundInfo, eligibility: refundEligibility,
       })
     } catch (error) {
       console.error('Error loading refund details:', error)
@@ -988,68 +654,61 @@ export default class DashboardViewController {
   // ==================== PAYPAL DASHBOARD ====================
   public async paypal({ view }: HttpContext) {
     try {
-      const paypalOrders = await Order.query()
-        .where('payment_method', 'paypal')
-        .orderBy('created_at', 'desc')
-        .limit(20)
-        .preload('user')
-
-      const totalPaypalPayments = await Order.query()
-        .where('payment_method', 'paypal')
-        .where('payment_status', 'completed')
-        .sum('total as total')
-
+      const paypalOrders = await Order.query().where('payment_method', 'paypal').orderBy('created_at', 'desc').limit(20).preload('user')
+      const totalPaypalPayments = await Order.query().where('payment_method', 'paypal').where('payment_status', 'completed').sum('total as total')
       const totalPaypalAmount = totalPaypalPayments[0]?.$extras?.total || 0
 
       const paypalStats = [
-        {
-          title: 'Transactions PayPal',
-          value: formatNumber(paypalOrders.length),
-          detail: 'Nombre total de transactions',
-          icon: '💳'
-        },
-        {
-          title: 'Montant total',
-          value: formatMoney(Number(totalPaypalAmount)),
-          detail: 'Chiffre d\'affaires PayPal',
-          icon: '💰'
-        },
-        {
-          title: 'Taux de conversion',
-          value: '98%',
-          detail: 'Paiements réussis',
-          icon: '📊'
-        }
+        { title: 'Transactions PayPal', value: formatNumber(paypalOrders.length), detail: 'Nombre total de transactions', icon: '💳' },
+        { title: 'Montant total', value: formatMoney(Number(totalPaypalAmount)), detail: 'Chiffre d\'affaires PayPal', icon: '💰' },
+        { title: 'Taux de conversion', value: '98%', detail: 'Paiements réussis', icon: '📊' },
       ]
 
       const recentPaypalTransactions = paypalOrders.map((order) => ({
-        id: order.id,
-        order_number: order.order_number,
-        customer: order.user?.full_name || order.customer_name || 'Client inconnu',
-        amount: formatMoney(order.total),
-        status: order.payment_status,
-        paypal_order_id: (order as any).paypal_order_id,
-        created_at: order.created_at?.toFormat('dd LLL yyyy HH:mm') ?? 'Date inconnue'
+        id: order.id, order_number: order.order_number, customer: order.user?.full_name || order.customer_name || 'Client inconnu',
+        amount: formatMoney(order.total), status: order.payment_status, paypal_order_id: (order as any).paypal_order_id,
+        created_at: order.created_at?.toFormat('dd LLL yyyy HH:mm') ?? 'Date inconnue',
       }))
 
-      return view.render('pages/dashboards/paypal', {
-        paypalStats,
-        recentTransactions: recentPaypalTransactions,
-        totalTransactions: paypalOrders.length,
-        clientId: env.get('PAYPAL_CLIENT_ID')
-      })
+      return view.render('pages/dashboards/paypal', { paypalStats, recentTransactions: recentPaypalTransactions, totalTransactions: paypalOrders.length, clientId: env.get('PAYPAL_CLIENT_ID') })
     } catch (error) {
       console.error('Error loading PayPal dashboard:', error)
-      return view.render('pages/dashboards/paypal', {
-        paypalStats: [
-          { title: 'Transactions PayPal', value: '0', detail: 'Aucune transaction', icon: '💳' },
-          { title: 'Montant total', value: '0 FCFA', detail: 'Aucun montant', icon: '💰' },
-          { title: 'Taux de conversion', value: '0%', detail: 'Aucune donnée', icon: '📊' },
-        ],
-        recentTransactions: [],
-        totalTransactions: 0,
-        clientId: env.get('PAYPAL_CLIENT_ID')
-      })
+      return view.render('pages/dashboards/paypal', { paypalStats: [], recentTransactions: [], totalTransactions: 0, clientId: env.get('PAYPAL_CLIENT_ID') })
+    }
+  }
+
+  // ==================== CONTRAT MARCHAND ====================
+
+  public async sendContractEmail({ params, response }: HttpContext) {
+    try {
+      const merchant = await User.find(params.id)
+      if (!merchant) return response.status(404).json({ success: false, message: 'Marchand non trouvé' })
+      if (!['merchant', 'marchant'].includes(merchant.role)) return response.status(400).json({ success: false, message: 'Cet utilisateur n\'est pas un marchand' })
+      if (!merchant.is_verified) return response.status(400).json({ success: false, message: 'Le marchand n\'est pas encore vérifié' })
+      const result = await ContractService.sendContractEmail(merchant)
+      return response.json({ success: result.success, message: result.message })
+    } catch (error: any) {
+      return response.status(500).json({ success: false, message: 'Erreur lors de l\'envoi du contrat', error: error.message })
+    }
+  }
+
+  public async signContract({ params, request, response }: HttpContext) {
+    try {
+      const result = await ContractService.signContract(params.id, request.ip())
+      if (!result.success) {
+        return response.status(400).send(`<!DOCTYPE html><html><head><title>Erreur - EDEN</title><meta charset="UTF-8"></head><body style="font-family:Arial;text-align:center;padding:50px"><h1 style="color:#ef4444;">❌ Erreur</h1><p>${result.message}</p><a href="${env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')}/dashboard/merchant" style="background:#2d6a4f;color:white;padding:10px 20px;text-decoration:none;border-radius:5px">Retour</a></body></html>`)
+      }
+      return response.send(`<!DOCTYPE html><html><head><title>Contrat signé - EDEN</title><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Georgia,serif;background:linear-gradient(135deg,#f5f5f5,#e8f5e9);min-height:100vh;display:flex;justify-content:center;align-items:center;margin:0;padding:20px}.confirmation-card{background:white;border-radius:20px;padding:40px;max-width:500px;text-align:center;box-shadow:0 20px 40px rgba(0,0,0,0.1);border:1px solid #2d6a4f}.checkmark{font-size:80px;color:#10b981;margin-bottom:20px}h1{color:#1a472a;margin-bottom:10px}.btn{background:#2d6a4f;color:white;padding:12px 30px;border-radius:40px;text-decoration:none;display:inline-block;margin-top:20px;font-weight:bold}.btn:hover{background:#1a472a}</style><body><div class="confirmation-card"><div class="checkmark">✅</div><h1>Contrat signé avec succès !</h1><p>Bonjour ${result.merchant?.full_name},</p><p>Nous avons bien reçu votre signature électronique.<br>Votre contrat est désormais actif.</p><p style="background:#f0fdf4;padding:15px;border-radius:10px;margin:20px 0">📧 Une copie a été envoyée par email.</p><a href="${env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')}/dashboard/merchant" class="btn">Accéder à mon espace</a></div></body></html>`)
+    } catch (error: any) {
+      return response.status(500).send('Erreur lors de la signature du contrat')
+    }
+  }
+
+  public async getContractStatus({ params, response }: HttpContext) {
+    try {
+      return response.json({ success: true, data: await ContractService.getContractStatus(params.id) })
+    } catch (error: any) {
+      return response.status(500).json({ success: false, message: error.message })
     }
   }
 
@@ -1057,24 +716,16 @@ export default class DashboardViewController {
 
   private getRefundStatusLabel(status: string): string {
     const labels: Record<string, string> = {
-      'refund_requested': 'Demande en cours',
-      'refund_approved': 'Approuvé',
-      'refund_rejected': 'Rejeté',
-      'refunded': 'Remboursé',
-      'refund_completed': 'Terminé',
-      'refund_processing': 'En traitement'
+      'refund_requested': 'Demande en cours', 'refund_approved': 'Approuvé', 'refund_rejected': 'Rejeté',
+      'refunded': 'Remboursé', 'refund_completed': 'Terminé', 'refund_processing': 'En traitement',
     }
     return labels[status] || 'Statut inconnu'
   }
 
   private getRefundStatusColor(status: string): string {
     const colors: Record<string, string> = {
-      'refund_requested': '#f59e0b',
-      'refund_approved': '#10b981',
-      'refund_rejected': '#ef4444',
-      'refunded': '#3b82f6',
-      'refund_completed': '#059669',
-      'refund_processing': '#8b5cf6'
+      'refund_requested': '#f59e0b', 'refund_approved': '#10b981', 'refund_rejected': '#ef4444',
+      'refunded': '#3b82f6', 'refund_completed': '#059669', 'refund_processing': '#8b5cf6',
     }
     return colors[status] || '#6b7280'
   }
@@ -1082,365 +733,18 @@ export default class DashboardViewController {
   private isOrderRefundable(order: Order): boolean {
     const refundableStatuses = ['delivered', 'shipped', 'paid']
     const nonRefundableStatuses = ['cancelled', 'refunded', 'refund_completed']
-
-    if (nonRefundableStatuses.includes(order.status)) {
-      return false
-    }
-
-    const orderDate = order.created_at
-    const now = DateTime.local()
-    const daysSinceOrder = orderDate ? now.diff(orderDate, 'days').days : 31
-
-    if (daysSinceOrder > 30) {
-      return false
-    }
-
+    if (nonRefundableStatuses.includes(order.status)) return false
+    const daysSinceOrder = order.created_at ? DateTime.local().diff(order.created_at, 'days').days : 31
+    if (daysSinceOrder > 30) return false
     return refundableStatuses.includes(order.status)
   }
 
-  private checkRefundEligibility(order: Order): {
-    eligible: boolean;
-    reasons: Array<{ condition: boolean; message: string }>;
-  } {
+  private checkRefundEligibility(order: Order): { eligible: boolean; reasons: Array<{ condition: boolean; message: string }> } {
     const reasons = []
-
-    const isStatusValid = ['delivered', 'shipped', 'paid'].includes(order.status)
-    reasons.push({
-      condition: isStatusValid,
-      message: `Le statut de la commande doit être "Livrée", "Expédiée" ou "Payée" (actuel: ${STATUS_META[order.status]?.label || order.status})`
-    })
-
-    const isNotRefunded = !['refunded', 'refund_completed'].includes(order.status)
-    reasons.push({
-      condition: isNotRefunded,
-      message: 'La commande n\'a pas déjà été remboursée'
-    })
-
-    const orderDate = order.created_at
-    const now = DateTime.local()
-    const daysSinceOrder = orderDate ? now.diff(orderDate, 'days').days : 31
-    const isWithin30Days = daysSinceOrder <= 30
-    reasons.push({
-      condition: isWithin30Days,
-      message: `La commande doit dater de moins de 30 jours (${Math.floor(daysSinceOrder)} jours)`
-    })
-
-    const eligible = reasons.every(r => r.condition)
-
-    return { eligible, reasons }
+    reasons.push({ condition: ['delivered', 'shipped', 'paid'].includes(order.status), message: `Le statut doit être "Livrée", "Expédiée" ou "Payée" (actuel: ${STATUS_META[order.status]?.label || order.status})` })
+    reasons.push({ condition: !['refunded', 'refund_completed'].includes(order.status), message: 'La commande n\'a pas déjà été remboursée' })
+    const daysSinceOrder = order.created_at ? DateTime.local().diff(order.created_at, 'days').days : 31
+    reasons.push({ condition: daysSinceOrder <= 30, message: `La commande doit dater de moins de 30 jours (${Math.floor(daysSinceOrder)} jours)` })
+    return { eligible: reasons.every(r => r.condition), reasons }
   }
-    /**
-   * API: Récupérer les détails d'un abonnement par ID (pour la modale)
-   */
-  public async apiGetSubscriptionById({ params, response }: HttpContext) {
-    try {
-      const subscription = await Subscription.query()
-        .where('id', params.id)
-        .preload('user')
-        .first()
-      
-      if (!subscription) {
-        return response.status(404).json({ 
-          success: false, 
-          message: 'Abonnement non trouvé' 
-        })
-      }
-      
-      // Calcul des jours restants
-      let daysRemaining = 0
-      if (subscription.endDate) {
-        daysRemaining = Math.max(0, Math.ceil(subscription.endDate.diff(DateTime.now(), 'days').days))
-      }
-      
-      return response.json({
-        success: true,
-        data: {
-          id: subscription.id,
-          merchantName: subscription.user?.full_name || subscription.user?.email || 'Marchand inconnu',
-          merchantEmail: subscription.user?.email || 'Email inconnu',
-          planName: SUBSCRIPTION_PLANS[subscription.plan]?.name || subscription.plan,
-          price: formatMoney(subscription.price),
-          duration: SUBSCRIPTION_PLANS[subscription.plan]?.duration || 0,
-          boostMultiplier: SUBSCRIPTION_PLANS[subscription.plan]?.boostMultiplier || 1,
-          status: subscription.status,
-          statusLabel: getSubscriptionStatusLabel(subscription.status),
-          statusColor: getSubscriptionStatusColor(subscription.status),
-          statusIcon: getSubscriptionStatusIcon(subscription.status),
-          subscriptionType: subscription.subscriptionType,
-          boostedProductsCount: subscription.boostedProductsCount || 0,
-          maxProducts: subscription.maxProducts || 0,
-          autoRenew: subscription.autoRenew,
-          startDate: subscription.startDate?.toFormat('dd LLL yyyy') || null,
-          endDate: subscription.endDate?.toFormat('dd LLL yyyy') || null,
-          daysRemaining: daysRemaining,
-          totalViews: subscription.totalViews || 0,
-          totalClicks: subscription.totalClicks || 0,
-          paymentReferenceId: subscription.paymentReferenceId,
-          paymentStatus: subscription.paymentStatus,
-          createdAt: subscription.createdAt?.toFormat('dd LLL yyyy HH:mm') || null,
-        }
-      })
-    } catch (error) {
-      console.error('❌ Erreur API subscription details:', error)
-      return response.status(500).json({ 
-        success: false, 
-        message: 'Erreur serveur' 
-      })
-    }
-  }
-
-  // Ajoutez cette méthode dans votre DashboardViewController ou MerchantsController
-
-/**
- * Envoie un contrat de partenariat signé par EDEN au marchand
- * À appeler quand le marchand est vérifié (is_verified = true)
- */
-// Dans DashboardViewController
-
-/**
- * Envoie un contrat de partenariat signé par EDEN au marchand
- */
-public async sendContractEmail({ params, response }: HttpContext) {
-  try {
-    const merchant = await User.find(params.id)
-    
-    if (!merchant) {
-      return response.status(404).json({
-        success: false,
-        message: 'Marchand non trouvé'
-      })
-    }
-
-    if (merchant.role !== 'merchant' && merchant.role !== 'marchant') {
-      return response.status(400).json({
-        success: false,
-        message: 'Cet utilisateur n\'est pas un marchand'
-      })
-    }
-
-    if (!merchant.is_verified) {
-      return response.status(400).json({
-        success: false,
-        message: 'Le marchand n\'est pas encore vérifié'
-      })
-    }
-
-    const result = await ContractService.sendContractEmail(merchant)
-
-    if (result.success) {
-      return response.json({
-        success: true,
-        message: result.message
-      })
-    } else {
-      return response.status(500).json({
-        success: false,
-        message: result.message
-      })
-    }
-  } catch (error: any) {
-    console.error('Erreur envoi contrat:', error)
-    return response.status(500).json({
-      success: false,
-      message: 'Erreur lors de l\'envoi du contrat',
-      error: error.message
-    })
-  }
-}
-
-/**
- * Route de signature du contrat par le marchand
- */
-public async signContract({ params, request, response }: HttpContext) {
-  try {
-    const ipAddress = request.ip()
-    const result = await ContractService.signContract(params.id, ipAddress)
-
-    if (!result.success) {
-      return response.status(400).send(`
-        <!DOCTYPE html>
-        <html>
-        <head><title>Erreur - EDEN</title><meta charset="UTF-8"></head>
-        <body style="font-family: Arial; text-align: center; padding: 50px;">
-          <h1 style="color: #ef4444;">❌ Erreur</h1>
-          <p>${result.message}</p>
-          <a href="${env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')}/dashboard/merchant" 
-             style="background: #2d6a4f; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-            Retour à l'espace marchand
-          </a>
-        </body>
-        </html>
-      `)
-    }
-
-    // Page de confirmation
-    return response.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Contrat signé - EDEN</title>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body {
-            font-family: 'Georgia', serif;
-            background: linear-gradient(135deg, #f5f5f5 0%, #e8f5e9 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin: 0;
-            padding: 20px;
-          }
-          .confirmation-card {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 500px;
-            text-align: center;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            border: 1px solid #2d6a4f;
-          }
-          .checkmark { font-size: 80px; color: #10b981; margin-bottom: 20px; }
-          h1 { color: #1a472a; margin-bottom: 10px; }
-          .btn {
-            background: #2d6a4f;
-            color: white;
-            padding: 12px 30px;
-            border-radius: 40px;
-            text-decoration: none;
-            display: inline-block;
-            margin-top: 20px;
-            font-weight: bold;
-          }
-          .btn:hover { background: #1a472a; }
-        </style>
-      </head>
-      <body>
-        <div class="confirmation-card">
-          <div class="checkmark">✅</div>
-          <h1>Contrat signé avec succès !</h1>
-          <p>Bonjour ${result.merchant?.full_name},</p>
-          <p>Nous avons bien reçu votre signature électronique.<br>Votre contrat de partenariat avec <strong>EDEN</strong> est désormais actif.</p>
-          <p style="background: #f0fdf4; padding: 15px; border-radius: 10px; margin: 20px 0;">
-            📧 Une copie du contrat signé vous a été envoyée par email.
-          </p>
-          <a href="${env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')}/dashboard/merchant" class="btn">
-            Accéder à mon espace marchand
-          </a>
-        </div>
-      </body>
-      </html>
-    `)
-  } catch (error: any) {
-    console.error('Erreur signature contrat:', error)
-    return response.status(500).send('Erreur lors de la signature du contrat')
-  }
-}
-
-/**
- * Vérifier le statut du contrat d'un marchand
- */
-public async getContractStatus({ params, response }: HttpContext) {
-  try {
-    const status = await ContractService.getContractStatus(params.id)
-    return response.json({
-      success: true,
-      data: status
-    })
-  } catch (error: any) {
-    return response.status(500).json({
-      success: false,
-      message: error.message
-    })
-  }
-}
-
-/**
- * Route de signature du contrat par le marchand
- * GET /api/merchant/contract/:id/sign
- */
-public async signContract({ params, response }: HttpContext) {
-  try {
-    const merchantId = params.id
-    const merchant = await User.find(merchantId)
-
-    if (!merchant) {
-      return response.status(404).send('Marchand non trouvé')
-    }
-
-    // Marquer le contrat comme signé
-    merchant.contract_signed_at = DateTime.now()
-    merchant.contract_signed = true
-    await merchant.save()
-
-    // Afficher une page de confirmation
-    return response.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Contrat signé - EDEN</title>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body {
-            font-family: 'Georgia', serif;
-            background: linear-gradient(135deg, #f5f5f5 0%, #e8f5e9 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin: 0;
-            padding: 20px;
-          }
-          .confirmation-card {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 500px;
-            text-align: center;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            border: 1px solid #2d6a4f;
-          }
-          .checkmark {
-            font-size: 80px;
-            color: #10b981;
-            margin-bottom: 20px;
-          }
-          h1 { color: #1a472a; margin-bottom: 10px; }
-          .btn {
-            background: #2d6a4f;
-            color: white;
-            padding: 12px 30px;
-            border-radius: 40px;
-            text-decoration: none;
-            display: inline-block;
-            margin-top: 20px;
-            font-weight: bold;
-          }
-          .btn:hover { background: #1a472a; }
-        </style>
-      </head>
-      <body>
-        <div class="confirmation-card">
-          <div class="checkmark">✅</div>
-          <h1>Contrat signé avec succès !</h1>
-          <p>Bonjour ${merchant.full_name},</p>
-          <p>Nous avons bien reçu votre signature électronique.<br>Votre contrat de partenariat avec <strong>EDEN</strong> est désormais actif.</p>
-          <p style="background: #f0fdf4; padding: 15px; border-radius: 10px; margin: 20px 0;">
-            📧 Une copie du contrat signé vous a été envoyée par email.
-          </p>
-          <a href="${process.env.FRONTEND_URL || 'https://eden-azure-one.vercel.app'}/dashboard/merchant" class="btn">
-            Accéder à mon espace marchand
-          </a>
-        </div>
-      </body>
-      </html>
-    `)
-
-  } catch (error: any) {
-    console.error('Erreur signature contrat:', error)
-    return response.status(500).send('Erreur lors de la signature du contrat')
-  }
-}
 }
