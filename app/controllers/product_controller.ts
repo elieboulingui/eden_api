@@ -6,7 +6,7 @@ import Product from '#models/Product'
 export default class ProductsController {
   
   /**
-   * Récupère tous les produits en promotion (old_price > price)
+   * Récupère tous les produits en promotion (oldPrice > price)
    */
   async onSale({ request, response }: HttpContext) {
     try {
@@ -15,17 +15,17 @@ export default class ProductsController {
       const categoryId = request.input('category_id')
 
       let query = Product.query()
-        .whereNotNull('old_price')
-        .where('old_price', '>', 0)
-        .whereRaw('old_price > price')
-        .where('is_archived', false)
+        .whereNotNull('oldPrice')  // ✅ CORRIGÉ: old_price → oldPrice
+        .where('oldPrice', '>', 0)  // ✅ CORRIGÉ: old_price → oldPrice
+        .whereRaw('oldPrice > price')  // ✅ CORRIGÉ: old_price → oldPrice
+        .where('isArchived', false)  // ✅ CORRIGÉ: is_archived → isArchived
         .where('status', 'active')
         .preload('user')
         .preload('categoryRelation')
-        .orderByRaw('((old_price - price) / old_price) DESC')
+        .orderByRaw('((oldPrice - price) / oldPrice) DESC')  // ✅ CORRIGÉ: old_price → oldPrice
 
       if (categoryId) {
-        query = query.where('category_id', categoryId)
+        query = query.where('categoryId', categoryId)  // ✅ CORRIGÉ: category_id → categoryId
       }
 
       const products = await query.paginate(page, limit)
@@ -69,15 +69,15 @@ export default class ProductsController {
       const minDiscount = request.input('min_discount', 20)
 
       const products = await Product.query()
-        .whereNotNull('old_price')
-        .where('old_price', '>', 0)
-        .whereRaw('old_price > price')
-        .whereRaw('((old_price - price) / old_price * 100) >= ?', [minDiscount])
-        .where('is_archived', false)
+        .whereNotNull('oldPrice')  // ✅ CORRIGÉ: old_price → oldPrice
+        .where('oldPrice', '>', 0)  // ✅ CORRIGÉ: old_price → oldPrice
+        .whereRaw('oldPrice > price')  // ✅ CORRIGÉ: old_price → oldPrice
+        .whereRaw('((oldPrice - price) / oldPrice * 100) >= ?', [minDiscount])  // ✅ CORRIGÉ: old_price → oldPrice
+        .where('isArchived', false)  // ✅ CORRIGÉ: is_archived → isArchived
         .where('status', 'active')
         .preload('user')
         .preload('categoryRelation')
-        .orderByRaw('((old_price - price) / old_price) DESC')
+        .orderByRaw('((oldPrice - price) / oldPrice) DESC')  // ✅ CORRIGÉ: old_price → oldPrice
         .limit(limit)
 
       // ✅ Ajouter categoryName dans chaque produit
@@ -114,15 +114,15 @@ export default class ProductsController {
       const limit = request.input('limit', 20)
 
       const products = await Product.query()
-        .whereNotNull('old_price')
-        .where('old_price', '>', 0)
-        .whereRaw('old_price > price')
-        .where('is_archived', false)
+        .whereNotNull('oldPrice')  // ✅ CORRIGÉ: old_price → oldPrice
+        .where('oldPrice', '>', 0)  // ✅ CORRIGÉ: old_price → oldPrice
+        .whereRaw('oldPrice > price')  // ✅ CORRIGÉ: old_price → oldPrice
+        .where('isArchived', false)  // ✅ CORRIGÉ: is_archived → isArchived
         .where('status', 'active')
-        .where('is_on_sale', true)
+        .where('isOnSale', true)  // ✅ CORRIGÉ: is_on_sale → isOnSale
         .preload('user')
         .preload('categoryRelation')
-        .orderByRaw('((old_price - price) / old_price) DESC')
+        .orderByRaw('((oldPrice - price) / oldPrice) DESC')  // ✅ CORRIGÉ: old_price → oldPrice
         .paginate(page, limit)
 
       // ✅ Ajouter categoryName dans chaque produit
