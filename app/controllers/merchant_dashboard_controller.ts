@@ -1327,7 +1327,7 @@ export default class MerchantDashboardController {
     }
   }
 
- async createProduct({ params, request, response }: HttpContext) {
+async createProduct({ params, request, response }: HttpContext) {
   try {
     const { userId } = params
     const { name, description, price, stock, category_name, image_url } = request.only([
@@ -1361,7 +1361,8 @@ export default class MerchantDashboardController {
       categoryId = category.id
     }
 
-    const product = await Product.create({
+    // Création du produit SANS reviews_count
+    const productData: any = {
       name: name.trim(),
       description: description || '',
       price: parseFloat(price) || 0,
@@ -1374,8 +1375,7 @@ export default class MerchantDashboardController {
       rating: 0,
       isArchived: false,
       sales: 0,
-      likes: 0,           // ✅ La colonne existe dans le modèle
-      reviews_count: 0,   // ✅ La colonne existe dans le modèle
+      likes: 0,
       status: 'active',
       minOrderQuantity: 1,
       isBoosted: false,
@@ -1387,7 +1387,12 @@ export default class MerchantDashboardController {
       boostSales: 0,
       isFeatured: false,
       isTrending: false,
-    })
+    }
+    
+    // N'ajouter reviews_count que si la colonne existe (optionnel)
+    // productData.reviews_count = 0;
+
+    const product = await Product.create(productData)
 
     if (categoryId) {
       const category = await Category.find(categoryId)
