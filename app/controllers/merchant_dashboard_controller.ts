@@ -1461,99 +1461,78 @@ async createProduct({ params, request, response }: HttpContext) {
   try {
     const { userId } = params
     const { name, description, price, stock, category_name, image_url } = request.only([
-      'name',
-      'description',
-      'price',
-      'stock',
-      'category_name',
-      'image_url',
+      'name', 'description', 'price', 'stock', 'category_name', 'image_url',
     ])
 
-    // ✅ AJOUTER CETTE VALIDATION
-    if (!name) {
-      return response.badRequest({ 
-        success: false, 
-        message: 'Le nom du produit est requis' 
-      })
+    // Validation
+    if (!name || name.trim() === '') {
+      return response.badRequest({ success: false, message: 'Le nom du produit est requis' })
     }
 
     const user = await User.findBy('id', userId)
-
     if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
       return response.forbidden({ success: false, message: 'Non autorisé' })
     }
 
+    // Gérer la catégorie
     let categoryId: string | null = null
+    if (category_name && category_name.trim() !== '') {
+      let category = await Category.query()
+        .where('name', category_name.trim())
+        .where('user_id', user.id)
+        .first()
 
-    // ✅ AJOUTER UN TRY/CATCH autour de la gestion de catégorie
-    try {
-      if (category_name && category_name.trim() !== '') {
-        const catName = category_name.trim()
-
-        let category = await Category.query()
-          .where('name', catName)
-          .where('user_id', user.id)
-          .first()
-
-        if (!category) {
-          category = await Category.create({
-            name: catName,
-            slug: catName.toLowerCase().replace(/\s+/g, '-'),
-            user_id: user.id,
-            is_active: true,
-            product_ids: [],
-            product_count: 0,
-          })
-        }
-
-        categoryId = category.id
+      if (!category) {
+        category = await Category.create({
+          name: category_name.trim(),
+          slug: category_name.trim().toLowerCase().replace(/\s+/g, '-'),
+          user_id: user.id,
+          is_active: true,
+        })
       }
-    } catch (catError: any) {
-      console.error('Erreur gestion catégorie:', catError)
-      // Continue sans catégorie si erreur
-      categoryId = null
+      categoryId = category.id
     }
 
-    // ✅ AJOUTER DES VALEURS PAR DÉFAUT
-    const productPrice = price ? parseFloat(price) : 0
-    const productStock = stock ? parseInt(stock) : 0
-
-    // Créer le produit
+    // Créer le produit avec les BONS noms de colonnes
     const product = await Product.create({
-      name,
-      description: description || null,
-      price: productPrice,
-      stock: productStock,
-      image_url: image_url || null,
-      user_id: user.id,
-      category_id: categoryId,
+      name: name.trim(),
+      description: description || '',
+      price: parseFloat(price) || 0,
+      stock: parseInt(stock) || 0,
+      imageUrl: image_url || null,
+      userId: user.id,
+      categoryId: categoryId,
       isNew: true,
       isOnSale: false,
       rating: 0,
-      isArchived: false, // ✅ AJOUTER CETTE LIGNE (important !)
+      isArchived: false,
+      sales: 0,
+      likes: 0,
+      reviewsCount: 0,
+      status: 'active',
+      minOrderQuantity: 1,
+      isBoosted: false,
+      boostMultiplier: 1,
+      boostLevel: 'none',
+      boostPriority: 0,
+      boostViews: 0,
+      boostClicks: 0,
+      boostSales: 0,
+      isFeatured: false,
+      isTrending: false,
     })
 
-    // ✅ AJOUTER UN TRY/CATCH autour de l'ajout à la catégorie
+    // Ajouter à la catégorie
     if (categoryId) {
-      try {
-        const category = await Category.find(categoryId)
-        if (category) {
-          let existingProductIds = category.product_ids || []
-
-          if (!Array.isArray(existingProductIds)) {
-            existingProductIds = []
-          }
-
-          if (!existingProductIds.includes(product.id)) {
-            existingProductIds.push(product.id)
-            category.product_ids = existingProductIds
-            category.product_count = existingProductIds.length
-            await category.save()
-          }
+      const category = await Category.find(categoryId)
+      if (category) {
+        const ids = Array.isArray(category.product_ids) ? category.product_ids : []
+        if (!ids.includes(product.id)) {
+          ids.push(product.id)
+          category.product_ids = ids
+          category.product_count = ids.length
+          await category.save()
         }
-      } catch (catUpdateError: any) {
-        console.error('Erreur mise à jour catégorie:', catUpdateError)
-        // Produit créé même si échec de mise à jour catégorie
       }
     }
 
@@ -1564,21 +1543,18 @@ async createProduct({ params, request, response }: HttpContext) {
         name: product.name,
         price: product.price,
         stock: product.stock,
-        category_id: product.category_id,
+        category_id: product.categoryId,
         category_name: category_name || null,
-        image_url: product.image_url,
+        image_url: product.imageUrl,
       },
       message: `Produit "${name}" créé avec succès`,
     })
 
   } catch (error: any) {
-    console.error('❌ Erreur createProduct:', error)
-    // ✅ AFFICHER PLUS DE DÉTAILS
-    console.error('Stack trace:', error.stack)
+    console.error('❌ Erreur createProduct:', error.message)
     return response.internalServerError({
       success: false,
-      message: error.message || 'Erreur lors de la création du produit',
-      error_details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: error.message,
     })
   }
 }
