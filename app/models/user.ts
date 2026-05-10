@@ -186,6 +186,16 @@ export default class User extends compose(BaseModel, AuthFinder) {
   // ÉTAPE 3 : PAIEMENT ET VALIDATION
   // ============================================================
 
+  // Dans app/models/user.ts, ajoutez :
+@column()
+declare contract_sent_at: DateTime | null
+
+@column()
+declare contract_signed_at: DateTime | null
+
+@column()
+declare contract_signed: boolean
+
   @column({ columnName: 'payment_method' })
   declare payment_method: 'airtel_money' | 'moov_money' | 'virement_bancaire' | null
 
