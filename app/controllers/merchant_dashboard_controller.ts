@@ -1565,70 +1565,193 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
     }
   }
 
-  async updateProduct({ params, request, response }: HttpContext) {
-    try {
-      const { userId, productId } = params
-      const { name, description, price, stock, category_name, image_url } = request.only([
-        'name', 'description', 'price', 'stock', 'category_name', 'image_url'
-      ])
+ // En haut du fichier, ajoutez l'import
 
-      const user = await User.findBy('id', userId)
+// Puis modifiez la méthode updateProduct
+async updateProduct({ params, request, response }: HttpContext) {
+  try {
+    const { userId, productId } = params
+    const { name, description, price, stock, category_name, image_url } = request.only([
+      'name', 'description', 'price', 'stock', 'category_name', 'image_url'
+    ])
 
-      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-        return response.forbidden({ success: false, message: 'Non autorisé' })
-      }
+    const user = await User.findBy('id', userId)
 
-      const product = await Product.query()
-        .where('id', productId)
+    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+      return response.forbidden({ success: false, message: 'Non autorisé' })
+    }
+
+    const product = await Product.query()
+      .where('id', productId)
+      .where('user_id', user.id)
+      .first()
+
+    if (!product) {
+      return response.notFound({ success: false, message: 'Produit non trouvé' })
+    }
+
+    // ✅ SAUVEGARDER L'ANCIEN PRIX
+    const oldPrice = product.price
+    let newPrice = oldPrice
+
+    let categoryId: string | null = null
+
+    if (category_name && category_name.trim() !== '') {
+      const category = await Category.query()
+        .where('name', category_name)
         .where('user_id', user.id)
         .first()
 
-      if (!product) {
-        return response.notFound({ success: false, message: 'Produit non trouvé' })
+      if (category) {
+        categoryId = category.id
+      } else {
+        const newCategory = await Category.create({
+          name: category_name,
+          slug: category_name.toLowerCase().replace(/\s+/g, '-'),
+          user_id: user.id,
+        })
+        categoryId = newCategory.id
       }
-
-      let categoryId: string | null = null
-
-      if (category_name && category_name.trim() !== '') {
-        const category = await Category.query()
-          .where('name', category_name)
-          .where('user_id', user.id)
-          .first()
-
-        if (category) {
-          categoryId = category.id
-        } else {
-          const newCategory = await Category.create({
-            name: category_name,
-            slug: category_name.toLowerCase().replace(/\s+/g, '-'),
-            user_id: user.id,
-          })
-          categoryId = newCategory.id
-        }
-      }
-
-      if (name) product.name = name
-      if (description !== undefined) product.description = description
-      if (price) product.price = parseFloat(price)
-      if (stock !== undefined) product.stock = parseInt(stock)
-      if (image_url !== undefined) product.image_url = image_url
-      if (categoryId) product.category_id = categoryId
-
-      await product.save()
-
-      return response.ok({
-        success: true,
-        data: product,
-        message: 'Produit mis à jour avec succès'
-      })
-    } catch (error: any) {
-      console.error('Erreur updateProduct:', error)
-      return response.internalServerError({
-        success: false,
-        message: error.message
-      })
     }
+
+    if (name) product.name = name
+    if (description !== undefined) product.description = description
+    if (price) {
+      newPrice = parseFloat(price)
+      product.price = newPrice
+    }
+    if (stock !== undefined) product.stock = parseInt(stock)
+    if (image_url !== undefined) product.image_url = image_url
+    if (categoryId) product.category_id = categoryId
+
+    // ✅ GESTION DE LA PROMOTION AUTOMATIQUE
+    let promotionMessage = ''
+    let promotionCreated: any = null
+    
+    if (price && newPrice < oldPrice) {
+      const reductionPercent = ((oldPrice - newPrice) / oldPrice) * 100
+      
+      // Activer le flag promotion sur le produit
+      product.isOnSale = true
+      product.isNew = false
+      
+      // Sauvegarder l'ancien prix
+      if ('old_price' in product) {
+        (product as any).old_price = oldPrice
+      }
+
+      // ✅ CRÉER UNE PROMOTION DANS LA TABLE PROMOTIONS
+      try {
+        const promoEndDate = DateTime.now().plus({ days: 30 }) // Promotion valable 30 jours
+        
+        const promotion = await Promotion.create({
+          title: `🔥 ${reductionPercent.toFixed(0)}% sur ${product.name}`,
+          description: `Profitez de ${reductionPercent.toFixed(0)}% de réduction sur ${product.name} ! Ancien prix: ${oldPrice} FCFA, Nouveau prix: ${newPrice} FCFA. Offre limitée !`,
+          image_url: product.image_url,
+          banner_image: product.image_url,
+          type: 'flash_sale',
+          discount_percentage: Math.round(reductionPercent),
+          discount_amount: oldPrice - newPrice,
+          category: category_name || null,
+          product_ids: JSON.stringify([product.id]), // ✅ Produit concerné
+          link: `/product/${product.id}`,
+          button_text: '🌐 Voir le produit',
+          min_order_amount: null,
+          start_date: DateTime.now(),
+          end_date: promoEndDate,
+          status: 'active',
+          priority: Math.round(reductionPercent), // Plus la réduction est grande, plus la priorité est haute
+        })
+
+        promotionCreated = {
+          id: promotion.id,
+          title: promotion.title,
+          discount_percentage: promotion.discount_percentage,
+          end_date: promotion.end_date
+        }
+
+        promotionMessage = ` ✅ PROMO CRÉÉE : -${reductionPercent.toFixed(0)}% sur "${product.name}" ! Visible jusqu'au ${promoEndDate.toFormat('dd/MM/yyyy')}.`
+        
+        console.log(`🎉 Promotion créée: ${promotion.title}`)
+      } catch (promoError: any) {
+        console.error('Erreur création promotion:', promoError)
+        promotionMessage = ` ⚠️ Prix réduit de ${reductionPercent.toFixed(0)}% mais la promotion n'a pas pu être créée.`
+      }
+      
+    } else if (price && newPrice >= oldPrice && oldPrice > 0) {
+      // Prix augmenté ou inchangé → désactiver la promotion sur le produit
+      product.isOnSale = false
+      
+      // ✅ DÉSACTIVER LES PROMOTIONS EXISTANTES POUR CE PRODUIT
+      try {
+        const existingPromos = await Promotion.query()
+          .where('product_ids', 'LIKE', `%${product.id}%`)
+          .where('status', 'active')
+        
+        for (const promo of existingPromos) {
+          promo.status = 'expired'
+          promo.end_date = DateTime.now()
+          await promo.save()
+          console.log(`🏁 Promotion expirée: ${promo.title}`)
+        }
+
+        if (existingPromos.length > 0) {
+          promotionMessage += ` ${existingPromos.length} promotion(s) désactivée(s).`
+        }
+      } catch (err) {
+        console.error('Erreur désactivation promotions:', err)
+      }
+      
+      if (newPrice === oldPrice) {
+        promotionMessage = ` Prix inchangé (${newPrice} FCFA).` + promotionMessage
+      } else {
+        const increasePercent = ((newPrice - oldPrice) / oldPrice) * 100
+        promotionMessage = ` Prix augmenté de ${increasePercent.toFixed(0)}% (${oldPrice} → ${newPrice} FCFA).` + promotionMessage
+      }
+    }
+
+    await product.save()
+
+    // Recharger avec la relation catégorie
+    const updatedProduct = await Product.query()
+      .where('id', product.id)
+      .preload('categoryRelation')
+      .first()
+
+    let categoryNameResult = 'Sans catégorie'
+    if (updatedProduct?.categoryRelation) {
+      categoryNameResult = updatedProduct.categoryRelation.name
+    }
+
+    return response.ok({
+      success: true,
+      message: `Produit "${product.name}" mis à jour.${promotionMessage}`,
+      data: {
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        old_price: oldPrice !== newPrice ? oldPrice : undefined,
+        stock: product.stock,
+        image_url: product.image_url,
+        category: categoryNameResult,
+        category_id: product.category_id,
+        is_on_sale: product.isOnSale,
+        is_new: product.isNew,
+        price_changed: oldPrice !== newPrice,
+        reduction_percent: oldPrice > newPrice ? ((oldPrice - newPrice) / oldPrice) * 100 : 0,
+        promotion_active: product.isOnSale,
+        promotion: promotionCreated // ✅ Infos de la promotion créée
+      }
+    })
+  } catch (error: any) {
+    console.error('Erreur updateProduct:', error)
+    return response.internalServerError({
+      success: false,
+      message: error.message
+    })
   }
+}
 async deleteProduct({ params, response }: HttpContext) {
   try {
     const { userId, productId } = params
