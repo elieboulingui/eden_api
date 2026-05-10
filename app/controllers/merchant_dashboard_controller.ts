@@ -1333,6 +1333,9 @@ async createProduct({ params, request, response }: HttpContext) {
       'name', 'description', 'price', 'stock', 'category_name', 'image_url',
     ])
 
+    console.log('🔵 ========== DÉBUT CRÉATION PRODUIT ==========')
+    console.log('📦 Données reçues:', { userId, name, description, price, stock, category_name, image_url })
+
     if (!name || name.trim() === '') {
       return response.badRequest({ success: false, message: 'Le nom du produit est requis' })
     }
@@ -1342,6 +1345,8 @@ async createProduct({ params, request, response }: HttpContext) {
       return response.forbidden({ success: false, message: 'Non autorisé' })
     }
 
+    console.log('👤 Utilisateur trouvé:', { id: user.id, role: user.role })
+
     let categoryId: string | null = null
     if (category_name && category_name.trim() !== '') {
       let category = await Category.query()
@@ -1350,17 +1355,21 @@ async createProduct({ params, request, response }: HttpContext) {
         .first()
 
       if (!category) {
+        console.log('📁 Catégorie non trouvée, création...')
         category = await Category.create({
           name: category_name.trim(),
           slug: category_name.trim().toLowerCase().replace(/\s+/g, '-'),
           user_id: user.id,
           is_active: true,
         })
+        console.log('✅ Catégorie créée:', { id: category.id, name: category.name })
+      } else {
+        console.log('📁 Catégorie existante trouvée:', { id: category.id, name: category.name })
       }
       categoryId = category.id
     }
 
-    // Création du produit SANS reviews_count
+    // Création du produit
     const productData: any = {
       name: name.trim(),
       description: description || '',
@@ -1387,11 +1396,12 @@ async createProduct({ params, request, response }: HttpContext) {
       isFeatured: false,
       isTrending: false,
     }
-    
-    // N'ajouter reviews_count que si la colonne existe (optionnel)
-    // productData.reviews_count = 0;
 
+    console.log('📝 Données du produit à insérer:', JSON.stringify(productData, null, 2))
+
+    console.log('💾 Tentative d\'insertion dans la base de données...')
     const product = await Product.create(productData)
+    console.log('✅ Produit créé avec succès:', { id: product.id, name: product.name })
 
     if (categoryId) {
       const category = await Category.find(categoryId)
@@ -1402,10 +1412,13 @@ async createProduct({ params, request, response }: HttpContext) {
           category.product_ids = ids
           category.product_count = ids.length
           await category.save()
+          console.log('📁 Catégorie mise à jour avec le nouveau produit')
         }
       }
     }
 
+    console.log('🔵 ========== FIN CRÉATION PRODUIT (SUCCÈS) ==========')
+    
     return response.created({
       success: true,
       data: {
@@ -1421,10 +1434,30 @@ async createProduct({ params, request, response }: HttpContext) {
     })
 
   } catch (error: any) {
-    console.error('❌ Erreur createProduct:', error.message)
+    console.error('❌ ========== ERREUR CRÉATION PRODUIT ==========')
+    console.error('❌ Message d\'erreur:', error.message)
+    console.error('❌ Code d\'erreur:', error.code)
+    console.error('❌ Détails complets:', error)
+    
+    // Afficher la requête SQL qui a échoué
+    if (error.sql) {
+      console.error('❌ SQL échoué:', error.sql)
+    }
+    
+    // Afficher les paramètres de la requête
+    if (error.parameters) {
+      console.error('❌ Paramètres:', error.parameters)
+    }
+    
+    console.error('❌ ================================================')
+    
     return response.internalServerError({
       success: false,
       message: error.message,
+      details: process.env.NODE_ENV === 'development' ? {
+        sql: error.sql,
+        parameters: error.parameters
+      } : undefined
     })
   }
 }
