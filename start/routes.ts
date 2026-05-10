@@ -523,11 +523,15 @@ router.group(() => {
   // ----------------------------------------------------------
   router.post('/retrait', [RetraitController, 'retrait']).as('retrait.process')
   // Dans la section des routes API, après les routes produits
-router.get('/products/on-sale', [ProductController, 'onSale']).as('products.on-sale')
-router.get('/products/biggest-discounts', [ProductController, 'biggestDiscounts']).as('products.biggest-discounts')
-router.get('/products/black-friday', [ProductController, 'blackFriday']).as('products.black-friday')
-
-// Assurez-vous aussi que ces routes existent (dans votre routes.ts vous avez déjà)
-router.get('/promo', [PromotionsController, 'index']).as('promo.index')
+// ----------------------------------------------------------
+// PROMOTIONS - Routes complètes
+// ----------------------------------------------------------
+router.get('/promotions', [PromotionsController, 'index']).as('promotions.index')
+router.get('/promotions/:id', [PromotionsController, 'show']).as('promotions.show')
+router.get('/promotions/banners', [PromotionsController, 'banners']).as('promotions.banners')
+router.get('/promotions/flash-sales', [PromotionsController, 'flashSales']).as('promotions.flash-sales')
+router.post('/promotions', [PromotionsController, 'store']).as('promotions.store')
+router.put('/promotions/:id', [PromotionsController, 'update']).as('promotions.update')
+router.delete('/promotions/:id', [PromotionsController, 'destroy']).as('promotions.destroy')
 
 }).prefix('/api')
