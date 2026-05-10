@@ -19,323 +19,318 @@ export default class MerchantDashboardController {
 
   // ============= WALLET =============
 
-  // Ajoutez cette fonction dans votre MerchantDashboardController
+  /**
+   * Récupère tous les produits archivés d'un marchand
+   * GET /api/merchant/:userId/archived-products
+   */
+  async getArchivedProducts({ params, request, response }: HttpContext) {
+    try {
+      const { userId } = params
 
-/**
- * Récupère tous les produits archivés d'un marchand
- * GET /api/merchant/:userId/archived-products
- */
-async getArchivedProducts({ params, request, response }: HttpContext) {
-  try {
-    const { userId } = params
+      if (!userId) {
+        return response.badRequest({ 
+          success: false, 
+          message: "ID utilisateur manquant" 
+        })
+      }
 
-    if (!userId) {
-      return response.badRequest({ 
-        success: false, 
-        message: "ID utilisateur manquant" 
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ 
+          success: false, 
+          message: 'Utilisateur non trouvé' 
+        })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ 
+          success: false, 
+          message: 'Seuls les marchands peuvent accéder à cette ressource' 
+        })
+      }
+
+      // Pagination
+      const page = request.input('page', 1)
+      const limit = request.input('limit', 20)
+      const search = request.input('search', '')
+
+      // Requête de base pour les produits archivés
+      let query = Product.query()
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .where('isArchived', true)
+        .preload('categoryRelation')
+        .orderBy('updatedAt', 'desc')
+
+      // Ajouter la recherche si présente
+      if (search) {
+        query = query.where((builder) => {
+          builder
+            .where('name', 'ILIKE', `%${search}%`)
+            .orWhere('description', 'ILIKE', `%${search}%`)
+        })
+      }
+
+      const products = await query.paginate(page, limit)
+
+      // Transformer les produits pour le frontend
+      const transformedProducts = products.all().map((product: any) => {
+        let categoryName = 'Sans catégorie'
+
+        if (product.categoryRelation) {
+          categoryName = product.categoryRelation.name
+        } else if (product.category) {
+          categoryName = product.category
+        }
+
+        // Calculer le nombre de jours depuis l'archivage
+        const archivedDate = DateTime.fromJSDate(product.updatedAt.toJSDate())
+        const daysSinceArchived = Math.floor(DateTime.now().diff(archivedDate, 'days').days)
+
+        return {
+          id: product.id,
+          name: product.name,
+          description: product.description,
+          price: product.price,
+          old_price: product.oldPrice,  // ✅ CORRIGÉ: old_price → oldPrice
+          stock: product.stock,
+          image_url: product.imageUrl,  // ✅ CORRIGÉ: image_url → imageUrl
+          category: categoryName,
+          category_id: product.categoryId,  // ✅ CORRIGÉ: category_id → categoryId
+          origin: product.origin,
+          weight: product.weight,
+          packaging: product.packaging,
+          conservation: product.conservation,
+          is_new: product.isNew,
+          is_on_sale: product.isOnSale,
+          rating: product.rating,
+          sales: product.sales || 0,
+          status: product.status || 'archived',
+          created_at: product.createdAt,
+          updated_at: product.updatedAt,
+          archived_at: product.updatedAt,
+          days_since_archived: daysSinceArchived,
+          can_be_restored: true,
+          is_permanently_deleted: false
+        }
+      })
+
+      // Calculer des statistiques sur les produits archivés
+      const totalArchivedProducts = await Product.query()
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .where('isArchived', true)
+        .count('* as total')
+
+      const stats = {
+        total_archived: parseInt(totalArchivedProducts[0].$extras.total) || 0,
+        archived_this_month: await Product.query()
+          .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+          .where('isArchived', true)
+          .where('updatedAt', '>=', DateTime.now().startOf('month').toSQL())
+          .count('* as total')
+          .then(result => parseInt(result[0].$extras.total) || 0),
+        oldest_archived: products.all().length > 0 
+          ? products.all().reduce((oldest, p) => 
+              p.updatedAt < oldest.updatedAt ? p : oldest
+            ).updatedAt
+          : null
+      }
+
+      return response.ok({
+        success: true,
+        data: transformedProducts,
+        meta: {
+          total: products.total,
+          per_page: products.perPage,
+          current_page: products.currentPage,
+          last_page: products.lastPage,
+          first_page: 1,
+          first_page_url: `/api/merchant/${userId}/archived-products?page=1`,
+          last_page_url: `/api/merchant/${userId}/archived-products?page=${products.lastPage}`,
+          next_page_url: products.currentPage < products.lastPage 
+            ? `/api/merchant/${userId}/archived-products?page=${products.currentPage + 1}` 
+            : null,
+          previous_page_url: products.currentPage > 1 
+            ? `/api/merchant/${userId}/archived-products?page=${products.currentPage - 1}` 
+            : null
+        },
+        stats: stats,
+        count: transformedProducts.length,
+        message: `${stats.total_archived} produit(s) archivé(s) trouvé(s)`
+      })
+
+    } catch (error: any) {
+      console.error('Erreur dans getArchivedProducts:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la récupération des produits archivés',
+        error: error.message
       })
     }
+  }
 
-    const user = await User.findBy('id', userId)
+  /**
+   * Restaure un produit archivé (le remet en actif)
+   * POST /api/merchant/:userId/archived-products/:productId/restore
+   */
+  async restoreArchivedProduct({ params, response }: HttpContext) {
+    try {
+      const { userId, productId } = params
 
-    if (!user) {
-      return response.notFound({ 
-        success: false, 
-        message: 'Utilisateur non trouvé' 
-      })
-    }
+      if (!userId || !productId) {
+        return response.badRequest({ 
+          success: false, 
+          message: "Paramètres manquants" 
+        })
+      }
 
-    if (user.role !== 'marchant' && user.role !== 'merchant') {
-      return response.forbidden({ 
-        success: false, 
-        message: 'Seuls les marchands peuvent accéder à cette ressource' 
-      })
-    }
+      const user = await User.findBy('id', userId)
 
-    // Pagination
-    const page = request.input('page', 1)
-    const limit = request.input('limit', 20)
-    const search = request.input('search', '')
+      if (!user) {
+        return response.notFound({ 
+          success: false, 
+          message: 'Utilisateur non trouvé' 
+        })
+      }
 
-    // Requête de base pour les produits archivés
-    let query = Product.query()
-      .where('user_id', user.id)
-      .where('isArchived', true)  // ✅ Uniquement les produits archivés
-      .preload('categoryRelation')
-      .orderBy('updatedAt', 'desc')  // Trier par date d'archivage (dernière modification)
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ 
+          success: false, 
+          message: 'Non autorisé' 
+        })
+      }
 
-    // Ajouter la recherche si présente
-    if (search) {
-      query = query.where((builder) => {
-        builder
-          .where('name', 'ILIKE', `%${search}%`)
-          .orWhere('description', 'ILIKE', `%${search}%`)
-      })
-    }
+      const product = await Product.query()
+        .where('id', productId)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .first()
 
-    const products = await query.paginate(page, limit)
+      if (!product) {
+        return response.notFound({ 
+          success: false, 
+          message: 'Produit non trouvé' 
+        })
+      }
 
-    // Transformer les produits pour le frontend
-    const transformedProducts = products.all().map((product: any) => {
+      // Vérifier si le produit est bien archivé
+      if (!product.isArchived) {
+        return response.badRequest({
+          success: false,
+          message: 'Ce produit n\'est pas archivé'
+        })
+      }
+
+      // Restaurer le produit
+      product.isArchived = false
+      product.isNew = false
+      await product.save()
+
+      // Recharger avec la catégorie
+      await product.load('categoryRelation')
+
       let categoryName = 'Sans catégorie'
-
       if (product.categoryRelation) {
         categoryName = product.categoryRelation.name
-      } else if (product.category) {
-        categoryName = product.category
       }
 
-      // Calculer le nombre de jours depuis l'archivage
-      const archivedDate = DateTime.fromJSDate(product.updatedAt.toJSDate())
-      const daysSinceArchived = Math.floor(DateTime.now().diff(archivedDate, 'days').days)
-
-      return {
-        id: product.id,
-        name: product.name,
-        description: product.description,
-        price: product.price,
-        old_price: product.old_price,
-        stock: product.stock,
-        image_url: product.image_url,
-        category: categoryName,
-        category_id: product.category_id,
-        origin: product.origin,
-        weight: product.weight,
-        packaging: product.packaging,
-        conservation: product.conservation,
-        is_new: product.isNew,
-        is_on_sale: product.isOnSale,
-        rating: product.rating,
-        sales: product.sales || 0,
-        status: product.status || 'archived',
-        created_at: product.createdAt,
-        updated_at: product.updatedAt,
-        archived_at: product.updatedAt,  // Date d'archivage
-        days_since_archived: daysSinceArchived,
-        // Informations supplémentaires
-        can_be_restored: true,  // Toujours true car le produit existe toujours
-        is_permanently_deleted: false  // Archivage ≠ suppression définitive
-      }
-    })
-
-    // Calculer des statistiques sur les produits archivés
-    const totalArchivedProducts = await Product.query()
-      .where('user_id', user.id)
-      .where('isArchived', true)
-      .count('* as total')
-
-    const stats = {
-      total_archived: parseInt(totalArchivedProducts[0].$extras.total) || 0,
-      archived_this_month: await Product.query()
-        .where('user_id', user.id)
-        .where('isArchived', true)
-        .where('updatedAt', '>=', DateTime.now().startOf('month').toSQL())
-        .count('* as total')
-        .then(result => parseInt(result[0].$extras.total) || 0),
-      oldest_archived: products.all().length > 0 
-        ? products.all().reduce((oldest, p) => 
-            p.updatedAt < oldest.updatedAt ? p : oldest
-          ).updatedAt
-        : null
-    }
-
-    return response.ok({
-      success: true,
-      data: transformedProducts,
-      meta: {
-        total: products.total,
-        per_page: products.perPage,
-        current_page: products.currentPage,
-        last_page: products.lastPage,
-        first_page: 1,
-        first_page_url: `/api/merchant/${userId}/archived-products?page=1`,
-        last_page_url: `/api/merchant/${userId}/archived-products?page=${products.lastPage}`,
-        next_page_url: products.currentPage < products.lastPage 
-          ? `/api/merchant/${userId}/archived-products?page=${products.currentPage + 1}` 
-          : null,
-        previous_page_url: products.currentPage > 1 
-          ? `/api/merchant/${userId}/archived-products?page=${products.currentPage - 1}` 
-          : null
-      },
-      stats: stats,
-      count: transformedProducts.length,
-      message: `${stats.total_archived} produit(s) archivé(s) trouvé(s)`
-    })
-
-  } catch (error: any) {
-    console.error('Erreur dans getArchivedProducts:', error)
-    return response.internalServerError({
-      success: false,
-      message: 'Erreur lors de la récupération des produits archivés',
-      error: error.message
-    })
-  }
-}
-
-/**
- * Restaure un produit archivé (le remet en actif)
- * POST /api/merchant/:userId/archived-products/:productId/restore
- */
-async restoreArchivedProduct({ params, response }: HttpContext) {
-  try {
-    const { userId, productId } = params
-
-    if (!userId || !productId) {
-      return response.badRequest({ 
-        success: false, 
-        message: "Paramètres manquants" 
+      return response.ok({
+        success: true,
+        message: 'Produit restauré avec succès',
+        data: {
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          stock: product.stock,
+          category: categoryName,
+          is_archived: product.isArchived,
+          restored_at: DateTime.now().toISO()
+        }
       })
-    }
 
-    const user = await User.findBy('id', userId)
-
-    if (!user) {
-      return response.notFound({ 
-        success: false, 
-        message: 'Utilisateur non trouvé' 
-      })
-    }
-
-    if (user.role !== 'marchant' && user.role !== 'merchant') {
-      return response.forbidden({ 
-        success: false, 
-        message: 'Non autorisé' 
-      })
-    }
-
-    const product = await Product.query()
-      .where('id', productId)
-      .where('user_id', user.id)
-      .first()
-
-    if (!product) {
-      return response.notFound({ 
-        success: false, 
-        message: 'Produit non trouvé' 
-      })
-    }
-
-    // Vérifier si le produit est bien archivé
-    if (!product.isArchived) {
-      return response.badRequest({
+    } catch (error: any) {
+      console.error('Erreur dans restoreArchivedProduct:', error)
+      return response.internalServerError({
         success: false,
-        message: 'Ce produit n\'est pas archivé'
+        message: 'Erreur lors de la restauration du produit',
+        error: error.message
       })
     }
-
-    // Restaurer le produit
-    product.isArchived = false
-    product.isNew = false  // Un produit restauré n'est plus considéré comme "nouveau"
-    await product.save()
-
-    // Recharger avec la catégorie
-    await product.load('categoryRelation')
-
-    let categoryName = 'Sans catégorie'
-    if (product.categoryRelation) {
-      categoryName = product.categoryRelation.name
-    }
-
-    return response.ok({
-      success: true,
-      message: 'Produit restauré avec succès',
-      data: {
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        stock: product.stock,
-        category: categoryName,
-        is_archived: product.isArchived,
-        restored_at: DateTime.now().toISO()
-      }
-    })
-
-  } catch (error: any) {
-    console.error('Erreur dans restoreArchivedProduct:', error)
-    return response.internalServerError({
-      success: false,
-      message: 'Erreur lors de la restauration du produit',
-      error: error.message
-    })
   }
-}
 
-/**
- * Supprime définitivement un produit archivé
- * DELETE /api/merchant/:userId/archived-products/:productId/permanent
- */
-async permanentlyDeleteProduct({ params, response }: HttpContext) {
-  try {
-    const { userId, productId } = params
+  /**
+   * Supprime définitivement un produit archivé
+   * DELETE /api/merchant/:userId/archived-products/:productId/permanent
+   */
+  async permanentlyDeleteProduct({ params, response }: HttpContext) {
+    try {
+      const { userId, productId } = params
 
-    if (!userId || !productId) {
-      return response.badRequest({ 
-        success: false, 
-        message: "Paramètres manquants" 
+      if (!userId || !productId) {
+        return response.badRequest({ 
+          success: false, 
+          message: "Paramètres manquants" 
+        })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ 
+          success: false, 
+          message: 'Utilisateur non trouvé' 
+        })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ 
+          success: false, 
+          message: 'Non autorisé' 
+        })
+      }
+
+      const product = await Product.query()
+        .where('id', productId)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .first()
+
+      if (!product) {
+        return response.notFound({ 
+          success: false, 
+          message: 'Produit non trouvé' 
+        })
+      }
+
+      if (!product.isArchived) {
+        return response.badRequest({
+          success: false,
+          message: 'Seuls les produits archivés peuvent être supprimés définitivement. Archivez d\'abord le produit.'
+        })
+      }
+
+      const productName = product.name
+      const productId_deleted = product.id
+
+      await product.delete()
+
+      return response.ok({
+        success: true,
+        message: `Le produit "${productName}" a été supprimé définitivement`,
+        data: {
+          id: productId_deleted,
+          name: productName,
+          deleted_at: DateTime.now().toISO()
+        }
       })
-    }
 
-    const user = await User.findBy('id', userId)
-
-    if (!user) {
-      return response.notFound({ 
-        success: false, 
-        message: 'Utilisateur non trouvé' 
-      })
-    }
-
-    if (user.role !== 'marchant' && user.role !== 'merchant') {
-      return response.forbidden({ 
-        success: false, 
-        message: 'Non autorisé' 
-      })
-    }
-
-    const product = await Product.query()
-      .where('id', productId)
-      .where('user_id', user.id)
-      .first()
-
-    if (!product) {
-      return response.notFound({ 
-        success: false, 
-        message: 'Produit non trouvé' 
-      })
-    }
-
-    // Vérifier si le produit est archivé (sécurité supplémentaire)
-    if (!product.isArchived) {
-      return response.badRequest({
+    } catch (error: any) {
+      console.error('Erreur dans permanentlyDeleteProduct:', error)
+      return response.internalServerError({
         success: false,
-        message: 'Seuls les produits archivés peuvent être supprimés définitivement. Archivez d\'abord le produit.'
+        message: 'Erreur lors de la suppression définitive du produit',
+        error: error.message
       })
     }
-
-    const productName = product.name
-    const productId_deleted = product.id
-
-    // Supprimer définitivement
-    await product.delete()
-
-    return response.ok({
-      success: true,
-      message: `Le produit "${productName}" a été supprimé définitivement`,
-      data: {
-        id: productId_deleted,
-        name: productName,
-        deleted_at: DateTime.now().toISO()
-      }
-    })
-
-  } catch (error: any) {
-    console.error('Erreur dans permanentlyDeleteProduct:', error)
-    return response.internalServerError({
-      success: false,
-      message: 'Erreur lors de la suppression définitive du produit',
-      error: error.message
-    })
   }
-}
 
   async getWallet({ params, response }: HttpContext) {
     try {
@@ -354,12 +349,12 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
       }
 
       let wallet = await Wallet.query()
-        .where('user_id', user.id)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
         .first()
 
       if (!wallet) {
         wallet = await Wallet.create({
-          user_id: user.id,
+          userId: user.id,  // ✅ CORRIGÉ: user_id → userId
           balance: 0,
           currency: 'XAF',
           status: 'active'
@@ -370,12 +365,12 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
         success: true,
         data: {
           id: wallet.id,
-          user_id: wallet.user_id,
+          user_id: wallet.userId,  // ✅ CORRIGÉ: garder user_id pour l'API
           balance: wallet.balance,
           currency: wallet.currency,
           status: wallet.status,
-          created_at: wallet.created_at,
-          updated_at: wallet.updated_at
+          created_at: wallet.createdAt,
+          updated_at: wallet.updatedAt
         }
       })
 
@@ -416,7 +411,6 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
       console.log('customer_account_number:', customer_account_number)
       console.log('operator_code:', operator_code)
 
-      // Validation des paramètres
       if (!userId) {
         return response.badRequest({ success: false, message: "ID utilisateur manquant" })
       }
@@ -437,7 +431,6 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
         return response.badRequest({ success: false, message: "Clés API requises" })
       }
 
-      // Vérifier l'utilisateur
       const user = await User.findBy('id', userId)
 
       if (!user) {
@@ -448,21 +441,19 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
         return response.forbidden({ success: false, message: 'Seuls les marchands peuvent faire des retraits' })
       }
 
-      // Récupérer le wallet du marchand
       let wallet = await Wallet.query()
-        .where('user_id', user.id)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
         .first()
 
       if (!wallet) {
         wallet = await Wallet.create({
-          user_id: user.id,
+          userId: user.id,  // ✅ CORRIGÉ: user_id → userId
           balance: 0,
           currency: 'XAF',
           status: 'active'
         })
       }
 
-      // ✅ VÉRIFICATION DU SOLDE
       if (wallet.balance < amount) {
         return response.badRequest({
           success: false,
@@ -476,7 +467,6 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
         })
       }
 
-      // Appel à l'API GIVE_CHANGE externe
       console.log('🔵 Appel API GIVE_CHANGE externe...')
 
       const giveChangeResponse = await axios.post(
@@ -507,7 +497,6 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
         })
       }
 
-      // ✅ DÉBITER LE WALLET (seulement si l'API a répondu avec succès)
       const subtracted = await wallet.subtractBalance(amount)
 
       if (!subtracted) {
@@ -522,10 +511,8 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
         })
       }
 
-      // Enregistrer la transaction de retrait dans la base
       const withdrawalReference = `WDL-${Date.now()}-${Math.floor(Math.random() * 10000)}`
 
-      // Vérifier si la table merchant_withdrawals existe
       const hasWithdrawalsTable = await Database.rawQuery(`
         SELECT EXISTS (
           SELECT FROM information_schema.tables
@@ -553,7 +540,6 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
         })
       }
 
-      // Enregistrer dans la table transactions
       await Database.table('transactions').insert({
         id: crypto.randomUUID(),
         user_id: user.id,
@@ -584,7 +570,6 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
     } catch (error: any) {
       console.error('❌ Erreur dans giveChange:', error)
 
-      // Gestion spécifique des erreurs
       if (error.code === 'ECONNREFUSED') {
         return response.status(503).json({
           success: false,
@@ -618,75 +603,72 @@ async permanentlyDeleteProduct({ params, response }: HttpContext) {
     }
   }
 
-async getWithdrawalHistory({ params, response }: HttpContext) {
-  try {
-    const { userId } = params
+  async getWithdrawalHistory({ params, response }: HttpContext) {
+    try {
+      const { userId } = params
 
-    if (!userId) {
-      return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+      if (!userId) {
+        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      const withdrawals = await Withdrawal.query()
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .orderBy('createdAt', 'desc')
+
+      console.log(`📦 ${withdrawals.length} retrait(s) trouvé(s) pour l'utilisateur ${userId}`)
+
+      const formattedWithdrawals = withdrawals.map(w => ({
+        id: w.id,
+        amount: w.netAmount || w.amount,
+        status: w.status,
+        payment_method: w.paymentMethod,
+        account_number: w.accountNumber,
+        account_name: w.accountName,
+        operator: w.operator,
+        reference: w.reference,
+        created_at: w.createdAt,
+        fee: w.fee,
+        net_amount: w.netAmount
+      }))
+
+      const completed = formattedWithdrawals.filter(w => w.status === 'completed')
+      const pending = formattedWithdrawals.filter(w => w.status === 'pending' || w.status === 'processing')
+      const failed = formattedWithdrawals.filter(w => w.status === 'failed' || w.status === 'cancelled')
+      
+      const totalWithdrawn = completed.reduce((sum, w) => sum + Number(w.amount), 0)
+
+      const wallet = await Wallet.query().where('userId', user.id).first()  // ✅ CORRIGÉ: user_id → userId
+      const currentBalance = wallet ? wallet.balance : 0
+
+      return response.ok({
+        success: true,
+        data: formattedWithdrawals,
+        stats: {
+          total_withdrawn: totalWithdrawn,
+          total_withdrawals: withdrawals.length,
+          completed_count: completed.length,
+          pending_count: pending.length,
+          failed_count: failed.length
+        },
+        count: withdrawals.length,
+        current_balance: currentBalance
+      })
+
+    } catch (error: any) {
+      console.error('Erreur dans getWithdrawalHistory:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
     }
-
-    const user = await User.findBy('id', userId)
-
-    if (!user) {
-      return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
-    }
-
-    // ✅ Utiliser le modèle Withdrawal directement
-    const withdrawals = await Withdrawal.query()
-      .where('user_id', user.id)
-      .orderBy('created_at', 'desc')
-
-    console.log(`📦 ${withdrawals.length} retrait(s) trouvé(s) pour l'utilisateur ${userId}`)
-
-    // Transformer les données pour le frontend
-    const formattedWithdrawals = withdrawals.map(w => ({
-      id: w.id,
-      amount: w.net_amount || w.amount,
-      status: w.status,
-      payment_method: w.payment_method,
-      account_number: w.account_number,
-      account_name: w.account_name,
-      operator: w.operator,
-      reference: w.reference,
-      created_at: w.created_at,
-      fee: w.fee,
-      net_amount: w.net_amount
-    }))
-
-    // Calculer les statistiques
-    const completed = formattedWithdrawals.filter(w => w.status === 'completed')
-    const pending = formattedWithdrawals.filter(w => w.status === 'pending' || w.status === 'processing')
-    const failed = formattedWithdrawals.filter(w => w.status === 'failed' || w.status === 'cancelled')
-    
-    const totalWithdrawn = completed.reduce((sum, w) => sum + Number(w.amount), 0)
-
-    // Récupérer le solde actuel
-    const wallet = await Wallet.query().where('user_id', user.id).first()
-    const currentBalance = wallet ? wallet.balance : 0
-
-    return response.ok({
-      success: true,
-      data: formattedWithdrawals,
-      stats: {
-        total_withdrawn: totalWithdrawn,
-        total_withdrawals: withdrawals.length,
-        completed_count: completed.length,
-        pending_count: pending.length,
-        failed_count: failed.length
-      },
-      count: withdrawals.length,
-      current_balance: currentBalance
-    })
-
-  } catch (error: any) {
-    console.error('Erreur dans getWithdrawalHistory:', error)
-    return response.internalServerError({
-      success: false,
-      message: error.message
-    })
   }
-}
+
   /**
    * Récupère les statistiques détaillées des retraits pour un marchand
    * GET /api/merchant/give-change/stats?userId={userId}
@@ -718,14 +700,12 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
         })
       }
 
-      // Récupérer le wallet
       const wallet = await Wallet.query()
-        .where('user_id', user.id)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
         .first()
 
       const currentBalance = wallet ? wallet.balance : 0
 
-      // Vérifier si la table merchant_withdrawals existe
       const hasWithdrawalsTable = await Database.rawQuery(`
         SELECT EXISTS (
           SELECT FROM information_schema.tables
@@ -742,7 +722,6 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
           .orderBy('created_at', 'desc')
       }
 
-      // Statistiques globales
       const completed = withdrawals.filter(w => w.status === 'completed')
       const pending = withdrawals.filter(w => w.status === 'pending')
       const failed = withdrawals.filter(w => w.status === 'failed')
@@ -750,7 +729,6 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
       const totalWithdrawn = completed.reduce((sum, w) => sum + Number(w.amount), 0)
       const averageWithdrawal = completed.length > 0 ? totalWithdrawn / completed.length : 0
 
-      // Dernier retrait
       const lastWithdrawal = withdrawals.length > 0 ? {
         id: withdrawals[0].id,
         amount: Number(withdrawals[0].amount),
@@ -763,7 +741,6 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
         created_at: withdrawals[0].created_at
       } : null
 
-      // Statistiques par mois (24 derniers mois)
       const monthlyStats: { month: string; amount: number; count: number }[] = []
       const now = DateTime.now()
       const twoYearsAgo = now.minus({ years: 2 })
@@ -787,7 +764,6 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
         })
       }
 
-      // Statistiques par opérateur
       const operatorStats: { operator: string; amount: number; count: number }[] = []
       const operatorMap = new Map<string, { amount: number; count: number }>()
 
@@ -810,7 +786,6 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
 
       operatorStats.sort((a, b) => b.amount - a.amount)
 
-      // Résumé
       const summary = {
         totalWithdrawn,
         totalWithdrawals: withdrawals.length,
@@ -859,11 +834,10 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
         return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
       }
 
-      // ✅ Récupérer TOUS les produits du marchand
       const merchantProducts = await Product.query()
-        .where('user_id', user.id)
-        .where('isArchived', false)  // ✅ Exclure les produits archivés
-        .select('id', 'name', 'price', 'image_url')
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .where('isArchived', false)
+        .select('id', 'name', 'price', 'imageUrl')  // ✅ CORRIGÉ: image_url → imageUrl
 
       const productIds = merchantProducts.map(p => p.id)
 
@@ -887,15 +861,14 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
         })
       }
 
-      // ✅ Récupérer les OrderItem qui contiennent les produits du marchand
       const orderItems = await OrderItem.query()
-        .whereIn('product_id', productIds)
+        .whereIn('productId', productIds)  // ✅ CORRIGÉ: product_id → productId
         .preload('order', (orderQuery) => {
           orderQuery
             .preload('user', (userQuery) => {
               userQuery.select('id', 'full_name', 'email')
             })
-            .orderBy('created_at', 'desc')
+            .orderBy('createdAt', 'desc')
         })
         .preload('product')
 
@@ -925,36 +898,35 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
         const order = item.order
         if (!order) continue
 
-        // Si la commande n'est pas encore dans la map, on l'initialise
         if (!ordersMap.has(order.id)) {
           const tracking = await OrderTracking.query()
-            .where('order_id', order.id)
-            .orderBy('tracked_at', 'desc')
+            .where('orderId', order.id)  // ✅ CORRIGÉ: order_id → orderId
+            .orderBy('trackedAt', 'desc')
             .first()
 
           ordersMap.set(order.id, {
             id: order.id,
-            order_number: order.order_number,
+            order_number: order.orderNumber,
             status: order.status,
             total: order.total,
             subtotal: order.subtotal,
-            shipping_cost: order.shipping_cost,
-            customer_name: order.customer_name,
-            customer_email: order.customer_email,
-            customer_phone: order.customer_phone,
-            shipping_address: order.shipping_address,
-            payment_method: order.payment_method,
-            tracking_number: order.tracking_number,
-            created_at: order.created_at,
-            estimated_delivery: order.estimated_delivery,
-            delivered_at: order.delivered_at,
+            shipping_cost: order.shippingCost,
+            customer_name: order.customerName,
+            customer_email: order.customerEmail,
+            customer_phone: order.customerPhone,
+            shipping_address: order.shippingAddress,
+            payment_method: order.paymentMethod,
+            tracking_number: order.trackingNumber,
+            created_at: order.createdAt,
+            estimated_delivery: order.estimatedDelivery,
+            delivered_at: order.deliveredAt,
             notes: order.notes,
             items: [],
             tracking: tracking ? {
               status: tracking.status,
               description: tracking.description,
               location: tracking.location,
-              tracked_at: tracking.tracked_at
+              tracked_at: tracking.trackedAt
             } : null,
             user: order.user ? {
               id: order.user.id,
@@ -964,39 +936,31 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
           })
         }
 
-        // Ajouter l'item à la commande (seulement les items qui appartiennent au marchand)
         const orderData = ordersMap.get(order.id)
-
-        // ✅ Vérifier que le produit appartient bien au marchand
-        const productBelongsToMerchant = merchantProducts.some(p => p.id === item.product_id)
+        const productBelongsToMerchant = merchantProducts.some(p => p.id === item.productId)
 
         if (productBelongsToMerchant) {
           orderData.items.push({
             id: item.id,
-            product_id: item.product_id,
-            product_name: item.product_name || item.product?.name || 'Produit',
-            product_description: item.product_description || item.product?.description || null,
+            product_id: item.productId,
+            product_name: item.productName || item.product?.name || 'Produit',
+            product_description: item.productDescription || item.product?.description || null,
             price: item.price,
             quantity: item.quantity,
             subtotal: item.subtotal || (item.price * item.quantity),
             category: item.category,
-            image: item.image || item.product?.image_url || null
+            image: item.image || item.product?.imageUrl || null  // ✅ CORRIGÉ: image_url → imageUrl
           })
         }
       }
 
-      // Convertir la map en tableau
       const orders = Array.from(ordersMap.values())
-
-      // Filtrer les commandes qui ont au moins un item du marchand
       const ordersWithMerchantItems = orders.filter(order => order.items.length > 0)
 
-      // Trier par date de création (plus récent d'abord)
       ordersWithMerchantItems.sort((a, b) => {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       })
 
-      // Calculer les statistiques
       const stats = {
         totalOrders: ordersWithMerchantItems.length,
         totalRevenue: ordersWithMerchantItems.reduce((sum, order) => {
@@ -1049,9 +1013,8 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
         return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
       }
 
-      // ✅ Récupérer les produits du marchand
       const merchantProducts = await Product.query()
-        .where('user_id', user.id)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
         .where('isArchived', false)
         .select('id')
 
@@ -1065,9 +1028,8 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
         })
       }
 
-      // ✅ Récupérer les OrderItem pour les commandes en attente
       const orderItems = await OrderItem.query()
-        .whereIn('product_id', productIds)
+        .whereIn('productId', productIds)  // ✅ CORRIGÉ: product_id → productId
         .preload('order', (orderQuery) => {
           orderQuery
             .where('status', 'pending')
@@ -1083,20 +1045,19 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
         const order = item.order
         if (!order || order.status !== 'pending') continue
 
-        // ✅ Vérifier que le produit appartient au marchand
-        const productBelongsToMerchant = merchantProducts.some(p => p.id === item.product_id)
+        const productBelongsToMerchant = merchantProducts.some(p => p.id === item.productId)
         if (!productBelongsToMerchant) continue
 
         if (!ordersMap.has(order.id)) {
           ordersMap.set(order.id, {
             id: order.id,
-            order_number: order.order_number,
+            order_number: order.orderNumber,
             status: order.status,
             total: order.total,
-            customer_name: order.customer_name,
-            customer_email: order.customer_email,
-            customer_phone: order.customer_phone,
-            created_at: order.created_at,
+            customer_name: order.customerName,
+            customer_email: order.customerEmail,
+            customer_phone: order.customerPhone,
+            created_at: order.createdAt,
             items_count: 0,
             user: order.user ? {
               full_name: order.user.full_name,
@@ -1156,20 +1117,20 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
       }
 
       const merchantProducts = await Product.query()
-        .where('user_id', user.id)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
         .where('isArchived', false)
         .select('id')
 
       const merchantProductIds = merchantProducts.map(p => p.id)
-      const hasMerchantProducts = order.items.some(item => merchantProductIds.includes(item.product_id))
+      const hasMerchantProducts = order.items.some(item => merchantProductIds.includes(item.productId))
 
       if (!hasMerchantProducts) {
         return response.forbidden({ success: false, message: 'Cette commande ne contient pas de vos produits' })
       }
 
       const tracking = await OrderTracking.query()
-        .where('order_id', order.id)
-        .orderBy('tracked_at', 'desc')
+        .where('orderId', order.id)  // ✅ CORRIGÉ: order_id → orderId
+        .orderBy('trackedAt', 'desc')
         .first()
 
       return response.ok({
@@ -1180,9 +1141,9 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
             status: tracking.status,
             description: tracking.description,
             location: tracking.location,
-            tracked_at: tracking.tracked_at
+            tracked_at: tracking.trackedAt
           } : null,
-          merchant_items: order.items.filter(item => merchantProductIds.includes(item.product_id))
+          merchant_items: order.items.filter(item => merchantProductIds.includes(item.productId))
         }
       })
 
@@ -1206,7 +1167,7 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
 
     try {
       const orders = await OrderTracking.query()
-        .where('user_id', id)
+        .where('userId', id)  // ✅ CORRIGÉ: user_id → userId
         .preload('order', (orderQuery) => {
           orderQuery.preload('items', (itemsQuery) => {
             itemsQuery.preload('product')
@@ -1229,148 +1190,141 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
   }
 
   async dashboard(ctx: HttpContext) {
-  const { params, response } = ctx
-  const userId = params.userId
+    const { params, response } = ctx
+    const userId = params.userId
 
-  const user = await User.findBy('id', userId)
-  if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-    return response.forbidden({ success: false, message: 'Non autorisé' })
-  }
+    const user = await User.findBy('id', userId)
+    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+      return response.forbidden({ success: false, message: 'Non autorisé' })
+    }
 
-  // ✅ Charger les produits avec leur catégorie
-  const products = await Product.query()
-    .where('user_id', user.id)
-    .where('isArchived', false)
-    .preload('categoryRelation')
-    .orderBy('createdAt', 'desc')
+    const products = await Product.query()
+      .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+      .where('isArchived', false)
+      .preload('categoryRelation')
+      .orderBy('createdAt', 'desc')
 
-  // Récupérer les catégories du marchand
-  const categories = await Category.query()
-    .where('user_id', user.id)
-    .orderBy('name', 'asc')
+    const categories = await Category.query()
+      .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+      .orderBy('name', 'asc')
 
-  // Récupérer les coupons du marchand
-  const coupons = await Coupon.query()
-    .where('user_id', user.id)
-    .orderBy('created_at', 'desc')
+    const coupons = await Coupon.query()
+      .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+      .orderBy('createdAt', 'desc')
 
-  // Récupérer le wallet
-  let wallet = await Wallet.query()
-    .where('user_id', user.id)
-    .first()
+    let wallet = await Wallet.query()
+      .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+      .first()
 
-  if (!wallet) {
-    wallet = await Wallet.create({
-      user_id: user.id,
-      balance: 0,
-      currency: 'XAF',
-      status: 'active'
+    if (!wallet) {
+      wallet = await Wallet.create({
+        userId: user.id,  // ✅ CORRIGÉ: user_id → userId
+        balance: 0,
+        currency: 'XAF',
+        status: 'active'
+      })
+    }
+
+    const productIds = products.map(p => p.id)
+    let likesCountMap: Record<string, number> = {}
+
+    if (productIds.length > 0) {
+      try {
+        const likesData = await Database
+          .from('favorites')
+          .select('product_id')
+          .count('* as total')
+          .whereIn('product_id', productIds)
+          .groupBy('product_id')
+
+        likesCountMap = likesData.reduce((acc: Record<string, number>, curr: any) => {
+          acc[curr.product_id] = parseInt(curr.total)
+          return acc
+        }, {})
+      } catch (error) {
+        console.log('Table favorites non disponible:', error)
+      }
+    }
+
+    let salesCountMap: Record<string, number> = {}
+
+    if (productIds.length > 0) {
+      try {
+        const orderItems = await OrderItem.query()
+          .whereIn('productId', productIds)  // ✅ CORRIGÉ: product_id → productId
+          .select('productId')
+          .count('* as total')
+          .groupBy('productId')
+
+        salesCountMap = orderItems.reduce((acc: Record<string, number>, curr: any) => {
+          acc[curr.productId] = parseInt(curr.$extras.total)
+          return acc
+        }, {})
+      } catch (error) {
+        console.log('Table order_items non disponible:', error)
+      }
+    }
+
+    const transformedProducts = products.map(p => {
+      let categoryName = 'Sans catégorie'
+      if (p.categoryRelation) {
+        categoryName = p.categoryRelation.name
+      } else if (p.category) {
+        categoryName = p.category
+      }
+
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        stock: p.stock,
+        image_url: p.imageUrl,  // ✅ CORRIGÉ: image_url → imageUrl
+        category: categoryName,
+        likes: likesCountMap[p.id] || 0,
+        sales: salesCountMap[p.id] || 0,
+        status: p.status || 'active',
+        createdAt: p.createdAt
+      }
+    })
+
+    const totalLikes = transformedProducts.reduce((sum, p) => sum + p.likes, 0)
+    const totalSales = transformedProducts.reduce((sum, p) => sum + p.sales, 0)
+
+    return response.ok({
+      success: true,
+      data: {
+        stats: {
+          totalProducts: products.length,
+          totalSales: totalSales,
+          totalRevenue: 0,
+          totalLikes: totalLikes,
+          pendingOrders: 0,
+        },
+        products: transformedProducts,
+        categories: categories.map(c => ({
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          image_url: c.imageUrl || null,  // ✅ CORRIGÉ: image_url → imageUrl
+          productCount: c.productCount || 0
+        })),
+        coupons: coupons,
+        salesChart: [],
+        pendingOrders: [],
+        popularProducts: [],
+        merchant: {
+          id: user.id,
+          uuid: user.id,
+          full_name: user.full_name,
+          email: user.email,
+          avatar: user.avatar || null,
+          availableBalance: wallet.balance
+        }
+      }
     })
   }
 
-  // ✅ RÉCUPÉRER LES LIKES RÉELS (depuis la table favorites)
-  const productIds = products.map(p => p.id)
-  let likesCountMap: Record<string, number> = {}
-
-  if (productIds.length > 0) {
-    try {
-      const likesData = await Database
-        .from('favorites')
-        .select('product_id')
-        .count('* as total')
-        .whereIn('product_id', productIds)
-        .groupBy('product_id')
-
-      likesCountMap = likesData.reduce((acc: Record<string, number>, curr: any) => {
-        acc[curr.product_id] = parseInt(curr.total)
-        return acc
-      }, {})
-    } catch (error) {
-      console.log('Table favorites non disponible:', error)
-    }
-  }
-
-  // ✅ RÉCUPÉRER LES VENTES RÉELLES (depuis la table order_items)
-  let salesCountMap: Record<string, number> = {}
-
-  if (productIds.length > 0) {
-    try {
-      const orderItems = await OrderItem.query()
-        .whereIn('product_id', productIds)
-        .select('product_id')
-        .count('* as total')
-        .groupBy('product_id')
-
-      salesCountMap = orderItems.reduce((acc: Record<string, number>, curr: any) => {
-        acc[curr.product_id] = parseInt(curr.$extras.total)
-        return acc
-      }, {})
-    } catch (error) {
-      console.log('Table order_items non disponible:', error)
-    }
-  }
-
-  // ✅ Transformer les produits avec les vrais likes et ventes
-  const transformedProducts = products.map(p => {
-    let categoryName = 'Sans catégorie'
-    if (p.categoryRelation) {
-      categoryName = p.categoryRelation.name
-    } else if (p.category) {
-      categoryName = p.category
-    }
-
-    return {
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      price: p.price,
-      stock: p.stock,
-      image_url: p.image_url,
-      category: categoryName,
-      likes: likesCountMap[p.id] || 0,    // ✅ Vrais likes depuis favorites
-      sales: salesCountMap[p.id] || 0,   // ✅ Vraies ventes depuis order_items
-      status: p.status || 'active',
-      createdAt: p.createdAt
-    }
-  })
-
-  // Calculer les totaux
-  const totalLikes = transformedProducts.reduce((sum, p) => sum + p.likes, 0)
-  const totalSales = transformedProducts.reduce((sum, p) => sum + p.sales, 0)
-
-  return response.ok({
-    success: true,
-    data: {
-      stats: {
-        totalProducts: products.length,
-        totalSales: totalSales,
-        totalRevenue: 0,
-        totalLikes: totalLikes,
-        pendingOrders: 0,
-      },
-      products: transformedProducts,
-      categories: categories.map(c => ({
-        id: c.id,
-        name: c.name,
-        slug: c.slug,
-        image_url: c.image_url || null,
-        productCount: c.product_count || 0
-      })),
-      coupons: coupons,
-      salesChart: [],
-      pendingOrders: [],
-      popularProducts: [],
-      merchant: {
-        id: user.id,
-        uuid: user.id,
-        full_name: user.full_name,
-        email: user.email,
-        avatar: user.avatar || null,
-        availableBalance: wallet.balance
-      }
-    }
-  })
-}
   async getProducts({ params, request, response }: HttpContext) {
     try {
       const { userId } = params
@@ -1387,12 +1341,11 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
       const page = request.input('page', 1)
       const limit = request.input('limit', 10)
 
-      // ✅ CHARGER LA RELATION categoryRelation
       const products = await Product.query()
-        .where('user_id', user.id)
-        .where('isArchived', false) // ✅ Filtre ajouté
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .where('isArchived', false)
         .preload('categoryRelation')
-        .orderBy('createdAt', 'desc')  // ✅ Correction: createdAt
+        .orderBy('createdAt', 'desc')
         .paginate(page, limit)
 
       const productArray = products.all()
@@ -1430,13 +1383,13 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
           description: product.description,
           price: product.price,
           stock: product.stock,
-          image_url: product.image_url,
+          image_url: product.imageUrl,  // ✅ CORRIGÉ: image_url → imageUrl
           category: categoryName,
-          category_id: product.category_id,
+          category_id: product.categoryId,  // ✅ CORRIGÉ: category_id → categoryId
           likes: favoritesCountMap[product.id] || 0,
           sales: product.sales || 0,
           status: product.status || 'active',
-          created_at: product.createdAt  // ✅ Correction: utiliser createdAt du modèle
+          created_at: product.createdAt
         }
       })
 
@@ -1457,480 +1410,464 @@ async getWithdrawalHistory({ params, response }: HttpContext) {
     }
   }
 
-async createProduct({ params, request, response }: HttpContext) {
-  try {
-    const { userId } = params
-    const { name, description, price, stock, category_name, image_url } = request.only([
-      'name', 'description', 'price', 'stock', 'category_name', 'image_url',
-    ])
+  async createProduct({ params, request, response }: HttpContext) {
+    try {
+      const { userId } = params
+      const { name, description, price, stock, category_name, image_url } = request.only([
+        'name', 'description', 'price', 'stock', 'category_name', 'image_url',
+      ])
 
-    // Validation
-    if (!name || name.trim() === '') {
-      return response.badRequest({ success: false, message: 'Le nom du produit est requis' })
-    }
-
-    const user = await User.findBy('id', userId)
-    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-      return response.forbidden({ success: false, message: 'Non autorisé' })
-    }
-
-    // Gérer la catégorie
-    let categoryId: string | null = null
-    if (category_name && category_name.trim() !== '') {
-      let category = await Category.query()
-        .where('name', category_name.trim())
-        .where('user_id', user.id)
-        .first()
-
-      if (!category) {
-        category = await Category.create({
-          name: category_name.trim(),
-          slug: category_name.trim().toLowerCase().replace(/\s+/g, '-'),
-          user_id: user.id,
-          is_active: true,
-        })
+      if (!name || name.trim() === '') {
+        return response.badRequest({ success: false, message: 'Le nom du produit est requis' })
       }
-      categoryId = category.id
-    }
 
-    // Créer le produit avec les BONS noms de colonnes
-    const product = await Product.create({
-      name: name.trim(),
-      description: description || '',
-      price: parseFloat(price) || 0,
-      stock: parseInt(stock) || 0,
-      imageUrl: image_url || null,
-      userId: user.id,
-      categoryId: categoryId,
-      isNew: true,
-      isOnSale: false,
-      rating: 0,
-      isArchived: false,
-      sales: 0,
-      likes: 0,
-      reviewsCount: 0,
-      status: 'active',
-      minOrderQuantity: 1,
-      isBoosted: false,
-      boostMultiplier: 1,
-      boostLevel: 'none',
-      boostPriority: 0,
-      boostViews: 0,
-      boostClicks: 0,
-      boostSales: 0,
-      isFeatured: false,
-      isTrending: false,
-    })
+      const user = await User.findBy('id', userId)
+      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+        return response.forbidden({ success: false, message: 'Non autorisé' })
+      }
 
-    // Ajouter à la catégorie
-    if (categoryId) {
-      const category = await Category.find(categoryId)
-      if (category) {
-        const ids = Array.isArray(category.product_ids) ? category.product_ids : []
-        if (!ids.includes(product.id)) {
-          ids.push(product.id)
-          category.product_ids = ids
-          category.product_count = ids.length
-          await category.save()
+      let categoryId: string | null = null
+      if (category_name && category_name.trim() !== '') {
+        let category = await Category.query()
+          .where('name', category_name.trim())
+          .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+          .first()
+
+        if (!category) {
+          category = await Category.create({
+            name: category_name.trim(),
+            slug: category_name.trim().toLowerCase().replace(/\s+/g, '-'),
+            userId: user.id,  // ✅ CORRIGÉ: user_id → userId
+            isActive: true,
+          })
         }
-      }
-    }
-
-    return response.created({
-      success: true,
-      data: {
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        stock: product.stock,
-        category_id: product.categoryId,
-        category_name: category_name || null,
-        image_url: product.imageUrl,
-      },
-      message: `Produit "${name}" créé avec succès`,
-    })
-
-  } catch (error: any) {
-    console.error('❌ Erreur createProduct:', error.message)
-    return response.internalServerError({
-      success: false,
-      message: error.message,
-    })
-  }
-}
- // En haut du fichier, ajoutez l'import
-
-// Puis modifiez la méthode updateProduct
-async updateProduct({ params, request, response }: HttpContext) {
-  try {
-    const { userId, productId } = params
-    const { name, description, price, stock, category_name, image_url } = request.only([
-      'name', 'description', 'price', 'stock', 'category_name', 'image_url'
-    ])
-
-    const user = await User.findBy('id', userId)
-
-    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-      return response.forbidden({ success: false, message: 'Non autorisé' })
-    }
-
-    const product = await Product.query()
-      .where('id', productId)
-      .where('user_id', user.id)
-      .first()
-
-    if (!product) {
-      return response.notFound({ success: false, message: 'Produit non trouvé' })
-    }
-
-    // ✅ SAUVEGARDER L'ANCIEN PRIX
-    const oldPrice = product.price
-    let newPrice = oldPrice
-
-    let categoryId: string | null = null
-
-    if (category_name && category_name.trim() !== '') {
-      const category = await Category.query()
-        .where('name', category_name)
-        .where('user_id', user.id)
-        .first()
-
-      if (category) {
         categoryId = category.id
-      } else {
-        const newCategory = await Category.create({
-          name: category_name,
-          slug: category_name.toLowerCase().replace(/\s+/g, '-'),
-          user_id: user.id,
-        })
-        categoryId = newCategory.id
-      }
-    }
-
-    if (name) product.name = name
-    if (description !== undefined) product.description = description
-    if (price) {
-      newPrice = parseFloat(price)
-      product.price = newPrice
-    }
-    if (stock !== undefined) product.stock = parseInt(stock)
-    if (image_url !== undefined) product.image_url = image_url
-    if (categoryId) product.category_id = categoryId
-
-    // ✅ GESTION DE LA PROMOTION AUTOMATIQUE
-    let promotionMessage = ''
-    let promotionCreated: any = null
-    
-    if (price && newPrice < oldPrice) {
-      const reductionPercent = ((oldPrice - newPrice) / oldPrice) * 100
-      
-      // Activer le flag promotion sur le produit
-      product.isOnSale = true
-      product.isNew = false
-      
-      // Sauvegarder l'ancien prix
-      if ('old_price' in product) {
-        (product as any).old_price = oldPrice
       }
 
-      // ✅ CRÉER UNE PROMOTION DANS LA TABLE PROMOTIONS
-      try {
-        const promoEndDate = DateTime.now().plus({ days: 30 }) // Promotion valable 30 jours
-        
-        const promotion = await Promotion.create({
-          title: `🔥 ${reductionPercent.toFixed(0)}% sur ${product.name}`,
-          description: `Profitez de ${reductionPercent.toFixed(0)}% de réduction sur ${product.name} ! Ancien prix: ${oldPrice} FCFA, Nouveau prix: ${newPrice} FCFA. Offre limitée !`,
-          image_url: product.image_url,
-          banner_image: product.image_url,
-          type: 'flash_sale',
-          discount_percentage: Math.round(reductionPercent),
-          discount_amount: oldPrice - newPrice,
-          category: category_name || null,
-          product_ids: JSON.stringify([product.id]), // ✅ Produit concerné
-          link: `/product/${product.id}`,
-          button_text: '🌐 Voir le produit',
-          min_order_amount: null,
-          start_date: DateTime.now(),
-          end_date: promoEndDate,
-          status: 'active',
-          priority: Math.round(reductionPercent), // Plus la réduction est grande, plus la priorité est haute
-        })
+      const product = await Product.create({
+        name: name.trim(),
+        description: description || '',
+        price: parseFloat(price) || 0,
+        stock: parseInt(stock) || 0,
+        imageUrl: image_url || null,  // ✅ CORRIGÉ: image_url → imageUrl
+        userId: user.id,  // ✅ CORRIGÉ: user_id → userId
+        categoryId: categoryId,  // ✅ CORRIGÉ: category_id → categoryId
+        isNew: true,
+        isOnSale: false,
+        rating: 0,
+        isArchived: false,
+        sales: 0,
+        likes: 0,
+        reviewsCount: 0,
+        status: 'active',
+        minOrderQuantity: 1,
+        isBoosted: false,
+        boostMultiplier: 1,
+        boostLevel: 'none',
+        boostPriority: 0,
+        boostViews: 0,
+        boostClicks: 0,
+        boostSales: 0,
+        isFeatured: false,
+        isTrending: false,
+      })
 
-        promotionCreated = {
-          id: promotion.id,
-          title: promotion.title,
-          discount_percentage: promotion.discount_percentage,
-          end_date: promotion.end_date
+      if (categoryId) {
+        const category = await Category.find(categoryId)
+        if (category) {
+          const ids = Array.isArray(category.productIds) ? category.productIds : []
+          if (!ids.includes(product.id)) {
+            ids.push(product.id)
+            category.productIds = ids
+            category.productCount = ids.length
+            await category.save()
+          }
         }
-
-        promotionMessage = ` ✅ PROMO CRÉÉE : -${reductionPercent.toFixed(0)}% sur "${product.name}" ! Visible jusqu'au ${promoEndDate.toFormat('dd/MM/yyyy')}.`
-        
-        console.log(`🎉 Promotion créée: ${promotion.title}`)
-      } catch (promoError: any) {
-        console.error('Erreur création promotion:', promoError)
-        promotionMessage = ` ⚠️ Prix réduit de ${reductionPercent.toFixed(0)}% mais la promotion n'a pas pu être créée.`
       }
-      
-    } else if (price && newPrice >= oldPrice && oldPrice > 0) {
-      // Prix augmenté ou inchangé → désactiver la promotion sur le produit
-      product.isOnSale = false
-      
-      // ✅ DÉSACTIVER LES PROMOTIONS EXISTANTES POUR CE PRODUIT
-      try {
-        const existingPromos = await Promotion.query()
-          .where('product_ids', 'LIKE', `%${product.id}%`)
-          .where('status', 'active')
-        
-        for (const promo of existingPromos) {
-          promo.status = 'expired'
-          promo.end_date = DateTime.now()
-          await promo.save()
-          console.log(`🏁 Promotion expirée: ${promo.title}`)
-        }
 
-        if (existingPromos.length > 0) {
-          promotionMessage += ` ${existingPromos.length} promotion(s) désactivée(s).`
-        }
-      } catch (err) {
-        console.error('Erreur désactivation promotions:', err)
-      }
-      
-      if (newPrice === oldPrice) {
-        promotionMessage = ` Prix inchangé (${newPrice} FCFA).` + promotionMessage
-      } else {
-        const increasePercent = ((newPrice - oldPrice) / oldPrice) * 100
-        promotionMessage = ` Prix augmenté de ${increasePercent.toFixed(0)}% (${oldPrice} → ${newPrice} FCFA).` + promotionMessage
-      }
-    }
+      return response.created({
+        success: true,
+        data: {
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          stock: product.stock,
+          category_id: product.categoryId,
+          category_name: category_name || null,
+          image_url: product.imageUrl,
+        },
+        message: `Produit "${name}" créé avec succès`,
+      })
 
-    await product.save()
-
-    // Recharger avec la relation catégorie
-    const updatedProduct = await Product.query()
-      .where('id', product.id)
-      .preload('categoryRelation')
-      .first()
-
-    let categoryNameResult = 'Sans catégorie'
-    if (updatedProduct?.categoryRelation) {
-      categoryNameResult = updatedProduct.categoryRelation.name
-    }
-
-    return response.ok({
-      success: true,
-      message: `Produit "${product.name}" mis à jour.${promotionMessage}`,
-      data: {
-        id: product.id,
-        name: product.name,
-        description: product.description,
-        price: product.price,
-        old_price: oldPrice !== newPrice ? oldPrice : undefined,
-        stock: product.stock,
-        image_url: product.image_url,
-        category: categoryNameResult,
-        category_id: product.category_id,
-        is_on_sale: product.isOnSale,
-        is_new: product.isNew,
-        price_changed: oldPrice !== newPrice,
-        reduction_percent: oldPrice > newPrice ? ((oldPrice - newPrice) / oldPrice) * 100 : 0,
-        promotion_active: product.isOnSale,
-        promotion: promotionCreated // ✅ Infos de la promotion créée
-      }
-    })
-  } catch (error: any) {
-    console.error('Erreur updateProduct:', error)
-    return response.internalServerError({
-      success: false,
-      message: error.message
-    })
-  }
-}
-async deleteProduct({ params, response }: HttpContext) {
-  try {
-    const { userId, productId } = params
-    const user = await User.findBy('id', userId)
-
-    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-      return response.forbidden({ success: false, message: 'Non autorisé' })
-    }
-
-    const product = await Product.query()
-      .where('id', productId)
-      .where('user_id', user.id)
-      .first()
-
-    if (!product) {
-      return response.notFound({ success: false, message: 'Produit non trouvé' })
-    }
-
-    // Vérifier si le produit est déjà archivé
-    if (product.isArchived) {
-      return response.badRequest({
+    } catch (error: any) {
+      console.error('❌ Erreur createProduct:', error.message)
+      return response.internalServerError({
         success: false,
-        message: 'Ce produit est déjà archivé'
+        message: error.message,
       })
     }
-
-    // ✅ CORRECTION : Mettre à jour directement le champ isArchived
-    product.isArchived = true
-    await product.save()
-
-    return response.ok({
-      success: true,
-      message: 'Produit archivé avec succès',
-      data: {
-        id: product.id,
-        is_archived: product.isArchived,
-        archived_at: product.updatedAt
-      }
-    })
-  } catch (error: any) {
-    console.error('Erreur deleteProduct (archive):', error)
-    return response.internalServerError({
-      success: false,
-      message: error.message || 'Erreur lors de l\'archivage du produit'
-    })
   }
-}
 
- async getCategories({ params, response }: HttpContext) {
-  try {
-    const { userId } = params
+  async updateProduct({ params, request, response }: HttpContext) {
+    try {
+      const { userId, productId } = params
+      const { name, description, price, stock, category_name, image_url } = request.only([
+        'name', 'description', 'price', 'stock', 'category_name', 'image_url'
+      ])
 
-    if (!userId) {
-      return response.badRequest({ success: false, message: 'ID utilisateur requis' })
+      const user = await User.findBy('id', userId)
+
+      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+        return response.forbidden({ success: false, message: 'Non autorisé' })
+      }
+
+      const product = await Product.query()
+        .where('id', productId)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .first()
+
+      if (!product) {
+        return response.notFound({ success: false, message: 'Produit non trouvé' })
+      }
+
+      const oldPrice = product.price
+      let newPrice = oldPrice
+
+      let categoryId: string | null = null
+
+      if (category_name && category_name.trim() !== '') {
+        const category = await Category.query()
+          .where('name', category_name)
+          .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+          .first()
+
+        if (category) {
+          categoryId = category.id
+        } else {
+          const newCategory = await Category.create({
+            name: category_name,
+            slug: category_name.toLowerCase().replace(/\s+/g, '-'),
+            userId: user.id,  // ✅ CORRIGÉ: user_id → userId
+          })
+          categoryId = newCategory.id
+        }
+      }
+
+      if (name) product.name = name
+      if (description !== undefined) product.description = description
+      if (price) {
+        newPrice = parseFloat(price)
+        product.price = newPrice
+      }
+      if (stock !== undefined) product.stock = parseInt(stock)
+      if (image_url !== undefined) product.imageUrl = image_url  // ✅ CORRIGÉ: image_url → imageUrl
+      if (categoryId) product.categoryId = categoryId  // ✅ CORRIGÉ: category_id → categoryId
+
+      let promotionMessage = ''
+      let promotionCreated: any = null
+      
+      if (price && newPrice < oldPrice) {
+        const reductionPercent = ((oldPrice - newPrice) / oldPrice) * 100
+        
+        product.isOnSale = true
+        product.isNew = false
+        
+        if ('oldPrice' in product) {
+          (product as any).oldPrice = oldPrice
+        }
+
+        try {
+          const promoEndDate = DateTime.now().plus({ days: 30 })
+          
+          const promotion = await Promotion.create({
+            title: `🔥 ${reductionPercent.toFixed(0)}% sur ${product.name}`,
+            description: `Profitez de ${reductionPercent.toFixed(0)}% de réduction sur ${product.name} ! Ancien prix: ${oldPrice} FCFA, Nouveau prix: ${newPrice} FCFA. Offre limitée !`,
+            imageUrl: product.imageUrl,  // ✅ CORRIGÉ: image_url → imageUrl
+            bannerImage: product.imageUrl,
+            type: 'flash_sale',
+            discountPercentage: Math.round(reductionPercent),
+            discountAmount: oldPrice - newPrice,
+            category: category_name || null,
+            productIds: JSON.stringify([product.id]),
+            link: `/product/${product.id}`,
+            buttonText: '🌐 Voir le produit',
+            minOrderAmount: null,
+            startDate: DateTime.now(),
+            endDate: promoEndDate,
+            status: 'active',
+            priority: Math.round(reductionPercent),
+          })
+
+          promotionCreated = {
+            id: promotion.id,
+            title: promotion.title,
+            discount_percentage: promotion.discountPercentage,
+            end_date: promotion.endDate
+          }
+
+          promotionMessage = ` ✅ PROMO CRÉÉE : -${reductionPercent.toFixed(0)}% sur "${product.name}" ! Visible jusqu'au ${promoEndDate.toFormat('dd/MM/yyyy')}.`
+          
+          console.log(`🎉 Promotion créée: ${promotion.title}`)
+        } catch (promoError: any) {
+          console.error('Erreur création promotion:', promoError)
+          promotionMessage = ` ⚠️ Prix réduit de ${reductionPercent.toFixed(0)}% mais la promotion n'a pas pu être créée.`
+        }
+        
+      } else if (price && newPrice >= oldPrice && oldPrice > 0) {
+        product.isOnSale = false
+        
+        try {
+          const existingPromos = await Promotion.query()
+            .where('productIds', 'LIKE', `%${product.id}%`)
+            .where('status', 'active')
+          
+          for (const promo of existingPromos) {
+            promo.status = 'expired'
+            promo.endDate = DateTime.now()
+            await promo.save()
+            console.log(`🏁 Promotion expirée: ${promo.title}`)
+          }
+
+          if (existingPromos.length > 0) {
+            promotionMessage += ` ${existingPromos.length} promotion(s) désactivée(s).`
+          }
+        } catch (err) {
+          console.error('Erreur désactivation promotions:', err)
+        }
+        
+        if (newPrice === oldPrice) {
+          promotionMessage = ` Prix inchangé (${newPrice} FCFA).` + promotionMessage
+        } else {
+          const increasePercent = ((newPrice - oldPrice) / oldPrice) * 100
+          promotionMessage = ` Prix augmenté de ${increasePercent.toFixed(0)}% (${oldPrice} → ${newPrice} FCFA).` + promotionMessage
+        }
+      }
+
+      await product.save()
+
+      const updatedProduct = await Product.query()
+        .where('id', product.id)
+        .preload('categoryRelation')
+        .first()
+
+      let categoryNameResult = 'Sans catégorie'
+      if (updatedProduct?.categoryRelation) {
+        categoryNameResult = updatedProduct.categoryRelation.name
+      }
+
+      return response.ok({
+        success: true,
+        message: `Produit "${product.name}" mis à jour.${promotionMessage}`,
+        data: {
+          id: product.id,
+          name: product.name,
+          description: product.description,
+          price: product.price,
+          old_price: oldPrice !== newPrice ? oldPrice : undefined,
+          stock: product.stock,
+          image_url: product.imageUrl,
+          category: categoryNameResult,
+          category_id: product.categoryId,
+          is_on_sale: product.isOnSale,
+          is_new: product.isNew,
+          price_changed: oldPrice !== newPrice,
+          reduction_percent: oldPrice > newPrice ? ((oldPrice - newPrice) / oldPrice) * 100 : 0,
+          promotion_active: product.isOnSale,
+          promotion: promotionCreated
+        }
+      })
+    } catch (error: any) {
+      console.error('Erreur updateProduct:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
     }
+  }
 
-    const user = await User.findBy('id', userId)
+  async deleteProduct({ params, response }: HttpContext) {
+    try {
+      const { userId, productId } = params
+      const user = await User.findBy('id', userId)
 
-    if (!user) {
-      return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+        return response.forbidden({ success: false, message: 'Non autorisé' })
+      }
+
+      const product = await Product.query()
+        .where('id', productId)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .first()
+
+      if (!product) {
+        return response.notFound({ success: false, message: 'Produit non trouvé' })
+      }
+
+      if (product.isArchived) {
+        return response.badRequest({
+          success: false,
+          message: 'Ce produit est déjà archivé'
+        })
+      }
+
+      product.isArchived = true
+      await product.save()
+
+      return response.ok({
+        success: true,
+        message: 'Produit archivé avec succès',
+        data: {
+          id: product.id,
+          is_archived: product.isArchived,
+          archived_at: product.updatedAt
+        }
+      })
+    } catch (error: any) {
+      console.error('Erreur deleteProduct (archive):', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message || 'Erreur lors de l\'archivage du produit'
+      })
     }
+  }
 
-    const categories = await Category.query()
-      .where('user_id', user.id)
-      .orderBy('name', 'asc')
+  async getCategories({ params, response }: HttpContext) {
+    try {
+      const { userId } = params
 
-    // ✅ Pour chaque catégorie, compter les vrais produits non archivés
-    const categoriesWithCount = await Promise.all(
-      categories.map(async (category) => {
-        const productCountResult = await Product.query()
-          .where('category_id', category.id)
-          .where('user_id', user.id)
-          .where('isArchived', false)
-          .count('* as total')
+      if (!userId) {
+        return response.badRequest({ success: false, message: 'ID utilisateur requis' })
+      }
 
-        const realCount = parseInt(productCountResult[0].$extras.total) || 0
+      const user = await User.findBy('id', userId)
 
-        return {
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      const categories = await Category.query()
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .orderBy('name', 'asc')
+
+      const categoriesWithCount = await Promise.all(
+        categories.map(async (category) => {
+          const productCountResult = await Product.query()
+            .where('categoryId', category.id)  // ✅ CORRIGÉ: category_id → categoryId
+            .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+            .where('isArchived', false)
+            .count('* as total')
+
+          const realCount = parseInt(productCountResult[0].$extras.total) || 0
+
+          return {
+            id: category.id,
+            name: category.name,
+            slug: category.slug,
+            image_url: category.imageUrl || null,  // ✅ CORRIGÉ: image_url → imageUrl
+            icon_name: category.iconName || null,
+            product_count: realCount,
+            sort_order: category.sortOrder ?? 0,
+            is_active: category.isActive,
+          }
+        })
+      )
+
+      return response.ok({ 
+        success: true, 
+        message: 'Catégories récupérées avec succès',
+        data: categoriesWithCount,
+        count: categoriesWithCount.length,
+      })
+    } catch (error: any) {
+      console.error('ERREUR getCategories:', error)
+      return response.internalServerError({ success: false, message: error.message })
+    }
+  }
+
+  async createCategory({ params, request, response }: HttpContext) {
+    try {
+      const { userId } = params
+      const { name, slug, image_url } = request.only(['name', 'slug', 'image_url'])
+
+      if (!name) {
+        return response.badRequest({ success: false, message: 'Le nom est requis' })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+        return response.forbidden({ success: false, message: 'Non autorisé' })
+      }
+
+      const slugToUse = slug || name.toLowerCase().replace(/\s+/g, '-')
+
+      const category = await Category.create({
+        name,
+        slug: slugToUse,
+        userId: user.id,  // ✅ CORRIGÉ: user_id → userId
+        imageUrl: image_url || null,  // ✅ CORRIGÉ: image_url → imageUrl
+      })
+
+      return response.created({
+        success: true,
+        data: {
           id: category.id,
           name: category.name,
           slug: category.slug,
-          image_url: category.image_url || null,
-          icon_name: category.icon_name || null,
-          product_count: realCount,  // ✅ Vrai comptage
-          sort_order: category.sort_order ?? 0,
-          is_active: category.is_active,
-        }
+          image_url: category.imageUrl,  // ✅ CORRIGÉ: image_url → imageUrl
+          productCount: 0,
+        },
+        message: 'Catégorie créée',
       })
-    )
-
-    return response.ok({ 
-      success: true, 
-      message: 'Catégories récupérées avec succès',
-      data: categoriesWithCount,
-      count: categoriesWithCount.length,
-    })
-  } catch (error: any) {
-    console.error('ERREUR getCategories:', error)
-    return response.internalServerError({ success: false, message: error.message })
+    } catch (error: any) {
+      console.error('ERREUR createCategory:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message,
+      })
+    }
   }
-}
 
-  async createCategory({ params, request, response }: HttpContext) {
-  try {
-    const { userId } = params
-    const { name, slug, image_url } = request.only(['name', 'slug', 'image_url'])  // ✅ Ajouter image_url
+  async updateCategory({ params, request, response }: HttpContext) {
+    try {
+      const { userId, categoryId } = params
+      const { name, slug, is_active, image_url } = request.only(['name', 'slug', 'is_active', 'image_url'])
 
-    if (!name) {
-      return response.badRequest({ success: false, message: 'Le nom est requis' })
+      const user = await User.findBy('id', userId)
+
+      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+        return response.forbidden({ success: false, message: 'Non autorisé' })
+      }
+
+      const category = await Category.query()
+        .where('id', categoryId)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .first()
+
+      if (!category) {
+        return response.notFound({ success: false, message: 'Catégorie non trouvée' })
+      }
+
+      if (name) category.name = name
+      if (slug) category.slug = slug
+      if (is_active !== undefined) category.isActive = is_active
+      if (image_url !== undefined) category.imageUrl = image_url  // ✅ CORRIGÉ: image_url → imageUrl
+
+      await category.save()
+
+      return response.ok({
+        success: true,
+        data: category,
+        message: 'Catégorie mise à jour avec succès'
+      })
+    } catch (error: any) {
+      console.error('Erreur updateCategory:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message
+      })
     }
-
-    const user = await User.findBy('id', userId)
-
-    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-      return response.forbidden({ success: false, message: 'Non autorisé' })
-    }
-
-    const slugToUse = slug || name.toLowerCase().replace(/\s+/g, '-')
-
-    const category = await Category.create({
-      name,
-      slug: slugToUse,
-      user_id: user.id,
-      image_url: image_url || null,  // ✅ Sauvegarder l'URL de l'image
-    })
-
-    return response.created({
-      success: true,
-      data: {
-        id: category.id,
-        name: category.name,
-        slug: category.slug,
-        image_url: category.image_url,  // ✅ Retourner l'URL
-        productCount: 0,
-      },
-      message: 'Catégorie créée',
-    })
-  } catch (error: any) {
-    console.error('ERREUR createCategory:', error)
-    return response.internalServerError({
-      success: false,
-      message: error.message,
-    })
   }
-}
-
-async updateCategory({ params, request, response }: HttpContext) {
-  try {
-    const { userId, categoryId } = params
-    const { name, slug, is_active, image_url } = request.only(['name', 'slug', 'is_active', 'image_url'])  // ✅ Ajouter image_url
-
-    const user = await User.findBy('id', userId)
-
-    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-      return response.forbidden({ success: false, message: 'Non autorisé' })
-    }
-
-    const category = await Category.query()
-      .where('id', categoryId)
-      .where('user_id', user.id)
-      .first()
-
-    if (!category) {
-      return response.notFound({ success: false, message: 'Catégorie non trouvée' })
-    }
-
-    if (name) category.name = name
-    if (slug) category.slug = slug
-    if (is_active !== undefined) category.is_active = is_active
-    if (image_url !== undefined) category.image_url = image_url  // ✅ Mettre à jour l'image
-
-    await category.save()
-
-    return response.ok({
-      success: true,
-      data: category,
-      message: 'Catégorie mise à jour avec succès'
-    })
-  } catch (error: any) {
-    console.error('Erreur updateCategory:', error)
-    return response.internalServerError({
-      success: false,
-      message: error.message
-    })
-  }
-}
 
   async deleteCategory({ params, response }: HttpContext) {
     try {
@@ -1944,7 +1881,7 @@ async updateCategory({ params, request, response }: HttpContext) {
 
       const category = await Category.query()
         .where('id', categoryId)
-        .where('user_id', user.id)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
         .first()
 
       if (!category) {
@@ -1952,7 +1889,7 @@ async updateCategory({ params, request, response }: HttpContext) {
       }
 
       const productsCount = await Product.query()
-        .where('category_id', category.id)
+        .where('categoryId', category.id)  // ✅ CORRIGÉ: category_id → categoryId
         .count('* as total')
 
       if (parseInt(productsCount[0].$extras.total) > 0) {
@@ -1987,8 +1924,8 @@ async updateCategory({ params, request, response }: HttpContext) {
       }
 
       const coupons = await Coupon.query()
-        .where('user_id', user.id)
-        .orderBy('created_at', 'desc')
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .orderBy('createdAt', 'desc')
 
       return response.ok({ success: true, data: coupons })
     } catch (error: any) {
@@ -2013,11 +1950,11 @@ async updateCategory({ params, request, response }: HttpContext) {
         code: code.toUpperCase(),
         discount: parseFloat(discount),
         type: type,
-        valid_until: validUntil ? DateTime.fromJSDate(new Date(validUntil)) : null,
-        usage_limit: usageLimit ? parseInt(usageLimit) : undefined,
-        used_count: 0,
-        user_id: user.id,
-        product_id: productId || null,
+        validUntil: validUntil ? DateTime.fromJSDate(new Date(validUntil)) : null,
+        usageLimit: usageLimit ? parseInt(usageLimit) : undefined,
+        usedCount: 0,
+        userId: user.id,  // ✅ CORRIGÉ: user_id → userId
+        productId: productId || null,
         status: 'active'
       })
 
@@ -2050,7 +1987,7 @@ async updateCategory({ params, request, response }: HttpContext) {
 
       const coupon = await Coupon.query()
         .where('id', couponId)
-        .where('user_id', user.id)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
         .first()
 
       if (!coupon) {
@@ -2060,8 +1997,8 @@ async updateCategory({ params, request, response }: HttpContext) {
       if (code) coupon.code = code.toUpperCase()
       if (discount) coupon.discount = parseFloat(discount)
       if (type) coupon.type = type
-      if (validUntil) coupon.valid_until = DateTime.fromJSDate(new Date(validUntil))
-      if (usageLimit) coupon.usage_limit = parseInt(usageLimit)
+      if (validUntil) coupon.validUntil = DateTime.fromJSDate(new Date(validUntil))
+      if (usageLimit) coupon.usageLimit = parseInt(usageLimit)
       if (status) coupon.status = status
 
       await coupon.save()
@@ -2092,7 +2029,7 @@ async updateCategory({ params, request, response }: HttpContext) {
 
       const coupon = await Coupon.query()
         .where('id', couponId)
-        .where('user_id', user.id)
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
         .first()
 
       if (!coupon) {
@@ -2124,8 +2061,8 @@ async updateCategory({ params, request, response }: HttpContext) {
       }
 
       const totalProducts = await Product.query()
-        .where('user_id', user.id)
-        .where('isArchived', false)  // ✅ Correction: isArchived
+        .where('userId', user.id)  // ✅ CORRIGÉ: user_id → userId
+        .where('isArchived', false)
         .count('* as total')
 
       return response.ok({
@@ -2151,12 +2088,12 @@ async updateCategory({ params, request, response }: HttpContext) {
       }
 
       const orders = await Order.query()
-        .where('merchant_id', user.id)
+        .where('merchantId', user.id)  // ✅ CORRIGÉ: merchant_id → merchantId
         .where('status', 'pending')
         .preload('user', (query) => {
           query.select('id', 'full_name', 'email')
         })
-        .orderBy('created_at', 'desc')
+        .orderBy('createdAt', 'desc')
         .limit(10)
 
       const ordersData = orders.map(order => ({
@@ -2165,7 +2102,7 @@ async updateCategory({ params, request, response }: HttpContext) {
         customerName: order.user?.full_name || 'Client',
         total: order.total,
         status: order.status,
-        createdAt: order.created_at.toISO(),
+        createdAt: order.createdAt.toISO(),
       }))
 
       return response.ok({ success: true, data: ordersData })
