@@ -53,7 +53,6 @@ const CouponsController = () => import('#controllers/coupons_controller')
 const GiveChangeController = () => import('#controllers/give_change_controller')
 const HotelsController = () => import('#controllers/hotels_controller')
 const RoomsController = () => import('#controllers/rooms_controller')
-const BlogCommentController = () => import('#controllers/blog_comment_controller')
 
 // ============================================================
 // ROUTES WEB (PAGES)
@@ -142,7 +141,7 @@ router.group(() => {
   }).prefix('/kyc')
 
   // ============================================================
-  // 🆕 BLOG - ROUTES COMPLÈTES (PUBLIQUES, MARCHAND, ADMIN)
+  // BLOG - ROUTES COMPLÈTES
   // ============================================================
 
   // --- Routes publiques ---
@@ -150,35 +149,18 @@ router.group(() => {
   router.get('/blog/posts/featured', [BlogController, 'featured']).as('blog.featured')
   router.get('/blog/posts/:slug', [BlogController, 'show']).as('blog.show')
   router.post('/blog/posts/submit', [BlogController, 'publicStore']).as('blog.submit')
-  
-  // Commentaires publics
   router.get('/blog/posts/:postId/comments', [BlogController, 'getComments']).as('blog.comments.public')
   router.post('/blog/posts/:postId/comments', [BlogController, 'storeComment']).as('blog.comments.store')
 
-  // --- Routes marchand (CRUD de ses propres articles) ---
+  // --- Routes marchand ---
   router.group(() => {
-    // Lister les articles du marchand
     router.get('/:userId/posts', [BlogController, 'merchantPosts']).as('blog.merchant.posts')
-    
-    // Statistiques des articles du marchand
     router.get('/:userId/stats', [BlogController, 'merchantStats']).as('blog.merchant.stats')
-    
-    // Créer un article
     router.post('/:userId/posts', [BlogController, 'merchantStore']).as('blog.merchant.store')
-    
-    // Voir un article spécifique du marchand
     router.get('/:userId/posts/:id', [BlogController, 'merchantShow']).as('blog.merchant.show')
-    
-    // Mettre à jour un article
     router.put('/:userId/posts/:id', [BlogController, 'merchantUpdate']).as('blog.merchant.update')
-    
-    // Supprimer un article
     router.delete('/:userId/posts/:id', [BlogController, 'merchantDestroy']).as('blog.merchant.destroy')
-    
-    // Publier/Dépublier un article
     router.patch('/:userId/posts/:id/toggle-status', [BlogController, 'merchantToggleStatus']).as('blog.merchant.toggle-status')
-    
-    // Gérer les commentaires de ses articles
     router.delete('/comments/:commentId', [BlogController, 'deleteComment']).as('blog.merchant.comments.delete')
   }).prefix('/blog/merchant')
 
@@ -398,13 +380,11 @@ router.group(() => {
   router.group(() => {
     router.get('/search/location', [HotelsController, 'searchByLocation']).as('hotels.search.location')
     router.get('/city/:city', [HotelsController, 'getByCity']).as('hotels.city')
-    
     router.get('/', [HotelsController, 'index']).as('hotels.index')
     router.post('/', [HotelsController, 'store']).as('hotels.store')
     router.get('/:id', [HotelsController, 'show']).as('hotels.show')
     router.put('/:id', [HotelsController, 'update']).as('hotels.update')
     router.delete('/:id', [HotelsController, 'destroy']).as('hotels.destroy')
-    
     router.get('/:id/rooms', [HotelsController, 'getRooms']).as('hotels.rooms')
   }).prefix('/hotels')
 
@@ -465,14 +445,12 @@ router.group(() => {
   router.post('/orders/pay/link', [PayLinkController as any, 'pay']).as('orders.pay.link')
 
   // ============================================================
-  // 🆕 ABONNEMENTS (SUBSCRIPTIONS) - NOMS UNIQUES
+  // ABONNEMENTS (SUBSCRIPTIONS)
   // ============================================================
-
   router.get('/subscriptions/plans', (ctx) => Subscription.getPlans(ctx)).as('subscriptions.plans')
   router.get('/subscriptions/active/:userId', (ctx) => Subscription.getActiveSubscription(ctx)).as('subscriptions.active')
   router.get('/subscriptions/history/:userId', (ctx) => Subscription.getHistory(ctx)).as('subscriptions.history')
   router.get('/subscriptions/stats/:userId', (ctx) => Subscription.getStats(ctx)).as('subscriptions.stats')
-
   router.post('/subscriptions/subscribe', (ctx) => Subscription.subscribe(ctx)).as('subscriptions.subscribe')
   router.post('/subscriptions/pay/qr', (ctx) => SubscriptionQR.pay(ctx)).as('subscriptions.pay.qr')
   router.post('/subscriptions/pay/link', [PayLinkSubscriptionController as any, 'paySubscription']).as('subscriptions.pay.link')
