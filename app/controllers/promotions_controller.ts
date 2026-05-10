@@ -1,7 +1,7 @@
 // app/controllers/promotions_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import Promotion from '#models/promotion'
-import Product from '#models/product'
+import Product from '#models/Product'
 
 export default class PromotionsController {
   /**
