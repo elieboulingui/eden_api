@@ -534,7 +534,9 @@ router.post('/promotions', [PromotionsController, 'store']).as('promotions.store
 router.put('/promotions/:id', [PromotionsController, 'update']).as('promotions.update')
 router.delete('/promotions/:id', [PromotionsController, 'destroy']).as('promotions.destroy')
   // Routes pour les contrats marchands
+// Routes pour les contrats marchands
 router.get('/merchant/contract/:id/sign', [DashboardViewController, 'signContract']).as('merchant.contract.sign')
 router.post('/merchant/contract/:id/send', [DashboardViewController, 'sendContractEmail']).as('merchant.contract.send')
+router.get('/merchant/contract/:id/status', [DashboardViewController, 'getContractStatus']).as('merchant.contract.status')
 
 }).prefix('/api')
