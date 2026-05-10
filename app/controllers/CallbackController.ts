@@ -52,11 +52,11 @@ export default class CallbackController {
       let order: Order | null = null
 
       if (refId) {
-        order = await Order.query().where('payment_reference_id', refId).first()
+        order = await Order.query().where('paymentReferenceId', refId).first()
       }
 
       if (!order && txId) {
-        order = await Order.query().where('payment_reference_id', txId).first()
+        order = await Order.query().where('paymentReferenceId', txId).first()
       }
 
       if (!order) {
@@ -67,35 +67,35 @@ export default class CallbackController {
             .first()
 
           if (tracking) {
-            order = await Order.find(tracking.order_id)
+            order = await Order.find(tracking.orderId)
           }
         }
       }
 
       if (order) {
 
-        console.log(`📦 Commande: ${order.order_number}`)
+        console.log(`📦 Commande: ${order.orderNumber}`)
 
-        if (order.payment_status === 'paid') {
+        if (order.paymentStatus === 'paid') {
           console.log('⚠️ Déjà payé → skip')
           return response.ok({ message: 'Déjà traité' })
         }
 
-        order.payment_status = status
-        order.payment_transaction_id = txId || refId
-        order.payment_operator_simple = operator
-        order.payment_amount = amount
+        order.paymentStatus = status
+        order.paymentTransactionId = txId || refId
+        order.paymentOperatorSimple = operator
+        order.paymentAmount = amount
 
         if (status === 'paid') {
           order.status = 'paid'
-          order.payment_completed_at = DateTime.now()
+          order.paymentCompletedAt = DateTime.now()
           await order.save()
 
           await OrderTracking.create({
-            order_id: order.id,
+            orderId: order.id,
             status: 'paid',
             description: `✅ Paiement confirmé ${amount} FCFA`,
-            tracked_at: DateTime.now(),
+            trackedAt: DateTime.now(),
           })
 
           await this.updateProductStock(order.id)
@@ -112,22 +112,22 @@ export default class CallbackController {
 
         } else if (status === 'failed') {
           order.status = 'payment_failed'
-          order.payment_error_message = `${code} - ${message}`
+          order.paymentErrorMessage = `${code} - ${message}`
           await order.save()
 
           await OrderTracking.create({
-            order_id: order.id,
+            orderId: order.id,
             status: 'payment_failed',
             description: `❌ Paiement échoué`,
-            tracked_at: DateTime.now(),
+            trackedAt: DateTime.now(),
           })
 
         } else {
           await OrderTracking.create({
-            order_id: order.id,
+            orderId: order.id,
             status: 'pending_payment',
             description: `⏳ En attente`,
-            tracked_at: DateTime.now(),
+            trackedAt: DateTime.now(),
           })
         }
 
@@ -147,9 +147,9 @@ export default class CallbackController {
   }
 
   private async updateProductStock(orderId: string) {
-    const items = await OrderItem.query().where('order_id', orderId)
+    const items = await OrderItem.query().where('orderId', orderId)  // ✅ CORRIGÉ: order_id → orderId
     for (const item of items) {
-      const product = await Product.find(item.product_id)
+      const product = await Product.find(item.productId)  // ✅ CORRIGÉ: product_id → productId
       if (product) {
         product.stock = Math.max(0, product.stock - item.quantity)
         if (product.stock === 0) product.isArchived = true
@@ -161,35 +161,45 @@ export default class CallbackController {
   private async creditAdmin(total: number) {
     const admins = await User.query().whereIn('role', ['admin', 'superadmin'])
     for (const admin of admins) {
-      let wallet = await Wallet.findBy('user_id', admin.id)
+      let wallet = await Wallet.query().where('userId', admin.id).first()  // ✅ CORRIGÉ: user_id → userId
       const fee = total * 0.005
       if (wallet) {
         wallet.balance += fee
         await wallet.save()
       } else {
-        await Wallet.create({ user_id: admin.id, balance: fee, currency: 'XAF', status: 'active' })
+        await Wallet.create({ 
+          userId: admin.id,  // ✅ CORRIGÉ: user_id → userId
+          balance: fee, 
+          currency: 'XAF', 
+          status: 'active' 
+        })
       }
     }
   }
 
   private async creditSellers(orderId: string) {
-    const items = await OrderItem.query().where('order_id', orderId)
+    const items = await OrderItem.query().where('orderId', orderId)  // ✅ CORRIGÉ: order_id → orderId
     const map = new Map<string, number>()
 
     for (const item of items) {
-      const product = await Product.find(item.product_id)
-      if (product?.user_id) {
-        map.set(product.user_id, (map.get(product.user_id) || 0) + Number(item.subtotal))
+      const product = await Product.find(item.productId)  // ✅ CORRIGÉ: product_id → productId
+      if (product?.userId) {  // ✅ CORRIGÉ: user_id → userId
+        map.set(product.userId, (map.get(product.userId) || 0) + Number(item.subtotal))
       }
     }
 
     for (const [sellerId, amount] of map.entries()) {
-      let wallet = await Wallet.findBy('user_id', sellerId)
+      let wallet = await Wallet.query().where('userId', sellerId).first()  // ✅ CORRIGÉ: user_id → userId
       if (wallet) {
         wallet.balance += amount
         await wallet.save()
       } else {
-        await Wallet.create({ user_id: sellerId, balance: amount, currency: 'XAF', status: 'active' })
+        await Wallet.create({ 
+          userId: sellerId,  // ✅ CORRIGÉ: user_id → userId
+          balance: amount, 
+          currency: 'XAF', 
+          status: 'active' 
+        })
       }
     }
   }
