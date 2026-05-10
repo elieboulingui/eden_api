@@ -16,7 +16,7 @@ import Withdrawal from '#models/Withdrawal'
 
 export default class MerchantDashboardController {
 
-  // ============= WALLET =============
+  // ============= WALLET ============= 
 
   async getArchivedProducts({ params, request, response }: HttpContext) {
     try {
