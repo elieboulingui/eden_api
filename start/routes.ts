@@ -305,6 +305,12 @@ router.group(() => {
     router.get('give-change/:reference/status', [GiveChangeController, 'checkStatus']).as('merchant.give-change.status')
     router.get('give-change/history', [GiveChangeController, 'history']).as('merchant.give-change.history')
     router.get('give-change/stats', [GiveChangeController, 'stats']).as('merchant.give-change.stats')
+    // routes/merchant.ts
+router.get('/:userId/delivery-zones', 'MerchantDashboardController.getDeliveryZones')
+router.post('/:userId/delivery-zones', 'MerchantDashboardController.upsertDeliveryZone')
+router.put('/:userId/delivery-zones', 'MerchantDashboardController.updateDeliveryZones')
+router.delete('/:userId/delivery-zones', 'MerchantDashboardController.removeDeliveryZone')
+router.get('/:userId/delivery-fee', 'MerchantDashboardController.calculateDeliveryFee')
     router.post('give-change/:id/cancel', [GiveChangeController, 'cancel']).as('merchant.give-change.cancel')
   }).prefix('/merchant')
   router.get('/merchant/dashboard/withdrawal-stats', [MerchantDashboardController, 'getWithdrawalStats']).as('merchant.dashboard.withdrawal-stats')
