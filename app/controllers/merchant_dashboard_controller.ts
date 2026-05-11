@@ -2109,62 +2109,85 @@ async createProduct({ params, request, response }: HttpContext) {
   /**
    * ✅ Ajouter ou modifier une zone de livraison
    */
+  /**
+   * ✅ Ajouter ou modifier une zone de livraison
+   */
   async upsertDeliveryZone({ params, request, response }: HttpContext) {
     try {
       const { userId } = params
       const { zone, fee } = request.only(['zone', 'fee'])
 
-      if (!zone || !fee) {
-        return response.badRequest({
+      console.log('🔵 upsertDeliveryZone:', { userId, zone, fee, typeFee: typeof fee })
+
+      if (!zone || fee === undefined || fee === null) {
+        return response.status(400).json({
           success: false,
           message: 'La zone et le montant sont requis',
         })
       }
 
-      if (fee < 0) {
-        return response.badRequest({
+      const numericFee = Number(fee)
+      if (isNaN(numericFee) || numericFee < 0) {
+        return response.status(400).json({
           success: false,
-          message: 'Le montant ne peut pas être négatif',
+          message: 'Le montant doit être un nombre positif',
         })
       }
 
       const user = await User.findBy('id', userId)
 
       if (!user) {
-        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+        return response.status(404).json({
+          success: false,
+          message: 'Utilisateur non trouvé',
+        })
       }
 
       if (user.role !== 'marchant' && user.role !== 'merchant') {
-        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+        return response.status(403).json({
+          success: false,
+          message: 'Accès réservé aux marchands',
+        })
       }
 
-      // Normaliser la zone
-      const normalizedZone = zone.toLowerCase().trim()
-      
       // Récupérer les zones existantes
-      const zones = user.delivery_zones || {}
+      let zones: Record<string, number> = {}
       
-      // Ajouter ou modifier
-      zones[normalizedZone] = fee
-      
-      // Sauvegarder
-      user.delivery_zones = zones
-      await user.save()
+      if (user.delivery_zones && typeof user.delivery_zones === 'object') {
+        zones = { ...user.delivery_zones }
+      }
 
-      return response.ok({
+      // Ajouter ou modifier
+      const normalizedZone = zone.toLowerCase().trim()
+      zones[normalizedZone] = numericFee
+
+      // ✅ Sauvegarder directement avec une requête SQL pour éviter les problèmes
+      try {
+        await Database.rawQuery(
+          'UPDATE users SET delivery_zones = ? WHERE id = ?',
+          [JSON.stringify(zones), user.id]
+        )
+        console.log('✅ Zone sauvegardée via SQL direct:', { zone: normalizedZone, fee: numericFee })
+      } catch (sqlError: any) {
+        console.error('❌ Erreur SQL:', sqlError)
+        throw sqlError
+      }
+
+      return response.json({
         success: true,
-        message: `Zone "${zone}" ${zones[normalizedZone] ? 'mise à jour' : 'ajoutée'} avec succès`,
+        message: `Zone "${zone}" enregistrée avec succès`,
         data: {
           zone: normalizedZone.charAt(0).toUpperCase() + normalizedZone.slice(1),
-          fee,
+          fee: numericFee,
           total_zones: Object.keys(zones).length,
         },
       })
     } catch (error: any) {
-      console.error('Erreur upsertDeliveryZone:', error)
-      return response.internalServerError({
+      console.error('❌ Erreur upsertDeliveryZone:', error)
+      return response.status(500).json({
         success: false,
-        message: error.message,
+        message: error.message || 'Erreur serveur',
+        error: error.message,
       })
     }
   }
