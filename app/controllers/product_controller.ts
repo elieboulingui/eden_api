@@ -21,8 +21,14 @@ export default class ProductsController {
       merchant = await User.find(product.user_id)
       
       if (merchant) {
+        // ✅ Récupérer les zones directement depuis la colonne JSON
+        const zones = merchant.delivery_zones || {}
+        
         deliveryInfo = {
-          deliveryZones: merchant.deliveryZonesList || [],
+          deliveryZones: Object.entries(zones).map(([z, fee]) => ({
+            zone: z.charAt(0).toUpperCase() + z.slice(1),
+            fee: Number(fee),
+          })),
           deliveryFee: zone ? merchant.getDeliveryFee(zone) : 0,
           servesZone: zone ? merchant.servesZone(zone) : false,
         }
@@ -43,6 +49,11 @@ export default class ProductsController {
         neighborhood: merchant.neighborhood,
         is_verified: merchant.is_verified,
         logo_url: merchant.logo_url,
+        // ✅ Ajouter les zones du marchand
+        delivery_zones: Object.entries(merchant.delivery_zones || {}).map(([z, fee]) => ({
+          zone: z.charAt(0).toUpperCase() + z.slice(1),
+          fee: Number(fee),
+        })),
       } : null,
       delivery: deliveryInfo,
     }
@@ -211,6 +222,12 @@ export default class ProductsController {
       const deliveryFee = merchant.getDeliveryFee(zone)
       const servesZone = merchant.servesZone(zone)
 
+      // ✅ Zones formatées
+      const zones = Object.entries(merchant.delivery_zones || {}).map(([z, fee]) => ({
+        zone: z.charAt(0).toUpperCase() + z.slice(1),
+        fee: Number(fee),
+      }))
+
       return response.json({
         success: true,
         data: {
@@ -219,7 +236,7 @@ export default class ProductsController {
           zone,
           delivery_fee: deliveryFee,
           serves_zone: servesZone,
-          merchant_zones: merchant.deliveryZonesList,
+          merchant_zones: zones,
         },
       })
     } catch (error: unknown) {
@@ -247,13 +264,19 @@ export default class ProductsController {
         })
       }
 
+      // ✅ Zones formatées
+      const zones = Object.entries(merchant.delivery_zones || {}).map(([z, fee]) => ({
+        zone: z.charAt(0).toUpperCase() + z.slice(1),
+        fee: Number(fee),
+      }))
+
       return response.json({
         success: true,
         data: {
           merchant_id: merchant.id,
           merchant_name: merchant.shop_name || merchant.full_name,
-          delivery_zones: merchant.deliveryZonesList,
-          total_zones: merchant.deliveryZonesList.length,
+          delivery_zones: zones,
+          total_zones: zones.length,
         },
       })
     } catch (error: unknown) {
