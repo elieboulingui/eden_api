@@ -218,6 +218,18 @@ declare contract_signed: boolean
   // VALIDATION ET ENGAGEMENT
   // ============================================================
 
+    // ============================================================
+  // 🚚 ZONES DE LIVRAISON (SAISIES PAR LE MARCHAND)
+  // ============================================================
+
+  @column({ columnName: 'delivery_zones', consume: (value) => {
+    // ✅ Parser le JSON de la base de données
+    if (typeof value === 'string') return JSON.parse(value)
+    if (value && typeof value === 'object') return value
+    return {}
+  }})
+  declare delivery_zones: Record<string, number>  // ex: { "libreville": 2500, "owendo": 3000 }
+
   @column({ columnName: 'certify_truth' })
   declare certify_truth: boolean
 
@@ -483,6 +495,7 @@ declare contract_signed: boolean
     this.rejection_reason = reason
     await this.save()
   }
+  
 
   async pending(): Promise<void> {
     this.is_verified = false
