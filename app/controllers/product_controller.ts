@@ -2,7 +2,7 @@
 
 import type { HttpContext } from '@adonisjs/core/http'
 import Product from '#models/Product'
-import User from '#models/User'
+import User from '#models/user'
 
 export default class ProductsController {
   
