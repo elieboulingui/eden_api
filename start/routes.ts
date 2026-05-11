@@ -141,10 +141,8 @@ router.group(() => {
   }).prefix('/kyc')
 
   // ============================================================
-  // BLOG - ROUTES COMPLÈTES
+  // BLOG
   // ============================================================
-
-  // --- Routes publiques ---
   router.get('/blog/posts', [BlogController, 'index']).as('blog.index')
   router.get('/blog/posts/featured', [BlogController, 'featured']).as('blog.featured')
   router.get('/blog/posts/:slug', [BlogController, 'show']).as('blog.show')
@@ -152,7 +150,6 @@ router.group(() => {
   router.get('/blog/posts/:postId/comments', [BlogController, 'getComments']).as('blog.comments.public')
   router.post('/blog/posts/:postId/comments', [BlogController, 'storeComment']).as('blog.comments.store')
 
-  // --- Routes marchand ---
   router.group(() => {
     router.get('/:userId/posts', [BlogController, 'merchantPosts']).as('blog.merchant.posts')
     router.get('/:userId/stats', [BlogController, 'merchantStats']).as('blog.merchant.stats')
@@ -164,7 +161,6 @@ router.group(() => {
     router.delete('/comments/:commentId', [BlogController, 'deleteComment']).as('blog.merchant.comments.delete')
   }).prefix('/blog/merchant')
 
-  // --- Routes admin ---
   router.group(() => {
     router.get('/posts', [BlogController, 'adminIndex']).as('admin.posts.index')
     router.get('/posts/stats', [BlogController, 'stats']).as('admin.posts.stats')
@@ -298,19 +294,21 @@ router.group(() => {
   router.delete('/push-subscriptions/:id', [PushSubscriptionsController, 'destroy']).as('push.destroy')
 
   // ----------------------------------------------------------
-  // GIVE-CHANGE (RETRAITS)
+  // GIVE-CHANGE (RETRAITS) + ZONES DE LIVRAISON
   // ----------------------------------------------------------
   router.post('/merchant/give-change', [GiveChangeController, 'giveChange']).as('merchant.give-change')
   router.group(() => {
     router.get('give-change/:reference/status', [GiveChangeController, 'checkStatus']).as('merchant.give-change.status')
     router.get('give-change/history', [GiveChangeController, 'history']).as('merchant.give-change.history')
     router.get('give-change/stats', [GiveChangeController, 'stats']).as('merchant.give-change.stats')
-    // routes/merchant.ts
-router.get('/:userId/delivery-zones', 'MerchantDashboardController.getDeliveryZones')
-router.post('/:userId/delivery-zones', 'MerchantDashboardController.upsertDeliveryZone')
-router.put('/:userId/delivery-zones', 'MerchantDashboardController.updateDeliveryZones')
-router.delete('/:userId/delivery-zones', 'MerchantDashboardController.removeDeliveryZone')
-router.get('/:userId/delivery-fee', 'MerchantDashboardController.calculateDeliveryFee')
+    
+    // ✅ Zones de livraison (CORRIGÉ)
+    router.get('/:userId/delivery-zones', [MerchantDashboardController, 'getDeliveryZones'])
+    router.post('/:userId/delivery-zones', [MerchantDashboardController, 'upsertDeliveryZone'])
+    router.put('/:userId/delivery-zones', [MerchantDashboardController, 'updateDeliveryZones'])
+    router.delete('/:userId/delivery-zones', [MerchantDashboardController, 'removeDeliveryZone'])
+    router.get('/:userId/delivery-fee', [MerchantDashboardController, 'calculateDeliveryFee'])
+    
     router.post('give-change/:id/cancel', [GiveChangeController, 'cancel']).as('merchant.give-change.cancel')
   }).prefix('/merchant')
   router.get('/merchant/dashboard/withdrawal-stats', [MerchantDashboardController, 'getWithdrawalStats']).as('merchant.dashboard.withdrawal-stats')
@@ -528,21 +526,23 @@ router.get('/:userId/delivery-fee', 'MerchantDashboardController.calculateDelive
   // RETRAIT
   // ----------------------------------------------------------
   router.post('/retrait', [RetraitController, 'retrait']).as('retrait.process')
-  // Dans la section des routes API, après les routes produits
-// ----------------------------------------------------------
-// PROMOTIONS - Routes complètes
-// ----------------------------------------------------------
-router.get('/promotions', [PromotionsController, 'index']).as('promotions.index')
-router.get('/promotions/:id', [PromotionsController, 'show']).as('promotions.show')
-router.get('/promotions/banners', [PromotionsController, 'banners']).as('promotions.banners')
-router.get('/promotions/flash-sales', [PromotionsController, 'flashSales']).as('promotions.flash-sales')
-router.post('/promotions', [PromotionsController, 'store']).as('promotions.store')
-router.put('/promotions/:id', [PromotionsController, 'update']).as('promotions.update')
-router.delete('/promotions/:id', [PromotionsController, 'destroy']).as('promotions.destroy')
-  // Routes pour les contrats marchands
-// Routes pour les contrats marchands
-router.get('/merchant/contract/:id/sign', [DashboardViewController, 'signContract']).as('merchant.contract.sign')
-router.post('/merchant/contract/:id/send', [DashboardViewController, 'sendContractEmail']).as('merchant.contract.send')
-router.get('/merchant/contract/:id/status', [DashboardViewController, 'getContractStatus']).as('merchant.contract.status')
+
+  // ----------------------------------------------------------
+  // PROMOTIONS
+  // ----------------------------------------------------------
+  router.get('/promotions', [PromotionsController, 'index']).as('promotions.index')
+  router.get('/promotions/:id', [PromotionsController, 'show']).as('promotions.show')
+  router.get('/promotions/banners', [PromotionsController, 'banners']).as('promotions.banners')
+  router.get('/promotions/flash-sales', [PromotionsController, 'flashSales']).as('promotions.flash-sales')
+  router.post('/promotions', [PromotionsController, 'store']).as('promotions.store')
+  router.put('/promotions/:id', [PromotionsController, 'update']).as('promotions.update')
+  router.delete('/promotions/:id', [PromotionsController, 'destroy']).as('promotions.destroy')
+
+  // ----------------------------------------------------------
+  // CONTRATS MARCHANDS
+  // ----------------------------------------------------------
+  router.get('/merchant/contract/:id/sign', [DashboardViewController, 'signContract']).as('merchant.contract.sign')
+  router.post('/merchant/contract/:id/send', [DashboardViewController, 'sendContractEmail']).as('merchant.contract.send')
+  router.get('/merchant/contract/:id/status', [DashboardViewController, 'getContractStatus']).as('merchant.contract.status')
 
 }).prefix('/api')
