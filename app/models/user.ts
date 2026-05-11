@@ -258,6 +258,11 @@ declare contract_signed: boolean
   @column({ columnName: 'rejection_reason' })
   declare rejection_reason: string | null
 
+
+  // app/models/User.ts (ajouter après les autres colonnes)
+
+@column({ columnName: 'partner_code' })
+declare partner_code: string | null
   // ============================================================
   // TIMESTAMPS
   // ============================================================
