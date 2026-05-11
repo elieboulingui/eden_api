@@ -495,7 +495,45 @@ declare contract_signed: boolean
     this.rejection_reason = reason
     await this.save()
   }
-  
+    // ============================================================
+  // 🚚 MÉTHODES - ZONES DE LIVRAISON
+  // ============================================================
+
+  /**
+   * ✅ Récupérer les frais de livraison pour une zone donnée
+   */
+  getDeliveryFee(zone: string): number {
+    if (!this.delivery_zones || typeof this.delivery_zones !== 'object') {
+      return 0
+    }
+
+    const normalizedZone = zone.toLowerCase().trim()
+
+    // Chercher une correspondance exacte
+    if (this.delivery_zones[normalizedZone] !== undefined) {
+      return this.delivery_zones[normalizedZone]
+    }
+
+    // Chercher une correspondance partielle
+    for (const [key, value] of Object.entries(this.delivery_zones)) {
+      if (normalizedZone.includes(key) || key.includes(normalizedZone)) {
+        return value
+      }
+    }
+
+    return 0
+  }
+
+  /**
+   * ✅ Vérifier si une zone est desservie
+   */
+  servesZone(zone: string): boolean {
+    if (!this.delivery_zones) return false
+    const normalizedZone = zone.toLowerCase().trim()
+    return Object.keys(this.delivery_zones).some(
+      key => key.includes(normalizedZone) || normalizedZone.includes(key)
+    )
+  }
 
   async pending(): Promise<void> {
     this.is_verified = false
