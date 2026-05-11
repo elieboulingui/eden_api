@@ -2064,4 +2064,263 @@ async createProduct({ params, request, response }: HttpContext) {
       return response.internalServerError({ success: false, message: error.message })
     }
   }
+    // ============================================================
+  // 🚚 ZONES DE LIVRAISON
+  // ============================================================
+
+  /**
+   * ✅ Récupérer les zones de livraison du marchand
+   */
+  async getDeliveryZones({ params, response }: HttpContext) {
+    try {
+      const { userId } = params
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+      }
+
+      const zones = user.delivery_zones || {}
+
+      return response.ok({
+        success: true,
+        data: {
+          zones: Object.entries(zones).map(([zone, fee]) => ({
+            zone: zone.charAt(0).toUpperCase() + zone.slice(1),
+            fee,
+          })),
+          total_zones: Object.keys(zones).length,
+        },
+      })
+    } catch (error: any) {
+      console.error('Erreur getDeliveryZones:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message,
+      })
+    }
+  }
+
+  /**
+   * ✅ Ajouter ou modifier une zone de livraison
+   */
+  async upsertDeliveryZone({ params, request, response }: HttpContext) {
+    try {
+      const { userId } = params
+      const { zone, fee } = request.only(['zone', 'fee'])
+
+      if (!zone || !fee) {
+        return response.badRequest({
+          success: false,
+          message: 'La zone et le montant sont requis',
+        })
+      }
+
+      if (fee < 0) {
+        return response.badRequest({
+          success: false,
+          message: 'Le montant ne peut pas être négatif',
+        })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+      }
+
+      // Normaliser la zone
+      const normalizedZone = zone.toLowerCase().trim()
+      
+      // Récupérer les zones existantes
+      const zones = user.delivery_zones || {}
+      
+      // Ajouter ou modifier
+      zones[normalizedZone] = fee
+      
+      // Sauvegarder
+      user.delivery_zones = zones
+      await user.save()
+
+      return response.ok({
+        success: true,
+        message: `Zone "${zone}" ${zones[normalizedZone] ? 'mise à jour' : 'ajoutée'} avec succès`,
+        data: {
+          zone: normalizedZone.charAt(0).toUpperCase() + normalizedZone.slice(1),
+          fee,
+          total_zones: Object.keys(zones).length,
+        },
+      })
+    } catch (error: any) {
+      console.error('Erreur upsertDeliveryZone:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message,
+      })
+    }
+  }
+
+  /**
+   * ✅ Mettre à jour toutes les zones d'un coup
+   */
+  async updateDeliveryZones({ params, request, response }: HttpContext) {
+    try {
+      const { userId } = params
+      const { zones } = request.only(['zones'])
+
+      if (!zones || typeof zones !== 'object') {
+        return response.badRequest({
+          success: false,
+          message: 'Les zones sont requises (format: { "zone": montant })',
+        })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+      }
+
+      // Normaliser toutes les zones
+      const normalizedZones: Record<string, number> = {}
+      for (const [zone, fee] of Object.entries(zones)) {
+        if (typeof fee === 'number' && fee >= 0) {
+          normalizedZones[zone.toLowerCase().trim()] = fee
+        }
+      }
+
+      user.delivery_zones = normalizedZones
+      await user.save()
+
+      return response.ok({
+        success: true,
+        message: 'Zones de livraison mises à jour avec succès',
+        data: {
+          zones: Object.entries(normalizedZones).map(([zone, fee]) => ({
+            zone: zone.charAt(0).toUpperCase() + zone.slice(1),
+            fee,
+          })),
+          total_zones: Object.keys(normalizedZones).length,
+        },
+      })
+    } catch (error: any) {
+      console.error('Erreur updateDeliveryZones:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message,
+      })
+    }
+  }
+
+  /**
+   * ✅ Supprimer une zone de livraison
+   */
+  async removeDeliveryZone({ params, request, response }: HttpContext) {
+    try {
+      const { userId } = params
+      const { zone } = request.only(['zone'])
+
+      if (!zone) {
+        return response.badRequest({
+          success: false,
+          message: 'La zone est requise',
+        })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+      }
+
+      const normalizedZone = zone.toLowerCase().trim()
+      const zones = user.delivery_zones || {}
+
+      if (!zones[normalizedZone]) {
+        return response.notFound({
+          success: false,
+          message: `La zone "${zone}" n'existe pas`,
+        })
+      }
+
+      delete zones[normalizedZone]
+      user.delivery_zones = zones
+      await user.save()
+
+      return response.ok({
+        success: true,
+        message: `Zone "${zone}" supprimée avec succès`,
+        data: {
+          total_zones: Object.keys(zones).length,
+        },
+      })
+    } catch (error: any) {
+      console.error('Erreur removeDeliveryZone:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message,
+      })
+    }
+  }
+
+  /**
+   * ✅ Calculer les frais de livraison pour une zone
+   */
+  async calculateDeliveryFee({ params, request, response }: HttpContext) {
+    try {
+      const { userId } = params
+      const { zone } = request.only(['zone'])
+
+      if (!zone) {
+        return response.badRequest({
+          success: false,
+          message: 'La zone est requise',
+        })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Marchand non trouvé' })
+      }
+
+      const deliveryFee = user.getDeliveryFee(zone)
+      const servesZone = user.servesZone(zone)
+
+      return response.ok({
+        success: true,
+        data: {
+          zone: zone,
+          delivery_fee: deliveryFee,
+          serves_zone: servesZone,
+          message: servesZone 
+            ? `Frais de livraison pour ${zone}: ${deliveryFee} FCFA`
+            : `Le marchand ne dessert pas la zone "${zone}"`,
+        },
+      })
+    } catch (error: any) {
+      console.error('Erreur calculateDeliveryFee:', error)
+      return response.internalServerError({
+        success: false,
+        message: error.message,
+      })
+    }
+  }
 }
