@@ -435,6 +435,23 @@ declare contract_signed: boolean
   // ============================================================
   // MÉTHODES
   // ============================================================
+  // ============================================================
+// GETTERS (ajouter ce getter après les autres getters)
+// ============================================================
+
+  /**
+   * ✅ Récupérer la liste des zones formatée
+   */
+  get deliveryZonesList(): { zone: string; fee: number }[] {
+    if (!this.delivery_zones || typeof this.delivery_zones !== 'object') return []
+    
+    return Object.entries(this.delivery_zones)
+      .map(([zone, fee]) => ({
+        zone: zone.charAt(0).toUpperCase() + zone.slice(1),
+        fee,
+      }))
+      .sort((a, b) => a.zone.localeCompare(b.zone))
+  }
 
   async ensureMerchant(): Promise<void> {
     if (!this.isMerchant) {
