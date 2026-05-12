@@ -1,4 +1,4 @@
-// app/controllers/PayQRCodeController.ts - AVEC X-SECRET ET OPÉRATEUR DANS LA RÉPONSE
+// app/controllers/PayQRCodeController.ts - CORRIGÉ (utilise les champs existants du modèle)
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -181,17 +181,18 @@ export default class PayQRCodeController {
             data: statusResult.data || null
           }
           
+          // ✅ CORRIGÉ : utiliser les champs existants du modèle Order
           if (statusResult.status === 'SUCCESS') {
             order.status = 'paid'
-            order.paid_at = DateTime.now()
-            order.payment_amount = statusResult.data?.amount
-            order.payment_fees = statusResult.data?.fees
+            order.payment_completed_at = DateTime.now()  // ✅ payment_completed_at au lieu de paid_at
+            order.payment_amount = statusResult.data?.amount ?? null  // ✅ ?? null pour éviter undefined
+            // ❌ payment_fees n'existe pas → supprimé
             await order.save()
             
             await OrderTracking.create({
               order_id: order.id,
               status: 'paid',
-              description: `✅ Paiement immédiat - GIMAC - ${statusResult.data?.amount} FCFA`,
+              description: `✅ Paiement immédiat - GIMAC - ${statusResult.data?.amount ?? 0} FCFA`,
               tracked_at: DateTime.now()
             })
             
@@ -218,17 +219,14 @@ export default class PayQRCodeController {
           status: order.status,
           itemsCount: validProducts.length,
           
-          // ✅ OPÉRATEUR
           operator: {
             name: 'GIMAC',
             code: 'GIMAC_PAY',
             accountCode: GIMAC_ACCOUNT
           },
           
-          // ✅ X-SECRET
           x_secret: xSecret,
           
-          // ✅ QR CODE
           qr_code: {
             data: qrResult.data,
             format: qrResult.format,
@@ -238,7 +236,6 @@ export default class PayQRCodeController {
             mime_type: 'image/png'
           },
           
-          // ✅ STATUT DU PAIEMENT
           payment_status: paymentStatus
         }
       })
