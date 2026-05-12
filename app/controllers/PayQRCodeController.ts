@@ -1,4 +1,4 @@
-// app/controllers/PayQRCodeController.ts - GIMAC UNIQUEMENT AVEC IMAGE PNG
+// app/controllers/PayQRCodeController.ts - AVEC VÉRIFICATION STATUT À LA FIN
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -9,6 +9,7 @@ import Product from '#models/Product'
 import { DateTime } from 'luxon'
 import MypvitSecretService from '../services/mypvit_secret_services.js'
 import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
+import PvitStatusService from '../services/pvit_status_service.js' // ✅ AJOUTÉ
 
 const CALLBACK_URL_CODE = '9ZOXW'
 const GIMAC_ACCOUNT = 'ACC_69FE0E1BC34B4'
@@ -129,7 +130,7 @@ export default class PayQRCodeController {
         amount: subtotal,
         reference: order.order_number,
         phoneNumber: rawBody.customerPhone || '060000000',
-        returnAsImage: true  // ✅ Retourne l'image PNG en base64
+        returnAsImage: true
       })
       
       console.log('🔑 QR Code généré (image PNG base64)')
@@ -153,7 +154,66 @@ export default class PayQRCodeController {
 
       await order.load('items')
 
-      // ✅ Retourner le QR code en base64 pour affichage immédiat
+      // ✅ ==========================================
+      // ✅ ÉTAPE 9 : VÉRIFICATION DU STATUT (AJOUTÉE)
+      // ✅ ==========================================
+      console.log('🔍 ÉTAPE 9: Vérification statut...')
+      
+      let paymentStatus = null
+      
+      if (qrResult.reference_id) {
+        try {
+          // Récupérer le X-Secret actif
+          const xSecret = await MypvitSecretService.getSecret()
+          
+          console.log('📤 Envoi requête statut:')
+          console.log('   Transaction ID:', qrResult.reference_id)
+          console.log('   Compte:', GIMAC_ACCOUNT)
+          console.log('   X-Secret:', xSecret.substring(0, 15) + '...')
+          
+          // Appeler le service de statut
+          const statusResult = await PvitStatusService.checkStatus(
+            xSecret,
+            qrResult.reference_id,
+            GIMAC_ACCOUNT
+          )
+          
+          console.log('📥 Résultat statut:', statusResult)
+          
+          paymentStatus = {
+            checked: true,
+            status: statusResult.status,
+            data: statusResult.data || null
+          }
+          
+          // Mettre à jour la commande si déjà confirmée
+          if (statusResult.status === 'SUCCESS') {
+            order.status = 'paid'
+            order.paid_at = DateTime.now()
+            order.payment_amount = statusResult.data?.amount
+            order.payment_fees = statusResult.data?.fees
+            await order.save()
+            
+            await OrderTracking.create({
+              order_id: order.id,
+              status: 'paid',
+              description: `✅ Paiement immédiat - GIMAC - ${statusResult.data?.amount} FCFA`,
+              tracked_at: DateTime.now()
+            })
+            
+            console.log('✅ Paiement déjà confirmé !')
+          }
+          
+        } catch (statusError: any) {
+          console.log('⚠️ Erreur vérification statut:', statusError.message)
+          paymentStatus = {
+            checked: false,
+            error: statusError.message
+          }
+        }
+      }
+
+      // ✅ Retourner la réponse AVEC le statut
       return response.status(201).json({
         success: true,
         message: '✅ QR Code GIMAC généré !',
@@ -161,16 +221,18 @@ export default class PayQRCodeController {
           orderId: order.id,
           orderNumber: order.order_number,
           total: subtotal,
-          status: 'pending_payment',
+          status: order.status, // ✅ 'paid' si déjà confirmé, 'pending_payment' sinon
           itemsCount: validProducts.length,
           qr_code: {
-            data: qrResult.data,  // Base64 de l'image PNG
-            format: qrResult.format,  // 'png_base64'
+            data: qrResult.data,
+            format: qrResult.format,
             reference_id: qrResult.reference_id,
             amount: subtotal,
             expires_in: 600,
-            mime_type: 'image/png'  // Pour l'affichage frontend
-          }
+            mime_type: 'image/png'
+          },
+          // ✅ STATUT DU PAIEMENT VÉRIFIÉ
+          payment_status: paymentStatus
         }
       })
 
