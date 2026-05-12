@@ -3,7 +3,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
-// ✅ AJOUTER cette ligne avec les autres imports
+const CheckoutController = () => import('#controllers/checkout_controller')
 const CheckStatusController = () => import('#controllers/payments/check_status_controller')
 const PayLinkSubscriptionController = () => import('#controllers/PayLinkSubscriptionController')
 import SubscriptionQRController from '#controllers/SubscriptionQRController'
@@ -552,5 +552,8 @@ router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).
   router.get('/merchant/contract/:id/sign', [DashboardViewController, 'signContract']).as('merchant.contract.sign')
   router.post('/merchant/contract/:id/send', [DashboardViewController, 'sendContractEmail']).as('merchant.contract.send')
   router.get('/merchant/contract/:id/status', [DashboardViewController, 'getContractStatus']).as('merchant.contract.status')
+
+  router.get('/checkout/:userId', [CheckoutController, 'getCheckoutData']).as('checkout.data')
+
 
 }).prefix('/api')
