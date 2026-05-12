@@ -17,7 +17,7 @@ const ALLOWED_USER_FIELDS = [
   'selfie_url', 'personal_phone', 'residence_address',
   'is_phone_verified', 'is_email_verified',
   
-  // Infos entreprise (colonnes existantes)
+  // Infos entreprise (marchand)
   'commercial_name', 'shop_name', 'shop_description', 'vendor_type',
   'whatsapp_phone', 'is_whatsapp_verified', 'shop_address',
   'rccm_number', 'rccm_document_url', 'nif_number',
@@ -36,6 +36,10 @@ const ALLOWED_USER_FIELDS = [
   'stock_address', 'address_proof_url',
   'facebook_url', 'instagram_url', 'tiktok_url', 'stock_video_url',
   
+  // Références
+  'reference_1_name', 'reference_1_phone',
+  'reference_2_name', 'reference_2_phone',
+  
   // Autres
   'logo_url', 'cover_photo_url',
   'signature', 'certify_truth', 'accept_escrow',
@@ -43,8 +47,15 @@ const ALLOWED_USER_FIELDS = [
   // Statuts
   'verification_status', 'is_verified',
 
-  // ✅ Partenaire (marchand uniquement)
+  // Partenaire (marchand uniquement)
   'partner_code',
+
+  // 🆕 CHAMPS LIVREUR
+  'vehicle_type', 'license_number', 'license_document_url',
+  'vehicle_document_url', 'availability',
+  'is_available', 'is_online',
+  'current_latitude', 'current_longitude',
+  'total_deliveries', 'total_earnings', 'rating', 'total_ratings',
 ]
 
 export default class NewAccountController {
@@ -77,12 +88,15 @@ export default class NewAccountController {
         const lowerRole = rawData.role.toLowerCase()
         if (lowerRole === 'merchant' || lowerRole === 'marchant' || lowerRole === 'marchand') {
           role = 'merchant'
+        } else if (lowerRole === 'livreur' || lowerRole === 'livreur') {
+          role = 'livreur'
         } else if (lowerRole === 'admin') {
           role = 'admin'
         }
       }
 
       const isMerchant = role === 'merchant'
+      const isLivreur = role === 'livreur'
 
       // ✅ Filtrer et mapper les champs
       const userData: Record<string, any> = {}
@@ -151,6 +165,12 @@ export default class NewAccountController {
         tiktok_url: 'tiktok_url',
         stock_video_url: 'stock_video_url',
         
+        // Références
+        reference_1_name: 'reference_1_name',
+        reference_1_phone: 'reference_1_phone',
+        reference_2_name: 'reference_2_name',
+        reference_2_phone: 'reference_2_phone',
+        
         // Autres
         logo_url: 'logo_url',
         cover_photo_url: 'cover_photo_url',
@@ -158,6 +178,21 @@ export default class NewAccountController {
         // Statuts
         verification_status: 'verification_status',
         is_verified: 'is_verified',
+
+        // 🆕 Champs livreur
+        vehicle_type: 'vehicle_type',
+        license_number: 'license_number',
+        license_document_url: 'license_document_url',
+        vehicle_document_url: 'vehicle_document_url',
+        availability: 'availability',
+        is_available: 'is_available',
+        is_online: 'is_online',
+        current_latitude: 'current_latitude',
+        current_longitude: 'current_longitude',
+        total_deliveries: 'total_deliveries',
+        total_earnings: 'total_earnings',
+        rating: 'rating',
+        total_ratings: 'total_ratings',
       }
 
       // Construire userData en filtrant
@@ -196,14 +231,43 @@ export default class NewAccountController {
           userData.partner_code = rawData.partner_code
           console.log('🔗 [NewAccountController] Marchand partenaire:', rawData.partner_code)
         } else {
-          // ✅ Valeur par défaut pour les marchands sans code partenaire
           userData.partner_code = 'eden_client_nathjosh'
           console.log('🏪 [NewAccountController] Marchand normal → eden_client_nathjosh')
         }
       } else {
-        // Client normal : pas de partner_code
         userData.partner_code = null
-        console.log('👤 [NewAccountController] Client normal')
+        console.log('👤 [NewAccountController] Ni marchand → pas de partner_code')
+      }
+
+      // 🆕 STATUT LIVREUR
+      if (isLivreur) {
+        if (!userData.verification_status) {
+          userData.verification_status = 'pending'
+        }
+        if (userData.is_verified === undefined) {
+          userData.is_verified = false
+        }
+        if (userData.is_available === undefined) {
+          userData.is_available = true
+        }
+        if (userData.is_online === undefined) {
+          userData.is_online = false
+        }
+        if (userData.total_deliveries === undefined) {
+          userData.total_deliveries = 0
+        }
+        if (userData.total_earnings === undefined) {
+          userData.total_earnings = 0
+        }
+        if (userData.rating === undefined) {
+          userData.rating = 0
+        }
+        if (userData.total_ratings === undefined) {
+          userData.total_ratings = 0
+        }
+        console.log('🛵 [NewAccountController] Compte livreur - statut:', userData.verification_status)
+        console.log('  - Véhicule:', userData.vehicle_type || 'Non défini')
+        console.log('  - Disponibilité:', userData.availability || 'Non défini')
       }
 
       // Log des champs filtrés
@@ -242,7 +306,7 @@ export default class NewAccountController {
 
       console.log('💾 [NewAccountController] Création utilisateur dans la DB...')
 
-      // ✅ Créer l'utilisateur (seulement avec les champs autorisés)
+      // ✅ Créer l'utilisateur
       const user = await User.create(userData)
 
       console.log('✅ [NewAccountController] Utilisateur créé avec succès!')
@@ -252,6 +316,7 @@ export default class NewAccountController {
       console.log('  - Rôle:', user.role)
       console.log('  - Partenaire:', user.partner_code || 'Aucun')
       console.log('  - Est marchand:', user.isMerchant)
+      console.log('  - Est livreur:', user.isLivreur)
 
       // Créer wallet si marchand
       let wallet = null
@@ -267,6 +332,22 @@ export default class NewAccountController {
         } catch (walletError: unknown) {
           const error = walletError as Error
           console.error('⚠️ [NewAccountController] Erreur création wallet:', error.message)
+        }
+      }
+
+      // 🆕 Créer wallet pour le livreur aussi
+      if (isLivreur) {
+        try {
+          wallet = await Wallet.create({
+            user_id: user.id,
+            balance: 0,
+            currency: 'XAF',
+            status: 'active',
+          })
+          console.log('💰 [NewAccountController] Wallet créé pour le livreur')
+        } catch (walletError: unknown) {
+          const error = walletError as Error
+          console.error('⚠️ [NewAccountController] Erreur création wallet livreur:', error.message)
         }
       }
 
@@ -292,8 +373,13 @@ export default class NewAccountController {
           full_name: user.full_name,
           email: user.email,
           role: user.role,
-          // ✅ Partenaire visible uniquement pour les marchands
+          // Partenaire visible uniquement pour les marchands
           ...(user.isMerchant && { partner_code: user.partner_code }),
+          // 🆕 Infos livreur
+          ...(user.isLivreur && { 
+            vehicle_type: user.vehicle_type,
+            availability: user.availability,
+          }),
           verification_status: user.verification_status,
         },
         token,
