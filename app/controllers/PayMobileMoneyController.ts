@@ -1,4 +1,4 @@
-// app/controllers/PayMobileMoneyController.ts - CORRIGÉ FINAL
+// app/controllers/PayMobileMoneyController.ts - AVEC X-SECRET DANS LA RÉPONSE
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -44,33 +44,18 @@ export default class PayMobileMoneyController {
     console.log('📱 Numéro nettoyé:', local)
     console.log('🔢 Premier chiffre:', local.charAt(0))
 
-    // 📱 MOOV MONEY (06xxxxxxxx)
     if (local.startsWith('06') || local.startsWith('6')) {
       console.log('✅ MOOV_MONEY détecté')
-      return {
-        name: 'MOOV_MONEY',
-        code: 'MOOV_MONEY',
-        accountCode: 'ACC_69EFB143D4F54'
-      }
+      return { name: 'MOOV_MONEY', code: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
     }
 
-    // 📱 AIRTEL MONEY (07xxxxxxxx)
     if (local.startsWith('07') || local.startsWith('7')) {
       console.log('✅ AIRTEL_MONEY détecté')
-      return {
-        name: 'AIRTEL_MONEY',
-        code: 'AIRTEL_MONEY',
-        accountCode: 'ACC_69EFB0E02FCA3'
-      }
+      return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
     }
     
-    // 🏦 GIMAC (par défaut : numéros fixes, autres formats, cartes bancaires)
     console.log('✅ GIMAC détecté (par défaut)')
-    return {
-      name: 'GIMAC',
-      code: 'GIMAC_PAY',
-      accountCode: 'ACC_69FE0E1BC34B4'
-    }
+    return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
   }
 
   private async performKYC(phoneNumber: string): Promise<{
@@ -122,7 +107,6 @@ export default class PayMobileMoneyController {
     }
   }
 
-  // ✅ Vérifie le stock du panier
   private async checkCartStock(userId: string): Promise<{
     ok: boolean
     errors: string[]
@@ -141,28 +125,15 @@ export default class PayMobileMoneyController {
 
     for (const item of cart.items) {
       const p = await Product.findBy('id', item.product_id)
-      if (!p) { 
-        errors.push(`Produit ${item.product_id} introuvable`)
-        continue 
-      }
-      if (p.isArchived) { 
-        errors.push(`${p.name} - Archivé`)
-        continue 
-      }
-      if (p.stock <= 0) { 
-        errors.push(`${p.name} - Rupture de stock`)
-        continue 
-      }
-      if (p.stock < item.quantity) { 
-        errors.push(`${p.name}: stock ${p.stock} < ${item.quantity}`)
-        continue 
-      }
+      if (!p) { errors.push(`Produit ${item.product_id} introuvable`); continue }
+      if (p.isArchived) { errors.push(`${p.name} - Archivé`); continue }
+      if (p.stock <= 0) { errors.push(`${p.name} - Rupture de stock`); continue }
+      if (p.stock < item.quantity) { errors.push(`${p.name}: stock ${p.stock} < ${item.quantity}`); continue }
     }
 
     return { ok: errors.length === 0, errors, cart }
   }
 
-  // ✅ Crée les OrderItems à partir du panier
   private async buildItemsFromCart(order: Order, cart: Cart): Promise<{ subtotal: number; count: number }> {
     let subtotal = 0
     let count = 0
@@ -183,7 +154,6 @@ export default class PayMobileMoneyController {
         subtotal: itemTotal
       })
 
-      // ✅ Stock NON décrémenté ici - sera fait par le CallbackController après confirmation
       count++
     }
 
@@ -195,7 +165,6 @@ export default class PayMobileMoneyController {
     console.log('📱 ========== PAIEMENT MOBILE MONEY ==========')
 
     try {
-      // Récupérer toutes les données envoyées
       const payload = request.only([
         'userId', 'customerAccountNumber', 'shippingAddress', 'deliveryMethod',
         'deliveryPrice', 'customerName', 'customerEmail', 'customerPhone', 'agent', 'linkType', 'notes'
@@ -207,20 +176,14 @@ export default class PayMobileMoneyController {
       const phoneNumber = payload.customerAccountNumber || payload.customerPhone
 
       if (!userId) {
-        return response.status(400).json({
-          success: false,
-          message: 'userId requis'
-        })
+        return response.status(400).json({ success: false, message: 'userId requis' })
       }
 
       if (!phoneNumber) {
-        return response.status(400).json({
-          success: false,
-          message: 'Numéro de téléphone requis'
-        })
+        return response.status(400).json({ success: false, message: 'Numéro de téléphone requis' })
       }
 
-      // ✅ 1. RÉCUPÉRER LE PANIER DE L'UTILISATEUR
+      // 1. Récupérer le panier
       console.log('🛒 Récupération du panier pour userId:', userId)
       
       const { ok, errors, cart } = await this.checkCartStock(userId)
@@ -234,10 +197,7 @@ export default class PayMobileMoneyController {
       }
 
       if (!cart) {
-        return response.status(400).json({
-          success: false,
-          message: 'Panier introuvable'
-        })
+        return response.status(400).json({ success: false, message: 'Panier introuvable' })
       }
 
       console.log(`🛒 Panier trouvé avec ${cart.items.length} articles`)
@@ -249,10 +209,10 @@ export default class PayMobileMoneyController {
       // 3. Renouveler le secret
       await this.renewSecretIfNeeded(phoneNumber)
 
-      // 4. Récupérer l'utilisateur (pour son nom/email)
+      // 4. Récupérer l'utilisateur
       const user = await User.findBy('id', userId)
 
-      // 5. Calculer le total depuis le panier
+      // 5. Calculer le total
       let subtotal = 0
       for (const item of cart.items) {
         const product = await Product.findBy('id', item.product_id)
@@ -283,7 +243,7 @@ export default class PayMobileMoneyController {
         payment_operator_simple: kyc.operator
       })
 
-      // 7. Créer les OrderItems à partir du panier
+      // 7. Créer les OrderItems
       const { count } = await this.buildItemsFromCart(order, cart)
 
       // 8. Tracking initial
@@ -310,7 +270,12 @@ export default class PayMobileMoneyController {
 
       console.log('💳 Résultat paiement:', payment)
 
-      // 10. Traitement résultat
+      // ✅ 10. RÉCUPÉRER LE X-SECRET ACTIF
+      console.log('🔑 Récupération du X-Secret...')
+      const xSecret = await MypvitSecretService.getSecret()
+      console.log('   X-Secret:', xSecret.substring(0, 15) + '...')
+
+      // 11. Traitement résultat
       if (payment.status !== 'FAILED' && payment.reference_id) {
         order.payment_reference_id = payment.reference_id
         order.payment_operator_simple = kyc.operator
@@ -328,6 +293,7 @@ export default class PayMobileMoneyController {
 
         await order.load('items')
 
+        // ✅ RÉPONSE AVEC X-SECRET ET OPÉRATEUR
         return response.status(201).json({
           success: true,
           message: '⏳ Vérifiez votre téléphone pour confirmer le paiement',
@@ -340,19 +306,25 @@ export default class PayMobileMoneyController {
             paymentMethod: kyc.operator,
             itemsCount: count,
             userId,
+            // ✅ OPÉRATEUR SÉLECTIONNÉ
             operator: {
               name: kyc.operator,
               code: kyc.operatorCode,
-              accountCode: kyc.accountCode
+              accountCode: kyc.accountCode,
+              phoneNumber: phoneNumber
             },
+            // ✅ X-SECRET
+            x_secret: xSecret,
+            // ✅ PAIEMENT
             payment: {
               reference_id: payment.reference_id,
-              status: 'PENDING'
+              status: 'PENDING',
+              transaction_id: payment.reference_id
             },
           },
         })
       } else {
-        // Paiement échoué → Pas de restauration de stock nécessaire
+        // Paiement échoué
         order.status = 'payment_failed'
         order.payment_error_message = payment.message || 'Erreur inconnue'
         await order.save()
@@ -368,7 +340,12 @@ export default class PayMobileMoneyController {
           success: false,
           message: 'Paiement échoué',
           error: payment.message,
-          operator: kyc.operator
+          // ✅ Même en cas d'échec, on donne l'opérateur
+          operator: {
+            name: kyc.operator,
+            code: kyc.operatorCode,
+            accountCode: kyc.accountCode
+          }
         })
       }
     } catch (error: any) {
