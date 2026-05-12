@@ -1,10 +1,11 @@
-// app/controllers/SubscriptionController.ts
+// app/controllers/SubscriptionController.ts - AVEC X-SECRET DANS LE JSON
 import type { HttpContext } from '@adonisjs/core/http'
 import Subscription, { SubscriptionPlan, SUBSCRIPTION_PLANS } from '#models/Subscription'
 import User from '#models/user'
 import Product from '#models/Product'
 import { DateTime } from 'luxon'
 import MypvitTransactionService from '../services/mypvit_transaction_service.js'
+import MypvitSecretService from '../services/mypvit_secret_service.js' // ✅ AJOUTÉ
 import BoostService from '../services/BoostService.js'
 
 export default class SubscriptionController {
@@ -23,17 +24,14 @@ export default class SubscriptionController {
     if (clean.startsWith('241')) local = clean.substring(3)
     if (local.startsWith('0')) local = local.substring(1)
     
-    // 📱 MOOV MONEY (06xxxxxxxx)
     if (local.startsWith('06') || local.startsWith('6')) {
       return { name: 'MOOV_MONEY', code: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
     }
     
-    // 📱 AIRTEL MONEY (07xxxxxxxx)
     if (local.startsWith('07') || local.startsWith('7')) {
       return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
     }
     
-    // 🏦 GIMAC (par défaut : numéros fixes, autres formats, cartes bancaires)
     return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
   }
 
@@ -148,7 +146,7 @@ export default class SubscriptionController {
         phone: phoneNumber.replace(/\s/g, '')
       })
 
-      // ✅ Appel au service de paiement SANS agent
+      // ✅ Appel au service de paiement
       const paymentResult: any = await MypvitTransactionService.processPayment({
         amount: planConfig.price,
         reference: `SUB-${subscription.id.substring(0, 8)}`,
@@ -165,6 +163,10 @@ export default class SubscriptionController {
         message: paymentResult.message
       })
 
+      // ✅ RÉCUPÉRER LE X-SECRET
+      const xSecret = await MypvitSecretService.getSecret()
+      console.log('   X-Secret:', xSecret.substring(0, 15) + '...')
+
       // Gestion de l'échec
       if (paymentResult.status === 'FAILED' || !paymentResult.reference_id) {
         subscription.status = 'cancelled'
@@ -174,7 +176,13 @@ export default class SubscriptionController {
         return response.status(400).json({ 
           success: false, 
           message: 'Paiement échoué', 
-          error: paymentResult.message 
+          error: paymentResult.message,
+          operator: {
+            name: operator.name,
+            code: operator.code,
+            accountCode: operator.accountCode
+          },
+          x_secret: xSecret
         })
       }
 
@@ -183,6 +191,7 @@ export default class SubscriptionController {
       subscription.paymentStatus = 'PENDING'
       await subscription.save()
 
+      // ✅ RÉPONSE AVEC X-SECRET ET OPÉRATEUR
       return response.status(201).json({
         success: true,
         message: `⏳ Paiement ${operator.name} initié. Vérifiez votre téléphone.`,
@@ -191,9 +200,25 @@ export default class SubscriptionController {
           type: subscriptionType, 
           plan: planConfig.name, 
           price: planConfig.price, 
-          paymentReferenceId: paymentResult.reference_id, 
-          operator: { name: operator.name, code: operator.code }, 
-          status: 'pending_payment' 
+          paymentReferenceId: paymentResult.reference_id,
+          status: 'pending_payment',
+          
+          // ✅ OPÉRATEUR
+          operator: { 
+            name: operator.name, 
+            code: operator.code,
+            accountCode: operator.accountCode
+          },
+          
+          // ✅ X-SECRET
+          x_secret: xSecret,
+          
+          // ✅ PAIEMENT
+          payment: {
+            reference_id: paymentResult.reference_id,
+            status: 'PENDING',
+            transaction_id: paymentResult.reference_id
+          }
         },
       })
     } catch (error: any) {
@@ -244,10 +269,13 @@ export default class SubscriptionController {
         paymentRef: subscription.paymentReferenceId
       })
 
-      // ✅ Vérification du statut avec l'accountCode du metadata (GIMAC par défaut)
+      // ✅ Récupérer le X-Secret pour la vérification
+      const xSecret = await MypvitSecretService.getSecret()
+
+      // ✅ Vérification du statut
       const paymentStatus: any = await MypvitTransactionService.checkTransactionStatus(
         subscription.paymentReferenceId,
-        subscription.metadata?.accountCode || 'ACC_69FE0E1BC34B4'  // ✅ GIMAC par défaut
+        subscription.metadata?.accountCode || 'ACC_69FE0E1BC34B4'
       )
       
       const status = paymentStatus?.status || 'PENDING'
@@ -279,7 +307,9 @@ export default class SubscriptionController {
               type: subscription.subscriptionType, 
               plan: subscription.planName, 
               remainingDays: subscription.remainingDays 
-            } 
+            },
+            // ✅ X-SECRET dans la réponse aussi
+            x_secret: xSecret
           } 
         })
       } else if (status === 'FAILED') {
@@ -290,20 +320,29 @@ export default class SubscriptionController {
         return response.json({ 
           success: false, 
           message: '❌ Paiement échoué', 
-          data: { status: 'FAILED' } 
+          data: { 
+            status: 'FAILED',
+            x_secret: xSecret
+          } 
         })
       } else if (status === 'AMBIGUOUS') {
         return response.json({ 
           success: true, 
           message: '⚠️ Statut ambigu, veuillez réessayer', 
-          data: { status: 'AMBIGUOUS' }, 
+          data: { 
+            status: 'AMBIGUOUS',
+            x_secret: xSecret
+          }, 
           is_pending: true 
         })
       } else {
         return response.json({ 
           success: true, 
           message: '⏳ Paiement en attente', 
-          data: { status: 'PENDING' }, 
+          data: { 
+            status: 'PENDING',
+            x_secret: xSecret
+          }, 
           is_pending: true 
         })
       }
