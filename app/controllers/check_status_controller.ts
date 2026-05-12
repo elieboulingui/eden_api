@@ -28,8 +28,8 @@ export default class CheckStatusController {
       console.log('   Référence PVit:', order.payment_reference_id)
       console.log('   Opérateur:', order.payment_operator_simple)
 
-      // Si déjà confirmé
-      if (order.status === 'paid' || order.status === 'confirmed') {
+      // ✅ Si déjà confirmé (utilise les statuts existants)
+      if (order.status === 'paid') {
         return response.json({
           success: true,
           is_pending: false,
@@ -64,7 +64,7 @@ export default class CheckStatusController {
       console.log('   X-Secret:', xSecret.substring(0, 15) + '...')
 
       // ✅ 2. DÉTERMINER LE COMPTE OPÉRATION
-      const accountCode = this.getAccountCode(order.payment_operator_simple)
+      const accountCode = this.getAccountCode(order.payment_operator_simple ?? undefined)
 
       // ✅ 3. RÉCUPÉRER LE TRANSACTION ID
       const transactionId = order.payment_reference_id
@@ -128,15 +128,15 @@ export default class CheckStatusController {
     // ✅ SUCCESS
     if (status === 'SUCCESS') {
       order.status = 'paid'
-      order.paid_at = DateTime.now()
-      order.payment_amount = data.amount
-      order.payment_fees = data.fees
+      // ✅ Utiliser les champs existants du modèle
+      order.payment_completed_at = DateTime.now()
+      order.payment_amount = data?.amount ?? null
       await order.save()
 
       await OrderTracking.create({
         order_id: order.id,
         status: 'paid',
-        description: `✅ Paiement confirmé - ${data.operator} - ${data.amount} FCFA`,
+        description: `✅ Paiement confirmé - ${data?.operator || 'Inconnu'} - ${data?.amount || 0} FCFA`,
         tracked_at: DateTime.now()
       })
 
@@ -148,10 +148,10 @@ export default class CheckStatusController {
         orderNumber: order.order_number,
         customerName: order.customer_name,
         payment: {
-          amount: data.amount,
-          fees: data.fees,
-          operator: data.operator,
-          date: data.date
+          amount: data?.amount,
+          fees: data?.fees,
+          operator: data?.operator,
+          date: data?.date
         }
       })
     }
