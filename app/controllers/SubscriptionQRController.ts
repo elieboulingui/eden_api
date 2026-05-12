@@ -1,10 +1,11 @@
-// app/controllers/SubscriptionQRController.ts - GIMAC UNIQUEMENT AVEC IMAGE PNG
+// app/controllers/SubscriptionQRController.ts - AVEC X-SECRET DANS LA RÉPONSE
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import Product from '#models/Product'
 import Subscription, { SUBSCRIPTION_PLANS } from '#models/Subscription'
 import MypvitSecretService from '../services/mypvit_secret_services.js'
 import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
+import PvitStatusService from '../services/pvit_status_service.js' // ✅ AJOUTÉ
 
 const SUBSCRIPTION_CALLBACK_URL_CODE = 'T2D7X'
 const GIMAC_ACCOUNT = 'ACC_69FE0E1BC34B4'
@@ -137,7 +138,7 @@ export default class SubscriptionQRController {
         amount: planConfig.price,
         reference: reference,
         phoneNumber: phoneNumber,
-        returnAsImage: true  // ✅ RETOURNE L'IMAGE PNG EN BASE64
+        returnAsImage: true
       })
 
       console.log('✅ QR Code généré (image PNG base64)')
@@ -151,6 +152,65 @@ export default class SubscriptionQRController {
         await subscription.save()
       }
 
+      // ✅ RÉCUPÉRER LE X-SECRET
+      console.log('🔑 Récupération du X-Secret...')
+      const xSecret = await MypvitSecretService.getSecret()
+      console.log('   X-Secret:', xSecret.substring(0, 15) + '...')
+
+      // ✅ VÉRIFICATION DU STATUT
+      console.log('🔍 Vérification statut...')
+      
+      let paymentStatus = null
+      
+      if (qrResult.reference_id) {
+        try {
+          console.log('📤 Envoi requête statut:')
+          console.log('   Transaction ID:', qrResult.reference_id)
+          console.log('   Compte:', GIMAC_ACCOUNT)
+          console.log('   X-Secret:', xSecret.substring(0, 15) + '...')
+          
+          const statusResult = await PvitStatusService.checkStatus(
+            xSecret,
+            qrResult.reference_id,
+            GIMAC_ACCOUNT
+          )
+          
+          console.log('📥 Résultat statut:', statusResult)
+          
+          paymentStatus = {
+            checked: true,
+            status: statusResult.status,
+            data: statusResult.data || null
+          }
+          
+          // Mettre à jour l'abonnement si déjà confirmé
+          if (statusResult.status === 'SUCCESS') {
+            subscription.paymentStatus = 'COMPLETED'
+            subscription.paymentConfirmedAt = new Date()
+            
+            const durationDays = planConfig.duration
+            const now = new Date()
+            const endDate = new Date(now)
+            endDate.setDate(endDate.getDate() + durationDays)
+            
+            subscription.status = 'active'
+            subscription.startDate = now
+            subscription.endDate = endDate
+            
+            await subscription.save()
+            console.log('✅ Abonnement déjà activé !')
+          }
+          
+        } catch (statusError: any) {
+          console.log('⚠️ Erreur vérification statut:', statusError.message)
+          paymentStatus = {
+            checked: false,
+            error: statusError.message
+          }
+        }
+      }
+
+      // ✅ RÉPONSE AVEC X-SECRET, OPÉRATEUR ET STATUT
       return response.status(201).json({
         success: true,
         message: `✅ QR Code GIMAC généré pour ${planConfig.name} !`,
@@ -160,19 +220,33 @@ export default class SubscriptionQRController {
           plan: planConfig.name,
           price: planConfig.price,
           duration: planConfig.duration,
-          status: 'pending_payment',
+          status: subscription.status,
           customerName: user.full_name || payload.customerName || 'Client',
           paymentMethod: 'qr_code_gimac',
           userId,
-          operator: { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: GIMAC_ACCOUNT },
+          
+          // ✅ OPÉRATEUR
+          operator: {
+            name: 'GIMAC',
+            code: 'GIMAC_PAY',
+            accountCode: GIMAC_ACCOUNT
+          },
+          
+          // ✅ X-SECRET
+          x_secret: xSecret,
+          
+          // ✅ QR CODE
           qr_code: {
-            data: qrResult.data,  // ✅ Base64 de l'image PNG
-            format: qrResult.format,  // 'png_base64'
+            data: qrResult.data,
+            format: qrResult.format,
             reference_id: qrResult.reference_id || reference,
             amount: planConfig.price,
             expires_in: 600,
-            mime_type: 'image/png'  // ✅ Pour l'affichage frontend
+            mime_type: 'image/png'
           },
+          
+          // ✅ STATUT DU PAIEMENT
+          payment_status: paymentStatus
         },
       })
 
