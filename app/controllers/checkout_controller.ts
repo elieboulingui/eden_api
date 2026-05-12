@@ -76,7 +76,7 @@ export default class CheckoutController {
         }
       })
 
-    } catch (error) {
+    } catch (error:any) {
       return response.status(500).json({ success: false, message: error.message })
     }
   }
