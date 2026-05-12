@@ -1,11 +1,12 @@
-// app/controllers/SubscriptionQRController.ts - AVEC X-SECRET DANS LA RÉPONSE
+// app/controllers/SubscriptionQRController.ts - CORRIGÉ
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import Product from '#models/Product'
 import Subscription, { SUBSCRIPTION_PLANS } from '#models/Subscription'
 import MypvitSecretService from '../services/mypvit_secret_services.js'
 import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
-import PvitStatusService from '../services/pvit_status_service.js' // ✅ AJOUTÉ
+import PvitStatusService from '../services/pvit_status_service.js'
+import { DateTime } from 'luxon' // ✅ AJOUTÉ
 
 const SUBSCRIPTION_CALLBACK_URL_CODE = 'T2D7X'
 const GIMAC_ACCOUNT = 'ACC_69FE0E1BC34B4'
@@ -183,19 +184,14 @@ export default class SubscriptionQRController {
             data: statusResult.data || null
           }
           
-          // Mettre à jour l'abonnement si déjà confirmé
+          // ✅ CORRIGÉ : utiliser DateTime au lieu de Date
           if (statusResult.status === 'SUCCESS') {
             subscription.paymentStatus = 'COMPLETED'
-            subscription.paymentConfirmedAt = new Date()
             
-            const durationDays = planConfig.duration
-            const now = new Date()
-            const endDate = new Date(now)
-            endDate.setDate(endDate.getDate() + durationDays)
-            
+            const now = DateTime.now()
             subscription.status = 'active'
             subscription.startDate = now
-            subscription.endDate = endDate
+            subscription.endDate = now.plus({ days: planConfig.duration })
             
             await subscription.save()
             console.log('✅ Abonnement déjà activé !')
@@ -225,17 +221,14 @@ export default class SubscriptionQRController {
           paymentMethod: 'qr_code_gimac',
           userId,
           
-          // ✅ OPÉRATEUR
           operator: {
             name: 'GIMAC',
             code: 'GIMAC_PAY',
             accountCode: GIMAC_ACCOUNT
           },
           
-          // ✅ X-SECRET
           x_secret: xSecret,
           
-          // ✅ QR CODE
           qr_code: {
             data: qrResult.data,
             format: qrResult.format,
@@ -245,7 +238,6 @@ export default class SubscriptionQRController {
             mime_type: 'image/png'
           },
           
-          // ✅ STATUT DU PAIEMENT
           payment_status: paymentStatus
         },
       })
