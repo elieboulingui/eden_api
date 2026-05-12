@@ -32,7 +32,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare password: string
 
   @column()
-  declare role: 'superadmin' | 'admin' | 'client' | 'marchant' | 'merchant'
+  declare role: 'superadmin' | 'admin' | 'client' | 'marchant' | 'merchant' | 'livreur'
 
   @column()
   declare avatar: string | null
@@ -50,7 +50,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare neighborhood: string | null
 
   // ============================================================
-  // ÉTAPE 1 : INFORMATIONS DU RESPONSABLE (MARCHAND)
+  // ÉTAPE 1 : INFORMATIONS PERSONNELLES (MARCHAND & LIVREUR)
   // ============================================================
 
   @column.date({ columnName: 'birth_date' })
@@ -81,7 +81,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare residence_address: string | null
 
   // ============================================================
-  // ÉTAPE 2 : TYPE D'ACTIVITÉ
+  // ÉTAPE 2 : TYPE D'ACTIVITÉ (MARCHAND)
   // ============================================================
 
   @column({ columnName: 'vendor_type' })
@@ -121,7 +121,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare cover_photo_url: string | null
 
   // ============================================================
-  // BLOC 4 : BOUTIQUE PHYSIQUE (AVEC UNDERSCORES)
+  // BLOC 4 : BOUTIQUE PHYSIQUE
   // ============================================================
 
   @column({ columnName: 'shop_address' })
@@ -183,18 +183,65 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare reference2_phone: string | null
 
   // ============================================================
+  // 🆕 CHAMPS LIVREUR
+  // ============================================================
+
+  @column({ columnName: 'vehicle_type' })
+  declare vehicle_type: 'moto' | 'voiture' | 'velo' | 'pied' | null
+
+  @column({ columnName: 'license_number' })
+  declare license_number: string | null
+
+  @column({ columnName: 'license_document_url' })
+  declare license_document_url: string | null
+
+  @column({ columnName: 'vehicle_document_url' })
+  declare vehicle_document_url: string | null
+
+  @column({ columnName: 'availability' })
+  declare availability: 'full-time' | 'part-time' | null
+
+  // Statut en ligne
+  @column({ columnName: 'is_available' })
+  declare is_available: boolean
+
+  @column({ columnName: 'is_online' })
+  declare is_online: boolean
+
+  @column({ columnName: 'current_latitude' })
+  declare current_latitude: number | null
+
+  @column({ columnName: 'current_longitude' })
+  declare current_longitude: number | null
+
+  @column.dateTime({ columnName: 'last_location_update' })
+  declare last_location_update: DateTime | null
+
+  // Statistiques livreur
+  @column({ columnName: 'total_deliveries' })
+  declare total_deliveries: number
+
+  @column({ columnName: 'total_earnings' })
+  declare total_earnings: number
+
+  @column({ columnName: 'rating' })
+  declare rating: number
+
+  @column({ columnName: 'total_ratings' })
+  declare total_ratings: number
+
+  // ============================================================
   // ÉTAPE 3 : PAIEMENT ET VALIDATION
   // ============================================================
 
-  // Dans app/models/user.ts, ajoutez :
-@column()
-declare contract_sent_at: DateTime | null
+  @column()
+  declare contract_sent_at: DateTime | null
 
-@column()
-declare contract_signed_at: DateTime | null
+  @column()
+  declare contract_signed_at: DateTime | null
 
-@column()
-declare contract_signed: boolean
+  @column()
+  declare contract_signed: boolean
 
   @column({ columnName: 'payment_method' })
   declare payment_method: 'airtel_money' | 'moov_money' | 'virement_bancaire' | null
@@ -218,17 +265,15 @@ declare contract_signed: boolean
   // VALIDATION ET ENGAGEMENT
   // ============================================================
 
-    // ============================================================
-  // 🚚 ZONES DE LIVRAISON (SAISIES PAR LE MARCHAND)
-  // ============================================================
-
-  @column({ columnName: 'delivery_zones', consume: (value) => {
-    // ✅ Parser le JSON de la base de données
-    if (typeof value === 'string') return JSON.parse(value)
-    if (value && typeof value === 'object') return value
-    return {}
-  }})
-  declare delivery_zones: Record<string, number>  // ex: { "libreville": 2500, "owendo": 3000 }
+  @column({ 
+    columnName: 'delivery_zones', 
+    consume: (value) => {
+      if (typeof value === 'string') return JSON.parse(value)
+      if (value && typeof value === 'object') return value
+      return {}
+    }
+  })
+  declare delivery_zones: Record<string, number>
 
   @column({ columnName: 'certify_truth' })
   declare certify_truth: boolean
@@ -258,11 +303,9 @@ declare contract_signed: boolean
   @column({ columnName: 'rejection_reason' })
   declare rejection_reason: string | null
 
+  @column({ columnName: 'partner_code' })
+  declare partner_code: string | null
 
-  // app/models/User.ts (ajouter après les autres colonnes)
-
-@column({ columnName: 'partner_code' })
-declare partner_code: string | null
   // ============================================================
   // TIMESTAMPS
   // ============================================================
@@ -324,6 +367,13 @@ declare partner_code: string | null
     user.accept_escrow = user.accept_escrow ?? false
     user.is_verified = user.is_verified ?? false
     user.verification_status = user.verification_status ?? 'pending'
+    user.contract_signed = user.contract_signed ?? false
+    user.is_available = user.is_available ?? true
+    user.is_online = user.is_online ?? false
+    user.total_deliveries = user.total_deliveries ?? 0
+    user.total_earnings = user.total_earnings ?? 0
+    user.rating = user.rating ?? 0
+    user.total_ratings = user.total_ratings ?? 0
   }
 
   // ============================================================
@@ -346,6 +396,10 @@ declare partner_code: string | null
     return this.role === 'marchant' || this.role === 'merchant'
   }
 
+  get isLivreur(): boolean {
+    return this.role === 'livreur'
+  }
+
   get initials() {
     const name = this.full_name || this.email
     const [first, last] = name.split(' ')
@@ -356,6 +410,21 @@ declare partner_code: string | null
   }
 
   get hasCompletedRegistration(): boolean {
+    if (this.isLivreur) {
+      return !!(
+        this.birth_date &&
+        this.id_number &&
+        this.id_front_url &&
+        this.id_back_url &&
+        this.selfie_url &&
+        this.phone &&
+        this.email &&
+        this.vehicle_type &&
+        (this.vehicle_type === 'pied' || this.vehicle_type === 'velo' || 
+         (this.license_number && this.license_document_url))
+      )
+    }
+
     if (!this.isMerchant) return true
 
     const step1Complete = !!(
@@ -428,6 +497,16 @@ declare partner_code: string | null
     return this.vendor_type ? labels[this.vendor_type] : null
   }
 
+  get vehicleTypeLabel(): string | null {
+    const labels = {
+      'moto': '🏍️ Moto',
+      'voiture': '🚗 Voiture',
+      'velo': '🚲 Vélo',
+      'pied': '🚶 À pied',
+    }
+    return this.vehicle_type ? labels[this.vehicle_type] : null
+  }
+
   get verificationStatusLabel(): string {
     const labels = {
       'pending': 'En attente',
@@ -437,16 +516,6 @@ declare partner_code: string | null
     return this.verification_status ? labels[this.verification_status] : 'En attente'
   }
 
-  // ============================================================
-  // MÉTHODES
-  // ============================================================
-  // ============================================================
-// GETTERS (ajouter ce getter après les autres getters)
-// ============================================================
-
-  /**
-   * ✅ Récupérer la liste des zones formatée
-   */
   get deliveryZonesList(): { zone: string; fee: number }[] {
     if (!this.delivery_zones || typeof this.delivery_zones !== 'object') return []
     
@@ -458,9 +527,19 @@ declare partner_code: string | null
       .sort((a, b) => a.zone.localeCompare(b.zone))
   }
 
+  // ============================================================
+  // MÉTHODES
+  // ============================================================
+
   async ensureMerchant(): Promise<void> {
     if (!this.isMerchant) {
       throw new Error('Accès non autorisé. Seuls les marchands peuvent effectuer cette action.')
+    }
+  }
+
+  async ensureLivreur(): Promise<void> {
+    if (!this.isLivreur) {
+      throw new Error('Accès non autorisé. Seuls les livreurs peuvent effectuer cette action.')
     }
   }
 
@@ -480,7 +559,6 @@ declare partner_code: string | null
     return wallet?.balance ?? 0
   }
 
-  // ✅ Correction : Utiliser directement la relation merchant_id
   async getAverageRating(): Promise<number> {
     const result = await Review.query()
       .where('merchant_id', this.id)
@@ -490,7 +568,6 @@ declare partner_code: string | null
     return Number.parseFloat(result?.$extras?.average) || 0
   }
 
-  // ✅ Correction : Utiliser directement la relation merchant_id
   async getTotalReviews(): Promise<number> {
     const result = await Review.query()
       .where('merchant_id', this.id)
@@ -517,13 +594,16 @@ declare partner_code: string | null
     this.rejection_reason = reason
     await this.save()
   }
-    // ============================================================
-  // 🚚 MÉTHODES - ZONES DE LIVRAISON
-  // ============================================================
 
-  /**
-   * ✅ Récupérer les frais de livraison pour une zone donnée
-   */
+  async pending(): Promise<void> {
+    this.is_verified = false
+    this.verification_status = 'pending'
+    this.verified_at = null
+    this.verified_by = null
+    this.rejection_reason = null
+    await this.save()
+  }
+
   getDeliveryFee(zone: string): number {
     if (!this.delivery_zones || typeof this.delivery_zones !== 'object') {
       return 0
@@ -531,12 +611,10 @@ declare partner_code: string | null
 
     const normalizedZone = zone.toLowerCase().trim()
 
-    // Chercher une correspondance exacte
     if (this.delivery_zones[normalizedZone] !== undefined) {
       return this.delivery_zones[normalizedZone]
     }
 
-    // Chercher une correspondance partielle
     for (const [key, value] of Object.entries(this.delivery_zones)) {
       if (normalizedZone.includes(key) || key.includes(normalizedZone)) {
         return value
@@ -546,9 +624,6 @@ declare partner_code: string | null
     return 0
   }
 
-  /**
-   * ✅ Vérifier si une zone est desservie
-   */
   servesZone(zone: string): boolean {
     if (!this.delivery_zones) return false
     const normalizedZone = zone.toLowerCase().trim()
@@ -557,12 +632,36 @@ declare partner_code: string | null
     )
   }
 
-  async pending(): Promise<void> {
-    this.is_verified = false
-    this.verification_status = 'pending'
-    this.verified_at = null
-    this.verified_by = null
-    this.rejection_reason = null
+  // 🆕 Méthodes spécifiques livreur
+  async updateLocation(lat: number, lng: number): Promise<void> {
+    this.current_latitude = lat
+    this.current_longitude = lng
+    this.last_location_update = DateTime.now()
+    await this.save()
+  }
+
+  async goOnline(): Promise<void> {
+    this.is_online = true
+    this.is_available = true
+    await this.save()
+  }
+
+  async goOffline(): Promise<void> {
+    this.is_online = false
+    this.is_available = false
+    await this.save()
+  }
+
+  async incrementDeliveries(earnings: number): Promise<void> {
+    this.total_deliveries += 1
+    this.total_earnings += earnings
+    await this.save()
+  }
+
+  async updateRating(newRating: number): Promise<void> {
+    const totalRating = this.rating * this.total_ratings
+    this.total_ratings += 1
+    this.rating = (totalRating + newRating) / this.total_ratings
     await this.save()
   }
 }
