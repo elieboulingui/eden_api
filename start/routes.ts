@@ -3,6 +3,8 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+// ✅ AJOUTER cette ligne avec les autres imports
+const CheckStatusController = () => import('#controllers/payments/check_status_controller')
 const PayLinkSubscriptionController = () => import('#controllers/PayLinkSubscriptionController')
 import SubscriptionQRController from '#controllers/SubscriptionQRController'
 const SubscriptionQR = new SubscriptionQRController()
@@ -502,10 +504,8 @@ router.group(() => {
   // ----------------------------------------------------------
   // VÉRIFICATION STATUT PAIEMENT (PROXY PVIT) ✅ NOUVEAU
   // ----------------------------------------------------------
-  router.get('/payments/status/verify', async ({ request, response }) => {
-    const CheckStatusController = await import('#controllers/payments/check_status_controller')
-    return new CheckStatusController.default().verify({ request, response })
-  }).as('payments.status.verify')
+// ✅ Comme les autres routes !
+router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).as('payments.status.verify')
 
   // ----------------------------------------------------------
   // VÉRIFICATION STATUT PAIEMENT (EXISTANT)
