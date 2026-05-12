@@ -42,6 +42,9 @@ const ALLOWED_USER_FIELDS = [
   
   // Statuts
   'verification_status', 'is_verified',
+
+  // ✅ Partenaire (marchand uniquement)
+  'partner_code',
 ]
 
 export default class NewAccountController {
@@ -52,7 +55,9 @@ export default class NewAccountController {
       const rawData = request.body()
       
       console.log('📥 [NewAccountController] Données brutes reçues:')
-      console.log(JSON.stringify(rawData, null, 2))
+      console.log('  - email:', rawData.email)
+      console.log('  - role:', rawData.role)
+      console.log('  - partner_code:', rawData.partner_code || 'null (non défini)')
 
       // Vérifier email si présent
       if (rawData.email) {
@@ -158,7 +163,6 @@ export default class NewAccountController {
       // Construire userData en filtrant
       for (const [frontendKey, dbKey] of Object.entries(fieldMappings)) {
         if (Array.isArray(dbKey)) {
-          // Chercher la première source disponible
           for (const source of dbKey) {
             if (rawData[source] !== undefined && rawData[source] !== null && rawData[source] !== '') {
               if (ALLOWED_USER_FIELDS.includes(frontendKey)) {
@@ -184,6 +188,22 @@ export default class NewAccountController {
             userData[key] = value
           }
         }
+      }
+
+      // ✅ PARTNER_CODE : uniquement pour les marchands
+      if (isMerchant) {
+        if (rawData.partner_code) {
+          userData.partner_code = rawData.partner_code
+          console.log('🔗 [NewAccountController] Marchand partenaire:', rawData.partner_code)
+        } else {
+          // ✅ Valeur par défaut pour les marchands sans code partenaire
+          userData.partner_code = 'eden_client_nathjosh'
+          console.log('🏪 [NewAccountController] Marchand normal → eden_client_nathjosh')
+        }
+      } else {
+        // Client normal : pas de partner_code
+        userData.partner_code = null
+        console.log('👤 [NewAccountController] Client normal')
       }
 
       // Log des champs filtrés
@@ -221,7 +241,6 @@ export default class NewAccountController {
       }
 
       console.log('💾 [NewAccountController] Création utilisateur dans la DB...')
-      console.log('📋 Données finales:', JSON.stringify(userData, null, 2))
 
       // ✅ Créer l'utilisateur (seulement avec les champs autorisés)
       const user = await User.create(userData)
@@ -231,6 +250,8 @@ export default class NewAccountController {
       console.log('  - Nom:', user.full_name)
       console.log('  - Email:', user.email)
       console.log('  - Rôle:', user.role)
+      console.log('  - Partenaire:', user.partner_code || 'Aucun')
+      console.log('  - Est marchand:', user.isMerchant)
 
       // Créer wallet si marchand
       let wallet = null
@@ -251,7 +272,12 @@ export default class NewAccountController {
 
       // Générer JWT
       const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role },
+        { 
+          id: user.id, 
+          email: user.email, 
+          role: user.role,
+          partner_code: user.partner_code,
+        },
         JWT_SECRET,
         { expiresIn: '7d' }
       )
@@ -266,6 +292,8 @@ export default class NewAccountController {
           full_name: user.full_name,
           email: user.email,
           role: user.role,
+          // ✅ Partenaire visible uniquement pour les marchands
+          ...(user.isMerchant && { partner_code: user.partner_code }),
           verification_status: user.verification_status,
         },
         token,
@@ -277,7 +305,6 @@ export default class NewAccountController {
       console.error('💥 [NewAccountController] ERREUR:', err.message)
       console.error('💥 Stack:', err.stack)
 
-      // Message d'erreur plus explicite
       let errorMessage = err.message
       if (err.message?.includes('Cannot define')) {
         const fieldName = err.message.match(/"(\w+)"/)?.[1] || 'inconnu'
