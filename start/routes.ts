@@ -500,7 +500,15 @@ router.group(() => {
   router.get('/paypal/cancel', [PayPalController, 'cancel']).as('paypal.cancel')
 
   // ----------------------------------------------------------
-  // VÉRIFICATION STATUT PAIEMENT
+  // VÉRIFICATION STATUT PAIEMENT (PROXY PVIT) ✅ NOUVEAU
+  // ----------------------------------------------------------
+  router.get('/payments/status/verify', async ({ request, response }) => {
+    const CheckStatusController = await import('#controllers/payments/check_status_controller')
+    return new CheckStatusController.default().verify({ request, response })
+  }).as('payments.status.verify')
+
+  // ----------------------------------------------------------
+  // VÉRIFICATION STATUT PAIEMENT (EXISTANT)
   // ----------------------------------------------------------
   router.get('/orders/:orderNumber/payment-status', [CheckPaymentStatusController, 'check']).as('check_payment_status.check_by_order')
   router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check']).as('check_payment_status.check_by_reference')
