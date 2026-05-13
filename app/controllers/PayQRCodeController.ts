@@ -1,4 +1,4 @@
-// app/controllers/PayQRCodeController.ts - CORRIGÉ (utilise les champs existants du modèle)
+// app/controllers/PayQRCodeController.ts - CORRIGÉ (avec IDs PVIT complets)
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -131,7 +131,9 @@ export default class PayQRCodeController {
       })
       
       console.log('🔑 QR Code généré')
+      console.log('🔑 QR Result COMPLET:', JSON.stringify(qrResult, null, 2))
       console.log('🔑 Reference ID:', qrResult.reference_id)
+      console.log('🔑 Merchant Reference ID:', qrResult.merchant_reference_id)
 
       // ÉTAPE 8 : Sauvegarder la référence
       if (qrResult.reference_id) {
@@ -173,7 +175,7 @@ export default class PayQRCodeController {
             GIMAC_ACCOUNT
           )
           
-          console.log('📥 Résultat statut:', statusResult)
+          console.log('📥 Résultat statut:', JSON.stringify(statusResult, null, 2))
           
           paymentStatus = {
             checked: true,
@@ -181,12 +183,10 @@ export default class PayQRCodeController {
             data: statusResult.data || null
           }
           
-          // ✅ CORRIGÉ : utiliser les champs existants du modèle Order
           if (statusResult.status === 'SUCCESS') {
             order.status = 'paid'
-            order.payment_completed_at = DateTime.now()  // ✅ payment_completed_at au lieu de paid_at
-            order.payment_amount = statusResult.data?.amount ?? null  // ✅ ?? null pour éviter undefined
-            // ❌ payment_fees n'existe pas → supprimé
+            order.payment_completed_at = DateTime.now()
+            order.payment_amount = statusResult.data?.amount ?? null
             await order.save()
             
             await OrderTracking.create({
@@ -208,7 +208,7 @@ export default class PayQRCodeController {
         }
       }
 
-      // ✅ RÉPONSE AVEC X-SECRET, OPÉRATEUR ET STATUT
+      // ✅ RÉPONSE AVEC X-SECRET, OPÉRATEUR, IDS PVIT ET STATUT
       return response.status(201).json({
         success: true,
         message: '✅ QR Code GIMAC généré !',
@@ -219,23 +219,32 @@ export default class PayQRCodeController {
           status: order.status,
           itemsCount: validProducts.length,
           
+          // ✅ OPÉRATEUR
           operator: {
             name: 'GIMAC',
             code: 'GIMAC_PAY',
             accountCode: GIMAC_ACCOUNT
           },
           
+          // ✅ X-SECRET
           x_secret: xSecret,
           
+          // ✅ IDS PVIT
+          pvit_reference_id: qrResult.reference_id,                    // ID PVIT (PAY...)
+          merchant_reference_id: qrResult.merchant_reference_id,        // Votre REF...
+          
+          // ✅ QR CODE
           qr_code: {
             data: qrResult.data,
             format: qrResult.format,
-            reference_id: qrResult.reference_id,
+            reference_id: qrResult.reference_id,                        // ID PVIT ← Pour checkPvitStatus
+            merchant_reference_id: qrResult.merchant_reference_id,      // Votre REF
             amount: subtotal,
             expires_in: 600,
             mime_type: 'image/png'
           },
           
+          // ✅ STATUT
           payment_status: paymentStatus
         }
       })
