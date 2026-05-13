@@ -555,6 +555,18 @@ router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).
   router.get('/merchant/contract/:id/status', [DashboardViewController, 'getContractStatus']).as('merchant.contract.status')
 
   router.get('/checkout/:userId', [CheckoutController, 'getCheckoutData']).as('checkout.data')
-
+ // GET  /api/merchant/:merchantId/delivery-zones
+  // Récupère toutes les zones de livraison d'un marchand
+  router.get('/merchant/:merchantId/delivery-zones', [MerchantDeliveryController, 'getDeliveryZones'])
+  
+  // GET  /api/merchant/:merchantId/delivery-fee?zone=Akanda
+  // Calcule les frais de livraison pour une zone spécifique
+  router.get('/merchant/:merchantId/delivery-fee', [MerchantDeliveryController, 'getDeliveryFee'])
+  
+  // POST /api/cart/delivery-fees
+  // Calcule les frais pour tous les marchands du panier
+  // Body: { productIds: string[], zone: string }
+  router.post('/cart/delivery-fees', [MerchantDeliveryController, 'calculateCartDeliveryFees'])
+  
 
 }).prefix('/api')
