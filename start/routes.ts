@@ -3,6 +3,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+const MerchantDeliveryController = () => import('#controllers/MerchantDeliveryController')
 const CheckoutController = () => import('#controllers/checkout_controller')
 const CheckStatusController = () => import('#controllers/payments/check_status_controller')
 const PayLinkSubscriptionController = () => import('#controllers/PayLinkSubscriptionController')
