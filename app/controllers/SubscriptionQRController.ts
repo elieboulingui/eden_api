@@ -1,4 +1,4 @@
-// app/controllers/SubscriptionQRController.ts - CORRIGÉ
+// app/controllers/SubscriptionQRController.ts - CORRIGÉ (avec IDs PVIT)
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import Product from '#models/Product'
@@ -6,7 +6,7 @@ import Subscription, { SUBSCRIPTION_PLANS } from '#models/Subscription'
 import MypvitSecretService from '../services/mypvit_secret_services.js'
 import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
 import PvitStatusService from '../services/pvit_status_service.js'
-import { DateTime } from 'luxon' // ✅ AJOUTÉ
+import { DateTime } from 'luxon'
 
 const SUBSCRIPTION_CALLBACK_URL_CODE = 'T2D7X'
 const GIMAC_ACCOUNT = 'ACC_69FE0E1BC34B4'
@@ -143,8 +143,9 @@ export default class SubscriptionQRController {
       })
 
       console.log('✅ QR Code généré (image PNG base64)')
-      console.log('✅ Format:', qrResult.format)
-      console.log('✅ Reference ID:', qrResult.reference_id)
+      console.log('🔑 QR Result COMPLET:', JSON.stringify(qrResult, null, 2))
+      console.log('🔑 Reference ID:', qrResult.reference_id)
+      console.log('🔑 Merchant Reference ID:', qrResult.merchant_reference_id)
 
       // Mettre à jour l'abonnement
       if (qrResult.reference_id) {
@@ -176,7 +177,7 @@ export default class SubscriptionQRController {
             GIMAC_ACCOUNT
           )
           
-          console.log('📥 Résultat statut:', statusResult)
+          console.log('📥 Résultat statut:', JSON.stringify(statusResult, null, 2))
           
           paymentStatus = {
             checked: true,
@@ -184,7 +185,7 @@ export default class SubscriptionQRController {
             data: statusResult.data || null
           }
           
-          // ✅ CORRIGÉ : utiliser DateTime au lieu de Date
+          // ✅ Utiliser DateTime de Luxon
           if (statusResult.status === 'SUCCESS') {
             subscription.paymentStatus = 'COMPLETED'
             
@@ -206,7 +207,7 @@ export default class SubscriptionQRController {
         }
       }
 
-      // ✅ RÉPONSE AVEC X-SECRET, OPÉRATEUR ET STATUT
+      // ✅ RÉPONSE AVEC X-SECRET, OPÉRATEUR, IDS PVIT ET STATUT
       return response.status(201).json({
         success: true,
         message: `✅ QR Code GIMAC généré pour ${planConfig.name} !`,
@@ -221,23 +222,32 @@ export default class SubscriptionQRController {
           paymentMethod: 'qr_code_gimac',
           userId,
           
+          // ✅ OPÉRATEUR
           operator: {
             name: 'GIMAC',
             code: 'GIMAC_PAY',
             accountCode: GIMAC_ACCOUNT
           },
           
+          // ✅ X-SECRET
           x_secret: xSecret,
           
+          // ✅ IDS PVIT
+          pvit_reference_id: qrResult.reference_id,                    // ID PVIT (PAY...)
+          merchant_reference_id: qrResult.merchant_reference_id,        // Votre REF...
+          
+          // ✅ QR CODE
           qr_code: {
             data: qrResult.data,
             format: qrResult.format,
-            reference_id: qrResult.reference_id || reference,
+            reference_id: qrResult.reference_id,                        // ID PVIT ← Pour le statut
+            merchant_reference_id: qrResult.merchant_reference_id,      // Votre REF
             amount: planConfig.price,
             expires_in: 600,
             mime_type: 'image/png'
           },
           
+          // ✅ STATUT
           payment_status: paymentStatus
         },
       })
