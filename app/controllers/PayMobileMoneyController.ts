@@ -268,7 +268,11 @@ export default class PayMobileMoneyController {
         operator_code: kyc.operatorCode,
       })
 
-      console.log('💳 Résultat paiement:', payment)
+      // 🔥 LOG COMPLET DE LA RÉPONSE PVIT
+      console.log('💳 Résultat paiement COMPLET:', JSON.stringify(payment, null, 2))
+      console.log('🔍 payment.reference_id:', payment.reference_id)
+      console.log('🔍 payment.merchant_reference_id:', payment.merchant_reference_id)
+      console.log('🔍 payment.status:', payment.status)
 
       // ✅ 10. RÉCUPÉRER LE X-SECRET ACTIF
       console.log('🔑 Récupération du X-Secret...')
@@ -293,7 +297,7 @@ export default class PayMobileMoneyController {
 
         await order.load('items')
 
-        // ✅ RÉPONSE AVEC X-SECRET ET OPÉRATEUR
+        // ✅ RÉPONSE AVEC X-SECRET, OPÉRATEUR ET IDS PVIT
         return response.status(201).json({
           success: true,
           message: '⏳ Vérifiez votre téléphone pour confirmer le paiement',
@@ -315,10 +319,14 @@ export default class PayMobileMoneyController {
             },
             // ✅ X-SECRET
             x_secret: xSecret,
+            // ✅ IDS PVIT (LES DEUX !)
+            merchant_reference_id: payment.merchant_reference_id,  // Votre REF... (ex: REF1747248000)
+            pvit_reference_id: payment.reference_id,                // ID PVIT (ex: PAY240420250001)
             // ✅ PAIEMENT
             payment: {
-              reference_id: payment.reference_id,
-              status: 'PENDING',
+              reference_id: payment.reference_id,                    // ID PVIT ← POUR LE STATUS
+              merchant_reference_id: payment.merchant_reference_id,  // Votre REF
+              status: payment.status || 'PENDING',
               transaction_id: payment.reference_id
             },
           },
