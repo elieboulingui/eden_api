@@ -1,11 +1,11 @@
-// app/controllers/SubscriptionController.ts - AVEC X-SECRET DANS LE JSON
+// app/controllers/SubscriptionController.ts - AVEC X-SECRET ET IDS PVIT COMPLETS
 import type { HttpContext } from '@adonisjs/core/http'
 import Subscription, { SubscriptionPlan, SUBSCRIPTION_PLANS } from '#models/Subscription'
 import User from '#models/user'
 import Product from '#models/Product'
 import { DateTime } from 'luxon'
 import MypvitTransactionService from '../services/mypvit_transaction_service.js'
-import MypvitSecretService from '../services/mypvit_secret_service.js' // ✅ AJOUTÉ
+import MypvitSecretService from '../services/mypvit_secret_service.js'
 import BoostService from '../services/BoostService.js'
 
 export default class SubscriptionController {
@@ -157,11 +157,11 @@ export default class SubscriptionController {
         owner_charge: 'CUSTOMER',
       })
 
-      console.log('📥 [SubscriptionController] Résultat paiement:', {
-        status: paymentResult.status,
-        referenceId: paymentResult.reference_id,
-        message: paymentResult.message
-      })
+      // 🔥 LOG COMPLET DE LA RÉPONSE PVIT
+      console.log('💳 Résultat paiement COMPLET:', JSON.stringify(paymentResult, null, 2))
+      console.log('🔍 paymentResult.reference_id:', paymentResult.reference_id)
+      console.log('🔍 paymentResult.merchant_reference_id:', paymentResult.merchant_reference_id)
+      console.log('🔍 paymentResult.status:', paymentResult.status)
 
       // ✅ RÉCUPÉRER LE X-SECRET
       const xSecret = await MypvitSecretService.getSecret()
@@ -191,7 +191,7 @@ export default class SubscriptionController {
       subscription.paymentStatus = 'PENDING'
       await subscription.save()
 
-      // ✅ RÉPONSE AVEC X-SECRET ET OPÉRATEUR
+      // ✅ RÉPONSE AVEC X-SECRET, OPÉRATEUR ET IDS PVIT
       return response.status(201).json({
         success: true,
         message: `⏳ Paiement ${operator.name} initié. Vérifiez votre téléphone.`,
@@ -207,16 +207,22 @@ export default class SubscriptionController {
           operator: { 
             name: operator.name, 
             code: operator.code,
-            accountCode: operator.accountCode
+            accountCode: operator.accountCode,
+            phoneNumber: phoneNumber.replace(/\s/g, '')
           },
           
           // ✅ X-SECRET
           x_secret: xSecret,
           
+          // ✅ IDS PVIT (LES DEUX !)
+          pvit_reference_id: paymentResult.reference_id,                    // ID PVIT (PAY...) ← POUR LE STATUS
+          merchant_reference_id: paymentResult.merchant_reference_id,        // Votre REF... (SUB-...)
+          
           // ✅ PAIEMENT
           payment: {
-            reference_id: paymentResult.reference_id,
-            status: 'PENDING',
+            reference_id: paymentResult.reference_id,                        // ID PVIT ← POUR checkPvitStatus
+            merchant_reference_id: paymentResult.merchant_reference_id,      // Votre REF
+            status: paymentResult.status || 'PENDING',
             transaction_id: paymentResult.reference_id
           }
         },
@@ -308,8 +314,9 @@ export default class SubscriptionController {
               plan: subscription.planName, 
               remainingDays: subscription.remainingDays 
             },
-            // ✅ X-SECRET dans la réponse aussi
-            x_secret: xSecret
+            // ✅ X-SECRET et ID PVIT dans la réponse
+            x_secret: xSecret,
+            pvit_reference_id: subscription.paymentReferenceId
           } 
         })
       } else if (status === 'FAILED') {
@@ -322,7 +329,8 @@ export default class SubscriptionController {
           message: '❌ Paiement échoué', 
           data: { 
             status: 'FAILED',
-            x_secret: xSecret
+            x_secret: xSecret,
+            pvit_reference_id: subscription.paymentReferenceId
           } 
         })
       } else if (status === 'AMBIGUOUS') {
@@ -331,7 +339,8 @@ export default class SubscriptionController {
           message: '⚠️ Statut ambigu, veuillez réessayer', 
           data: { 
             status: 'AMBIGUOUS',
-            x_secret: xSecret
+            x_secret: xSecret,
+            pvit_reference_id: subscription.paymentReferenceId
           }, 
           is_pending: true 
         })
@@ -341,7 +350,8 @@ export default class SubscriptionController {
           message: '⏳ Paiement en attente', 
           data: { 
             status: 'PENDING',
-            x_secret: xSecret
+            x_secret: xSecret,
+            pvit_reference_id: subscription.paymentReferenceId
           }, 
           is_pending: true 
         })
