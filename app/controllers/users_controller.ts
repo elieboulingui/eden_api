@@ -8,7 +8,6 @@ export default class UsersController {
    */
   async index({ response, auth }: HttpContext) {
     try {
-      // Vérifier si l'utilisateur est authentifié
       const user = auth.user
       if (!user) {
         return response.status(401).json({
@@ -17,7 +16,6 @@ export default class UsersController {
         })
       }
 
-      // Récupérer tous les utilisateurs avec rôle client
       const clients = await User.query()
         .where('role', 'client')
         .orderBy('created_at', 'desc')
@@ -39,28 +37,21 @@ export default class UsersController {
   }
 
   /**
-   * Récupérer un client spécifique
+   * Récupérer un utilisateur spécifique (tous rôles)
    * GET /api/users/:id
+   * GET /api/client/:id
    */
-  async show({ params, response, auth }: HttpContext) {
+  async show({ params, response }: HttpContext) {
     try {
-      const user = auth.user
-      if (!user) {
-        return response.status(401).json({
-          success: false,
-          message: 'Non authentifié'
-        })
-      }
-
+      // ✅ Plus de filtre par rôle - retourne n'importe quel utilisateur
       const client = await User.query()
         .where('id', params.id)
-        .where('role', 'client')
         .first()
 
       if (!client) {
         return response.status(404).json({
           success: false,
-          message: 'Client non trouvé'
+          message: 'Utilisateur non trouvé'
         })
       }
 
@@ -69,9 +60,10 @@ export default class UsersController {
         data: client
       })
     } catch (error: any) {
+      console.error('Erreur:', error)
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la récupération du client',
+        message: 'Erreur lors de la récupération de l\'utilisateur',
         error: error.message
       })
     }
