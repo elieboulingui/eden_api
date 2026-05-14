@@ -218,7 +218,7 @@ router.group(() => {
   // ----------------------------------------------------------
   // SHOPS (UTILISÉ PAR LE FRONTEND)
   // ----------------------------------------------------------
-  router.get('/shops/user/:userId', [ShopController, 'getByUser']).as('shops.by-user')
+  router.get('/shops/user/:userId', [ShopController, 'apiIndex']).as('shops.by-user')
 
   // ----------------------------------------------------------
   // PANIER
