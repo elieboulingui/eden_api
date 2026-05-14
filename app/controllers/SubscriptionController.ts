@@ -1,4 +1,4 @@
-// app/controllers/SubscriptionController.ts - AVEC X-SECRET ET IDS PVIT COMPLETS
+// app/controllers/SubscriptionController.ts - AVEC RENOUVELLEMENT SECRET + IDS PVIT COMPLETS
 import type { HttpContext } from '@adonisjs/core/http'
 import Subscription, { SubscriptionPlan, SUBSCRIPTION_PLANS } from '#models/Subscription'
 import User from '#models/user'
@@ -113,7 +113,8 @@ export default class SubscriptionController {
 
     try {
       const phoneNumber = customerAccountNumber || user.phone || ''
-      const operator = this.detectOperatorGabon(phoneNumber)
+      const cleanPhone = phoneNumber.replace(/\s/g, '')
+      const operator = this.detectOperatorGabon(cleanPhone)
 
       // Créer l'abonnement en statut "pending"
       const subscription = await Subscription.create({
@@ -134,7 +135,7 @@ export default class SubscriptionController {
           operator: operator.name, 
           operatorCode: operator.code, 
           accountCode: operator.accountCode, 
-          phoneNumber: phoneNumber.replace(/\s/g, '') 
+          phoneNumber: cleanPhone
         },
       })
 
@@ -143,15 +144,39 @@ export default class SubscriptionController {
         plan: planConfig.name,
         amount: planConfig.price,
         operator: operator.name,
-        phone: phoneNumber.replace(/\s/g, '')
+        phone: cleanPhone
       })
 
-      // ✅ Appel au service de paiement
+      // ✅ 1. RENOUVELER LE SECRET AVANT LE PAIEMENT
+      console.log('🔄 [SubscriptionController] Renouvellement du secret avant paiement...')
+      try {
+        await MypvitSecretService.forceRenewal(cleanPhone)
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        console.log('✅ [SubscriptionController] Secret renouvelé avec succès')
+      } catch (renewError: any) {
+        console.error('⚠️ [SubscriptionController] Erreur renouvellement secret:', renewError.message)
+        // On continue même si le renouvellement échoue
+      }
+
+      // ✅ 2. RÉCUPÉRER LE X-SECRET ACTIF
+      const xSecret = await MypvitSecretService.getSecret(cleanPhone)
+      console.log('   X-Secret:', xSecret.substring(0, 15) + '...')
+
+      // ✅ 3. LOGGER LES INFOS OPÉRATEUR
+      const operatorInfo = MypvitSecretService.getOperatorInfo(cleanPhone)
+      console.log('   Operator:', operatorInfo.operator)
+      console.log('   AccountCode:', operatorInfo.accountCode)
+      console.log('   CodeUrl:', operatorInfo.codeUrl)
+
+      // ✅ 4. APPEL AU SERVICE DE PAIEMENT
+      const reference = `SUB${subscription.id.substring(0, 8)}`
+      console.log('   Référence:', reference)
+
       const paymentResult: any = await MypvitTransactionService.processPayment({
         amount: planConfig.price,
-        reference: `SUB${subscription.id.substring(0, 8)}`,
+        reference: reference,
         callback_url_code: 'T2D7X',
-        customer_account_number: phoneNumber.replace(/\s/g, ''),
+        customer_account_number: cleanPhone,
         merchant_operation_account_code: operator.accountCode,
         operator_code: operator.code,
         owner_charge: 'CUSTOMER',
@@ -162,10 +187,6 @@ export default class SubscriptionController {
       console.log('🔍 paymentResult.reference_id:', paymentResult.reference_id)
       console.log('🔍 paymentResult.merchant_reference_id:', paymentResult.merchant_reference_id)
       console.log('🔍 paymentResult.status:', paymentResult.status)
-
-      // ✅ RÉCUPÉRER LE X-SECRET
-      const xSecret = await MypvitSecretService.getSecret()
-      console.log('   X-Secret:', xSecret.substring(0, 15) + '...')
 
       // Gestion de l'échec
       if (paymentResult.status === 'FAILED' || !paymentResult.reference_id) {
@@ -208,20 +229,20 @@ export default class SubscriptionController {
             name: operator.name, 
             code: operator.code,
             accountCode: operator.accountCode,
-            phoneNumber: phoneNumber.replace(/\s/g, '')
+            phoneNumber: cleanPhone
           },
           
           // ✅ X-SECRET
           x_secret: xSecret,
           
           // ✅ IDS PVIT (LES DEUX !)
-          pvit_reference_id: paymentResult.reference_id,                    // ID PVIT (PAY...) ← POUR LE STATUS
-          merchant_reference_id: paymentResult.merchant_reference_id,        // Votre REF... (SUB-...)
+          pvit_reference_id: paymentResult.reference_id,
+          merchant_reference_id: paymentResult.merchant_reference_id,
           
           // ✅ PAIEMENT
           payment: {
-            reference_id: paymentResult.reference_id,                        // ID PVIT ← POUR checkPvitStatus
-            merchant_reference_id: paymentResult.merchant_reference_id,      // Votre REF
+            reference_id: paymentResult.reference_id,
+            merchant_reference_id: paymentResult.merchant_reference_id,
             status: paymentResult.status || 'PENDING',
             transaction_id: paymentResult.reference_id
           }
@@ -243,7 +264,6 @@ export default class SubscriptionController {
       return response.status(404).json({ success: false, message: 'Abonnement introuvable' })
     }
 
-    // Déjà actif
     if (subscription.status === 'active') {
       return response.json({ 
         success: true, 
@@ -260,7 +280,6 @@ export default class SubscriptionController {
       })
     }
 
-    // Pas de référence de paiement
     if (!subscription.paymentReferenceId) {
       return response.json({ 
         success: false, 
@@ -275,26 +294,20 @@ export default class SubscriptionController {
         paymentRef: subscription.paymentReferenceId
       })
 
-      // ✅ Récupérer le X-Secret pour la vérification
       const xSecret = await MypvitSecretService.getSecret()
-
-      // ✅ Vérification du statut
       const paymentStatus: any = await MypvitTransactionService.checkTransactionStatus(
         subscription.paymentReferenceId,
         subscription.metadata?.accountCode || 'ACC_69FE0E1BC34B4'
       )
       
       const status = paymentStatus?.status || 'PENDING'
-
       console.log('📊 [SubscriptionController] Statut reçu:', status)
 
       if (status === 'SUCCESS') {
-        // Activer l'abonnement
         await subscription.activate()
         subscription.paymentStatus = 'SUCCESS'
         await subscription.save()
 
-        // Activer le boost selon le type
         if (subscription.subscriptionType === 'all_products') {
           await BoostService.activateBoostForMerchant(subscription.userId, subscription.id)
           console.log('🚀 [SubscriptionController] Boost global activé')
@@ -314,7 +327,6 @@ export default class SubscriptionController {
               plan: subscription.planName, 
               remainingDays: subscription.remainingDays 
             },
-            // ✅ X-SECRET et ID PVIT dans la réponse
             x_secret: xSecret,
             pvit_reference_id: subscription.paymentReferenceId
           } 
