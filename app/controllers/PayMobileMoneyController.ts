@@ -1,9 +1,10 @@
-// app/controllers/PayMobileMoneyController.ts - AVEC X-SECRET DANS LA RÉPONSE
+// app/controllers/PayMobileMoneyController.ts - CORRIGÉ (vidage panier après paiement)
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
 import OrderTracking from '#models/order_tracking'
 import Cart from '#models/Cart'
+import CartItem from '#models/CartItem'
 import User from '#models/user'
 import Product from '#models/Product'
 import KYC from '#models/kyc'
@@ -297,6 +298,11 @@ export default class PayMobileMoneyController {
 
         await order.load('items')
 
+        // ✅ 12. VIDER LE PANIER (MAINTENANT SEULEMENT - APRÈS PAIEMENT RÉUSSI)
+        console.log('🗑️ Vidage du panier (après paiement initié avec succès)...')
+        await CartItem.query().where('cart_id', cart.id).delete()
+        console.log('🗑️ Panier vidé avec succès')
+
         // ✅ RÉPONSE AVEC X-SECRET, OPÉRATEUR ET IDS PVIT
         return response.status(201).json({
           success: true,
@@ -332,7 +338,9 @@ export default class PayMobileMoneyController {
           },
         })
       } else {
-        // Paiement échoué
+        // Paiement échoué - ON NE VIDE PAS LE PANIER
+        console.log('❌ Paiement échoué, le panier est conservé')
+        
         order.status = 'payment_failed'
         order.payment_error_message = payment.message || 'Erreur inconnue'
         await order.save()
@@ -363,6 +371,9 @@ export default class PayMobileMoneyController {
         console.error('🔴 Status:', error.response.status)
         console.error('🔴 Data:', JSON.stringify(error.response.data))
       }
+      
+      // ⚠️ IMPORTANT: En cas d'erreur, NE PAS vider le panier
+      // Le panier reste intact pour que l'utilisateur puisse réessayer
       
       return response.status(500).json({
         success: false,
