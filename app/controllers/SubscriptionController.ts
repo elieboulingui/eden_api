@@ -149,7 +149,7 @@ export default class SubscriptionController {
       // ✅ Appel au service de paiement
       const paymentResult: any = await MypvitTransactionService.processPayment({
         amount: planConfig.price,
-        reference: `SUB-${subscription.id.substring(0, 8)}`,
+        reference: `SUB${subscription.id.substring(0, 8)}`,
         callback_url_code: 'T2D7X',
         customer_account_number: phoneNumber.replace(/\s/g, ''),
         merchant_operation_account_code: operator.accountCode,
