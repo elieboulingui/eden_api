@@ -192,8 +192,8 @@ export default class OtpService {
     const frontendUrl = env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')
     const verificationUrl = `${frontendUrl}/verify-otp?code=${otp}&email=${encodeURIComponent(email)}&purpose=${purpose}`
 
-    // URL de l'image (serveur backend)
-    const imageUrl = env.get('APP_URL', 'http://localhost:3333') + '/Eden.png'
+    // URL de l'image Eden
+    const imageUrl = 'https://klgcnd8ya3.ufs.sh/f/7nK9zx6Ac4DRW9zWRklHqEXAQ6fZdRm8VSlhu5zM1ytTB34C'
 
     return `
       <!DOCTYPE html>
@@ -328,7 +328,7 @@ export default class OtpService {
               ${otp}
             </div>
 
-            <!-- ✅ NOUVEAU : Lien cliquable avec le code OTP en paramètre -->
+            <!-- ✅ Lien cliquable avec le code OTP en paramètre -->
             <div class="verify-button">
               <a href="${verificationUrl}">
                 🔐 Vérifier mon compte
