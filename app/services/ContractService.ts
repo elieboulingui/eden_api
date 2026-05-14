@@ -68,4 +68,70 @@ export default class ContractService {
       }
     }
   }
+
+  // Signer le contrat
+  static async signContract(merchantId: string): Promise<{ success: boolean; message: string; merchant?: User }> {
+    try {
+      const merchant = await User.find(merchantId)
+
+      if (!merchant) {
+        return { success: false, message: 'Marchand non trouvé' }
+      }
+
+      if (merchant.contract_signed) {
+        return { success: false, message: 'Contrat déjà signé' }
+      }
+
+      merchant.contract_signed = true
+      merchant.contract_signed_at = DateTime.now()
+      await merchant.save()
+
+      return {
+        success: true,
+        message: 'Contrat signé avec succès',
+        merchant
+      }
+    } catch (error) {
+      console.error('Erreur signature contrat:', error)
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Erreur inconnue'
+      }
+    }
+  }
+
+  // Vérifier le statut du contrat
+  static async getContractStatus(merchantId: string): Promise<{
+    sent: boolean
+    sentAt: DateTime | null
+    signed: boolean
+    signedAt: DateTime | null
+    needsSignature: boolean
+    contractUrl?: string
+  }> {
+    const merchant = await User.find(merchantId)
+    const FRONTEND_URL = env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')
+
+    if (!merchant) {
+      return {
+        sent: false,
+        sentAt: null,
+        signed: false,
+        signedAt: null,
+        needsSignature: false
+      }
+    }
+
+    const userName = (merchant.full_name || merchant.email).toLowerCase().replace(/\s+/g, '-')
+    const contractUrl = `${FRONTEND_URL}/contrat/${userName}`
+
+    return {
+      sent: !!merchant.contract_sent_at,
+      sentAt: merchant.contract_sent_at,
+      signed: merchant.contract_signed || false,
+      signedAt: merchant.contract_signed_at,
+      needsSignature: merchant.is_verified && !merchant.contract_signed,
+      contractUrl
+    }
+  }
 }
