@@ -566,6 +566,7 @@ router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).
   // POST /api/cart/delivery-fees
   // Calcule les frais pour tous les marchands du panier
   // Body: { productIds: string[], zone: string }
+  router.get('/contract/by-name/:name', [ContractsController, 'getByName'])
   router.post('/cart/delivery-fees', [MerchantDeliveryController, 'calculateCartDeliveryFees'])
   
 
