@@ -211,6 +211,16 @@ router.group(() => {
   router.get('/users/:id', [UsersController, 'show']).as('users.show')
 
   // ----------------------------------------------------------
+  // CLIENT (UTILISÉ PAR LE FRONTEND)
+  // ----------------------------------------------------------
+  router.get('/client/:id', [UsersController, 'show']).as('client.show')
+
+  // ----------------------------------------------------------
+  // SHOPS (UTILISÉ PAR LE FRONTEND)
+  // ----------------------------------------------------------
+  router.get('/shops/user/:userId', [ShopController, 'getByUser']).as('shops.by-user')
+
+  // ----------------------------------------------------------
   // PANIER
   // ----------------------------------------------------------
   router.get('/cart/:userId', [CartController, 'getCart']).as('cart.get')
@@ -504,10 +514,9 @@ router.group(() => {
   router.get('/paypal/cancel', [PayPalController, 'cancel']).as('paypal.cancel')
 
   // ----------------------------------------------------------
-  // VÉRIFICATION STATUT PAIEMENT (PROXY PVIT) ✅ NOUVEAU
+  // VÉRIFICATION STATUT PAIEMENT (PROXY PVIT)
   // ----------------------------------------------------------
-// ✅ Comme les autres routes !
-router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).as('payments.status.verify')
+  router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).as('payments.status.verify')
 
   // ----------------------------------------------------------
   // VÉRIFICATION STATUT PAIEMENT (EXISTANT)
@@ -548,27 +557,32 @@ router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).
   router.put('/promotions/:id', [PromotionsController, 'update']).as('promotions.update')
   router.delete('/promotions/:id', [PromotionsController, 'destroy']).as('promotions.destroy')
 
-  // ----------------------------------------------------------
-  // CONTRATS MARCHANDS
-  // ----------------------------------------------------------
+  // ============================================================
+  // CONTRATS MARCHANDS (COMPLET)
+  // ============================================================
+  
+  // Routes pour le Dashboard (admin) - existantes
   router.get('/merchant/contract/:id/sign', [DashboardViewController, 'signContract']).as('merchant.contract.sign')
   router.post('/merchant/contract/:id/send', [DashboardViewController, 'sendContractEmail']).as('merchant.contract.send')
   router.get('/merchant/contract/:id/status', [DashboardViewController, 'getContractStatus']).as('merchant.contract.status')
 
+  // Routes pour l'API Frontend (VendorContractPage)
+  router.post('/contracts/sign-and-send', [ContractsController, 'signAndSend']).as('contracts.sign-and-send')
+  router.post('/contracts/sign', [ContractsController, 'sign']).as('contracts.sign')
+  router.post('/contracts/sign/:id', [ContractsController, 'sign']).as('contracts.sign.by-id')
+  router.post('/contracts/send-email', [ContractsController, 'sendEmail']).as('contracts.send-email')
+  router.get('/contract/by-name/:name', [ContractsController, 'getByName']).as('contracts.by-name')
+
+  // ----------------------------------------------------------
+  // CHECKOUT
+  // ----------------------------------------------------------
   router.get('/checkout/:userId', [CheckoutController, 'getCheckoutData']).as('checkout.data')
- // GET  /api/merchant/:merchantId/delivery-zones
-  // Récupère toutes les zones de livraison d'un marchand
+
+  // ----------------------------------------------------------
+  // LIVRAISON (DELIVERY)
+  // ----------------------------------------------------------
   router.get('/merchant/:merchantId/delivery-zones', [MerchantDeliveryController, 'getDeliveryZones'])
-  
-  // GET  /api/merchant/:merchantId/delivery-fee?zone=Akanda
-  // Calcule les frais de livraison pour une zone spécifique
   router.get('/merchant/:merchantId/delivery-fee', [MerchantDeliveryController, 'getDeliveryFee'])
-  
-  // POST /api/cart/delivery-fees
-  // Calcule les frais pour tous les marchands du panier
-  // Body: { productIds: string[], zone: string }
-  router.get('/contract/by-name/:name', [ContractsController, 'getByName'])
   router.post('/cart/delivery-fees', [MerchantDeliveryController, 'calculateCartDeliveryFees'])
-  
 
 }).prefix('/api')
