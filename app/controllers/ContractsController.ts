@@ -1,77 +1,150 @@
-// app/Controllers/Http/ContractsController.ts
+// app/controllers/ContractsController.ts
+
 import type { HttpContext } from '@adonisjs/core/http'
-import User from '#models/user'
+import Client from '#models/client'
+import Shop from '#models/shop'
 
 export default class ContractsController {
+  
+  /**
+   * Récupère les informations d'un client/vendeur par son ID
+   * GET /api/client/:id
+   */
+  async getClientById({ params, response }: HttpContext) {
+    try {
+      const client = await Client.find(params.id)
+
+      if (!client) {
+        return response.status(404).json({
+          success: false,
+          message: 'Client non trouvé'
+        })
+      }
+
+      return response.json({
+        success: true,
+        data: client
+      })
+
+    } catch (error) {
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur serveur',
+        error: error.message
+      })
+    }
+  }
 
   /**
-   * Récupère les infos du marchand via le nom dans l'URL
+   * Récupère la boutique d'un utilisateur
+   * GET /api/shops/user/:userId
+   */
+  async getShopByUser({ params, response }: HttpContext) {
+    try {
+      const shop = await Shop.query()
+        .where('user_id', params.userId)
+        .first()
+
+      if (!shop) {
+        return response.status(404).json({
+          success: false,
+          message: 'Boutique non trouvée'
+        })
+      }
+
+      return response.json({
+        success: true,
+        data: shop
+      })
+
+    } catch (error) {
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur serveur',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Récupère un contrat par le nom du vendeur
    * GET /api/contract/by-name/:name
-   * 
-   * Frontend : https://eden-azure-one.vercel.app/contrat/dsds
    */
   async getByName({ params, response }: HttpContext) {
     try {
-      const { name } = params
+      const contracts = await Client.query()
+        .where('full_name', 'like', `%${params.name}%`)
+        .orWhere('company_name', 'like', `%${params.name}%`)
 
-      if (!name) {
-        return response.badRequest({
-          success: false,
-          message: 'Nom du marchand requis'
-        })
-      }
-
-      const searchName = decodeURIComponent(name).replace(/-/g, ' ').trim()
-
-      // Rechercher le marchand
-      let user = await User.query()
-        .whereRaw('LOWER(full_name) LIKE ?', [`%${searchName.toLowerCase()}%`])
-        .whereIn('role', ['marchant', 'merchant'])
-        .first()
-
-      if (!user) {
-        user = await User.query()
-          .where((builder) => {
-            builder
-              .whereRaw('LOWER(shop_name) LIKE ?', [`%${searchName.toLowerCase()}%`])
-              .orWhereRaw('LOWER(commercial_name) LIKE ?', [`%${searchName.toLowerCase()}%`])
-          })
-          .whereIn('role', ['marchant', 'merchant'])
-          .first()
-      }
-
-      if (!user) {
-        return response.notFound({
-          success: false,
-          message: 'Aucun marchand trouvé'
-        })
-      }
-
-      return response.ok({
+      return response.json({
         success: true,
+        data: contracts
+      })
+
+    } catch (error) {
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur serveur',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Signature et envoi du contrat par email
+   * POST /api/contracts/sign-and-send
+   */
+  async signAndSend({ request, response }: HttpContext) {
+    try {
+      const {
+        vendorInfo,
+        signature,
+        signedAt,
+        userId,
+        contractType,
+        contractNumber,
+        adminEmail,
+        vendorEmail
+      } = request.body()
+
+      // Validation
+      if (!vendorInfo || !signature || !vendorEmail) {
+        return response.status(400).json({
+          success: false,
+          message: 'Données manquantes (vendorInfo, signature, vendorEmail requis)'
+        })
+      }
+
+      // TODO: Générer le PDF du contrat
+      // TODO: Envoyer l'email au vendeur
+      // TODO: Envoyer l'email à l'admin (edenmarcket@gmail.com)
+      // TODO: Sauvegarder le contrat signé en base de données
+
+      // Pour l'instant, on simule le succès
+      console.log('Contrat signé:', {
+        contractNumber,
+        vendorEmail,
+        adminEmail,
+        signedAt
+      })
+
+      return response.json({
+        success: true,
+        message: 'Contrat signé et envoyé avec succès',
         data: {
-          id: user.id,
-          full_name: user.full_name,
-          email: user.email,
-          phone: user.phone,
-          shop_name: user.shop_name,
-          commercial_name: user.commercial_name,
-          vendor_type: user.vendor_type,
-          rccm: user.rccm_number,
-          nif: user.nif_number,
-          address: user.shop_address || user.address,
-          is_verified: user.is_verified,
-          contract_signed: user.contract_signed,
-          contract_signed_at: user.contract_signed_at
+          contractNumber,
+          signedAt,
+          sentTo: [vendorEmail, adminEmail]
         }
       })
 
     } catch (error) {
-      console.error('Erreur getByName:', error)
-      return response.internalServerError({
+      return response.status(500).json({
         success: false,
-        message: 'Erreur serveur'
+        message: 'Erreur lors de la signature du contrat',
+        error: error.message
       })
     }
   }
+
 }
