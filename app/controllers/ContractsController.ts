@@ -1,18 +1,22 @@
-// app/controllers/ContractsController.ts
+// app/controllers/ContractsController.ts (version complète)
 
 import type { HttpContext } from '@adonisjs/core/http'
 import Client from '#models/client'
 import Shop from '#models/shop'
+import Contract from '#models/contract'
+import { DateTime } from 'luxon'
 
 export default class ContractsController {
   
   /**
-   * Récupère les informations d'un client/vendeur par son ID
    * GET /api/client/:id
    */
   async getClientById({ params, response }: HttpContext) {
     try {
-      const client = await Client.find(params.id)
+      const client = await Client.query()
+        .where('id', params.id)
+        .preload('shop')
+        .first()
 
       if (!client) {
         return response.status(404).json({
@@ -36,7 +40,6 @@ export default class ContractsController {
   }
 
   /**
-   * Récupère la boutique d'un utilisateur
    * GET /api/shops/user/:userId
    */
   async getShopByUser({ params, response }: HttpContext) {
@@ -67,7 +70,6 @@ export default class ContractsController {
   }
 
   /**
-   * Récupère un contrat par le nom du vendeur
    * GET /api/contract/by-name/:name
    */
   async getByName({ params, response }: HttpContext) {
@@ -91,7 +93,6 @@ export default class ContractsController {
   }
 
   /**
-   * Signature et envoi du contrat par email
    * POST /api/contracts/sign-and-send
    */
   async signAndSend({ request, response }: HttpContext) {
@@ -101,47 +102,110 @@ export default class ContractsController {
         signature,
         signedAt,
         userId,
-        contractType,
+        contractType = 'vendor_partnership',
         contractNumber,
-        adminEmail,
+        adminEmail = 'edenmarcket@gmail.com',
         vendorEmail
       } = request.body()
 
       // Validation
-      if (!vendorInfo || !signature || !vendorEmail) {
+      if (!vendorInfo || !signature || !vendorEmail || !contractNumber) {
         return response.status(400).json({
           success: false,
-          message: 'Données manquantes (vendorInfo, signature, vendorEmail requis)'
+          message: 'Données manquantes : vendorInfo, signature, vendorEmail, contractNumber sont requis'
         })
       }
 
-      // TODO: Générer le PDF du contrat
-      // TODO: Envoyer l'email au vendeur
-      // TODO: Envoyer l'email à l'admin (edenmarcket@gmail.com)
-      // TODO: Sauvegarder le contrat signé en base de données
-
-      // Pour l'instant, on simule le succès
-      console.log('Contrat signé:', {
-        contractNumber,
-        vendorEmail,
-        adminEmail,
-        signedAt
+      // Sauvegarder le contrat en base de données
+      const contract = await Contract.create({
+        userId: userId || null,
+        contractNumber: contractNumber,
+        contractType: contractType,
+        vendorInfo: vendorInfo,
+        signature: signature,
+        status: 'signed',
+        signedAt: DateTime.fromISO(signedAt),
+        expiresAt: DateTime.now().plus({ years: 1 }), // Contrat valable 1 an
+        adminEmail: adminEmail,
+        vendorEmail: vendorEmail,
+        metadata: {
+          signedFrom: request.ip(),
+          userAgent: request.header('User-Agent')
+        }
       })
+
+      // TODO: Génération du PDF
+      // TODO: Envoi des emails
 
       return response.json({
         success: true,
-        message: 'Contrat signé et envoyé avec succès',
+        message: 'Contrat signé et sauvegardé avec succès',
         data: {
-          contractNumber,
-          signedAt,
-          sentTo: [vendorEmail, adminEmail]
+          id: contract.id,
+          contractNumber: contract.contractNumber,
+          status: contract.status,
+          signedAt: contract.signedAt,
+          expiresAt: contract.expiresAt
         }
       })
 
     } catch (error) {
+      console.error('Erreur signature contrat:', error)
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la signature du contrat',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * GET /api/contracts
+   */
+  async index({ response }: HttpContext) {
+    try {
+      const contracts = await Contract.query()
+        .preload('client')
+        .orderBy('created_at', 'desc')
+
+      return response.json({
+        success: true,
+        data: contracts
+      })
+    } catch (error) {
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur serveur',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * GET /api/contracts/:id
+   */
+  async show({ params, response }: HttpContext) {
+    try {
+      const contract = await Contract.query()
+        .where('id', params.id)
+        .preload('client')
+        .first()
+
+      if (!contract) {
+        return response.status(404).json({
+          success: false,
+          message: 'Contrat non trouvé'
+        })
+      }
+
+      return response.json({
+        success: true,
+        data: contract
+      })
+    } catch (error) {
+      return response.status(500).json({
+        success: false,
+        message: 'Erreur serveur',
         error: error.message
       })
     }
