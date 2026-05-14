@@ -1,4 +1,4 @@
-// app/controllers/SubscriptionController.ts - AVEC RENOUVELLEMENT SECRET + IDS PVIT COMPLETS
+// app/controllers/SubscriptionController.ts - AVEC RENOUVELLEMENT SECRET + FORMAT NUMÉRO CORRIGÉ
 import type { HttpContext } from '@adonisjs/core/http'
 import Subscription, { SubscriptionPlan, SUBSCRIPTION_PLANS } from '#models/Subscription'
 import User from '#models/user'
@@ -33,6 +33,27 @@ export default class SubscriptionController {
     }
     
     return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
+  }
+
+  /**
+   * Formate le numéro de téléphone pour l'API PVIT
+   * PVIT Gabon attend : 06XXXXXXXX ou 07XXXXXXXX (avec le 0)
+   */
+  private formatPhoneForPvit(phoneNumber: string): string {
+    let clean = phoneNumber.replace(/[\s\+\.\-]/g, '')
+    
+    // Supprimer le préfixe international 241
+    if (clean.startsWith('241')) {
+      clean = clean.substring(3)
+    }
+    
+    // S'assurer que le numéro commence par 0
+    if (!clean.startsWith('0') && clean.length === 8) {
+      clean = '0' + clean
+    }
+    
+    console.log('📱 Numéro formaté pour PVIT:', clean)
+    return clean
   }
 
   async getPlans({ response }: HttpContext) {
@@ -112,8 +133,14 @@ export default class SubscriptionController {
     const planConfig: any = SUBSCRIPTION_PLANS[plan]
 
     try {
-      const phoneNumber = customerAccountNumber || user.phone || ''
-      const cleanPhone = phoneNumber.replace(/\s/g, '')
+      const rawPhone = customerAccountNumber || user.phone || ''
+      
+      // ✅ FORMATAGE CORRECT DU NUMÉRO POUR PVIT
+      const cleanPhone = this.formatPhoneForPvit(rawPhone)
+      
+      console.log('📱 Numéro original:', rawPhone)
+      console.log('📱 Numéro formaté:', cleanPhone)
+      
       const operator = this.detectOperatorGabon(cleanPhone)
 
       // Créer l'abonnement en statut "pending"
@@ -155,7 +182,6 @@ export default class SubscriptionController {
         console.log('✅ [SubscriptionController] Secret renouvelé avec succès')
       } catch (renewError: any) {
         console.error('⚠️ [SubscriptionController] Erreur renouvellement secret:', renewError.message)
-        // On continue même si le renouvellement échoue
       }
 
       // ✅ 2. RÉCUPÉRER LE X-SECRET ACTIF
@@ -171,12 +197,13 @@ export default class SubscriptionController {
       // ✅ 4. APPEL AU SERVICE DE PAIEMENT
       const reference = `SUB${subscription.id.substring(0, 8)}`
       console.log('   Référence:', reference)
+      console.log('   Phone envoyé à PVIT:', cleanPhone)
 
       const paymentResult: any = await MypvitTransactionService.processPayment({
         amount: planConfig.price,
         reference: reference,
         callback_url_code: 'T2D7X',
-        customer_account_number: cleanPhone,
+        customer_account_number: cleanPhone,  // ✅ Numéro formaté (06XXXXXXXX)
         merchant_operation_account_code: operator.accountCode,
         operator_code: operator.code,
         owner_charge: 'CUSTOMER',
@@ -224,7 +251,6 @@ export default class SubscriptionController {
           paymentReferenceId: paymentResult.reference_id,
           status: 'pending_payment',
           
-          // ✅ OPÉRATEUR
           operator: { 
             name: operator.name, 
             code: operator.code,
@@ -232,14 +258,11 @@ export default class SubscriptionController {
             phoneNumber: cleanPhone
           },
           
-          // ✅ X-SECRET
           x_secret: xSecret,
           
-          // ✅ IDS PVIT (LES DEUX !)
           pvit_reference_id: paymentResult.reference_id,
           merchant_reference_id: paymentResult.merchant_reference_id,
           
-          // ✅ PAIEMENT
           payment: {
             reference_id: paymentResult.reference_id,
             merchant_reference_id: paymentResult.merchant_reference_id,
