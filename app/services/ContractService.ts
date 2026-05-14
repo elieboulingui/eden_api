@@ -7,7 +7,7 @@ import env from '#start/env'
 export default class ContractService {
   
   // Générer le template HTML du contrat
-  static generateContractHTML(merchant: User): string {
+  static generateContractHTML(merchant: User, userName?: string): string {
     const date = new Date().toLocaleDateString('fr-FR', {
       day: 'numeric',
       month: 'long',
@@ -15,6 +15,10 @@ export default class ContractService {
     })
 
     const APP_URL = env.get('APP_URL', 'https://eden-api-zklf.onrender.com')
+    const FRONTEND_URL = env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')
+    
+    // Récupérer le nom depuis l'URL si fourni, sinon utiliser les données du merchant
+    const contractUserName = userName || merchant.full_name || merchant.email
 
     return `
 <!DOCTYPE html>
@@ -122,6 +126,22 @@ export default class ContractService {
             margin: 25px 0;
             border: 1px solid #bbf7d0;
         }
+        .sign-button {
+            display: inline-block;
+            background: #2d6a4f;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 30px;
+            font-weight: bold;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+        }
+        .sign-button:hover {
+            background: #1a472a;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
         @media (max-width: 600px) {
             .contract-body { padding: 20px; }
             .signature-section { flex-direction: column; }
@@ -133,7 +153,7 @@ export default class ContractService {
         <div class="contract-header">
             <div class="eden-logo">🌿</div>
             <h1>CONTRAT DE PARTENARIAT</h1>
-            <h2>EDEN × ${merchant.full_name?.toUpperCase() || merchant.email?.toUpperCase()}</h2>
+            <h2>EDEN × ${contractUserName.toUpperCase()}</h2>
             <div class="subtitle">Entreprise de vente en ligne - Solutions digitales</div>
         </div>
 
@@ -223,9 +243,10 @@ export default class ContractService {
                     <div class="stamp">
                         ✍️ SIGNATURE DU MARCHAND<br>
                         <span style="font-size: 11px;">Je déclare avoir lu et accepté les conditions</span><br><br>
-                        <a href="${APP_URL}/api/merchant/contract/${merchant.id}/sign" 
-                           style="background: #2d6a4f; color: white; padding: 8px 20px; text-decoration: none; border-radius: 30px; display: inline-block; margin-top: 10px;">
-                           📝 Signer le contrat
+                        <!-- ✅ Bouton qui pousse vers la page de contrat sur le frontend -->
+                        <a href="${FRONTEND_URL}/contrat/${contractUserName.toLowerCase().replace(/\s+/g, '-')}" 
+                           class="sign-button">
+                           📝 Voir et signer le contrat
                         </a>
                     </div>
                 </div>
@@ -247,8 +268,8 @@ export default class ContractService {
     `
   }
 
-  // Envoyer le contrat par email
-  static async sendContractEmail(merchant: User): Promise<{ success: boolean; message: string }> {
+  // Envoyer le contrat par email avec le nom personnalisé
+  static async sendContractEmail(merchant: User, userName?: string): Promise<{ success: boolean; message: string }> {
     try {
       if (!merchant.is_verified) {
         return {
@@ -257,13 +278,13 @@ export default class ContractService {
         }
       }
 
-      const contractHTML = this.generateContractHTML(merchant)
+      const contractHTML = this.generateContractHTML(merchant, userName)
 
       await mail.send((message) => {
         message
           .from(env.get('SMTP_FROM', 'contrat@eden-gabon.com'))
           .to(merchant.email)
-          .subject(`📄 Contrat de partenariat EDEN - ${merchant.full_name || 'Marchand'}`)
+          .subject(`📄 Contrat de partenariat EDEN - ${userName || merchant.full_name || 'Marchand'}`)
           .html(contractHTML)
       })
 
@@ -330,6 +351,8 @@ export default class ContractService {
 
   // Envoyer un email de confirmation après signature
   static async sendConfirmationEmail(merchant: User): Promise<void> {
+    const FRONTEND_URL = env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')
+    
     const confirmationHTML = `
       <!DOCTYPE html>
       <html>
@@ -361,7 +384,7 @@ export default class ContractService {
             - Commission : 5% sur chaque vente
           </p>
           <div style="text-align: center;">
-            <a href="https://eden-azure-one.vercel.app/dashboard/merchant" class="btn">
+            <a href="${FRONTEND_URL}/dashboard/merchant" class="btn">
               Accéder à mon espace marchand
             </a>
           </div>
@@ -389,8 +412,10 @@ export default class ContractService {
     signed: boolean
     signedAt: DateTime | null
     needsSignature: boolean
+    contractUrl?: string
   }> {
     const merchant = await User.find(merchantId)
+    const FRONTEND_URL = env.get('FRONTEND_URL', 'https://eden-azure-one.vercel.app')
     
     if (!merchant) {
       return {
@@ -402,12 +427,17 @@ export default class ContractService {
       }
     }
 
+    // Générer l'URL du contrat avec le nom du marchand
+    const userName = (merchant.full_name || merchant.email).toLowerCase().replace(/\s+/g, '-')
+    const contractUrl = `${FRONTEND_URL}/contrat/${userName}`
+
     return {
       sent: !!merchant.contract_sent_at,
       sentAt: merchant.contract_sent_at,
       signed: merchant.contract_signed || false,
       signedAt: merchant.contract_signed_at,
-      needsSignature: merchant.is_verified && !merchant.contract_signed
+      needsSignature: merchant.is_verified && !merchant.contract_signed,
+      contractUrl
     }
   }
 }
