@@ -3,7 +3,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
-import ContractsController from '#controllers/ContractsController'
+const ContractsController = () => import('#controllers/ContractsController')
 const MerchantDeliveryController = () => import('#controllers/MerchantDeliveryController')
 const CheckoutController = () => import('#controllers/checkout_controller')
 const CheckStatusController = () => import('#controllers/payments/check_status_controller')
@@ -316,7 +316,7 @@ router.group(() => {
     router.get('give-change/history', [GiveChangeController, 'history']).as('merchant.give-change.history')
     router.get('give-change/stats', [GiveChangeController, 'stats']).as('merchant.give-change.stats')
     
-    // ✅ Zones de livraison (CORRIGÉ)
+    // Zones de livraison
     router.get('/:userId/delivery-zones', [MerchantDashboardController, 'getDeliveryZones'])
     router.post('/:userId/delivery-zones', [MerchantDashboardController, 'upsertDeliveryZone'])
     router.put('/:userId/delivery-zones', [MerchantDashboardController, 'updateDeliveryZones'])
@@ -423,34 +423,35 @@ router.group(() => {
   router.get('/shop', [ShopController, 'apiIndex']).as('api.shop.index')
   router.get('/shop/coupons', [ShopController, 'apiCoupons']).as('api.shop.coupons')
   router.get('/shop/promotions', [ShopController, 'apiPromotions']).as('api.shop.promotions')
+  router.get('/shops/user/:userId', [ShopController, 'getByUser']).as('shops.by-user')
 
   // ----------------------------------------------------------
   // MYPVIT
   // ----------------------------------------------------------
-  router.post('/mypvit/renew-secret', [MypvitController as any, 'renewSecret']).as('mypvit.renew-secret')
-  router.get('/mypvit/secret', [MypvitController as any, 'getCurrentSecret']).as('mypvit.secret')
-  router.get('/mypvit/countries', [MypvitController as any, 'getCountries']).as('mypvit.countries')
-  router.get('/mypvit/operators', [MypvitController as any, 'getOperators']).as('mypvit.operators')
-  router.get('/mypvit/countries-with-operators', [MypvitController as any, 'getCountriesWithOperators']).as('mypvit.countries-operators')
-  router.get('/mypvit/check-operator', [MypvitController as any, 'checkOperator']).as('mypvit.check-operator')
-  router.post('/mypvit/clear-cache', [MypvitController as any, 'clearCache']).as('mypvit.clear-cache')
-  router.get('/mypvit/kyc', [MypvitController as any, 'getKYC']).as('mypvit.kyc')
-  router.get('/mypvit/kyc/active', [MypvitController as any, 'checkActive']).as('mypvit.kyc.active')
-  router.post('/mypvit/kyc/verify', [MypvitController as any, 'verifyIdentity']).as('mypvit.kyc.verify')
-  router.post('/mypvit/qrcode/generate', [MypvitController as any, 'generateQRCode']).as('mypvit.qrcode.generate')
-  router.post('/mypvit/qrcode/static', [MypvitController as any, 'generateStaticQRCode']).as('mypvit.qrcode.static')
-  router.post('/mypvit/qrcode/dynamic', [MypvitController as any, 'generateDynamicQRCode']).as('mypvit.qrcode.dynamic')
-  router.post('/mypvit/qrcode/image', [MypvitController as any, 'generateQRCodeImage']).as('mypvit.qrcode.image')
-  router.post('/mypvit/transaction/payment', [MypvitController as any, 'processPayment']).as('mypvit.transaction.payment')
-  router.post('/mypvit/transaction/give-change', [MypvitController as any, 'processGiveChange']).as('mypvit.transaction.give-change')
-  router.get('/mypvit/transaction/status', [MypvitController as any, 'checkTransactionStatus']).as('mypvit.transaction.status')
-  router.post('/mypvit/link/web', [MypvitController as any, 'generateWebLink']).as('mypvit.link.web')
-  router.post('/mypvit/link/visa', [MypvitController as any, 'generateVisaLink']).as('mypvit.link.visa')
-  router.post('/mypvit/link/rest', [MypvitController as any, 'generateRestLink']).as('mypvit.link.rest')
-  router.get('/mypvit/balance', [MypvitController as any, 'getBalance']).as('mypvit.balance')
-  router.post('/mypvit/check-balance', [MypvitController as any, 'checkBalance']).as('mypvit.check-balance')
-  router.get('/mypvit/all-balances', [MypvitController as any, 'getAllBalances']).as('mypvit.all-balances')
-  router.post('/mypvit/callback', [CallbackController as any, 'handle']).as('mypvit.callback.orders')
+  router.post('/mypvit/renew-secret', [MypvitController, 'renewSecret']).as('mypvit.renew-secret')
+  router.get('/mypvit/secret', [MypvitController, 'getCurrentSecret']).as('mypvit.secret')
+  router.get('/mypvit/countries', [MypvitController, 'getCountries']).as('mypvit.countries')
+  router.get('/mypvit/operators', [MypvitController, 'getOperators']).as('mypvit.operators')
+  router.get('/mypvit/countries-with-operators', [MypvitController, 'getCountriesWithOperators']).as('mypvit.countries-operators')
+  router.get('/mypvit/check-operator', [MypvitController, 'checkOperator']).as('mypvit.check-operator')
+  router.post('/mypvit/clear-cache', [MypvitController, 'clearCache']).as('mypvit.clear-cache')
+  router.get('/mypvit/kyc', [MypvitController, 'getKYC']).as('mypvit.kyc')
+  router.get('/mypvit/kyc/active', [MypvitController, 'checkActive']).as('mypvit.kyc.active')
+  router.post('/mypvit/kyc/verify', [MypvitController, 'verifyIdentity']).as('mypvit.kyc.verify')
+  router.post('/mypvit/qrcode/generate', [MypvitController, 'generateQRCode']).as('mypvit.qrcode.generate')
+  router.post('/mypvit/qrcode/static', [MypvitController, 'generateStaticQRCode']).as('mypvit.qrcode.static')
+  router.post('/mypvit/qrcode/dynamic', [MypvitController, 'generateDynamicQRCode']).as('mypvit.qrcode.dynamic')
+  router.post('/mypvit/qrcode/image', [MypvitController, 'generateQRCodeImage']).as('mypvit.qrcode.image')
+  router.post('/mypvit/transaction/payment', [MypvitController, 'processPayment']).as('mypvit.transaction.payment')
+  router.post('/mypvit/transaction/give-change', [MypvitController, 'processGiveChange']).as('mypvit.transaction.give-change')
+  router.get('/mypvit/transaction/status', [MypvitController, 'checkTransactionStatus']).as('mypvit.transaction.status')
+  router.post('/mypvit/link/web', [MypvitController, 'generateWebLink']).as('mypvit.link.web')
+  router.post('/mypvit/link/visa', [MypvitController, 'generateVisaLink']).as('mypvit.link.visa')
+  router.post('/mypvit/link/rest', [MypvitController, 'generateRestLink']).as('mypvit.link.rest')
+  router.get('/mypvit/balance', [MypvitController, 'getBalance']).as('mypvit.balance')
+  router.post('/mypvit/check-balance', [MypvitController, 'checkBalance']).as('mypvit.check-balance')
+  router.get('/mypvit/all-balances', [MypvitController, 'getAllBalances']).as('mypvit.all-balances')
+  router.post('/mypvit/callback', [CallbackController, 'handle']).as('mypvit.callback.orders')
   router.post('/mypvit/callback/rendu-money', (ctx) => RenduMoneyCallback.handle(ctx)).as('mypvit.callback.rendu-money')
   router.post('/mypvit/callback/subscription', (ctx) => SubscriptionCallback.handle(ctx)).as('mypvit.callback.subscription')
   router.post('/mypvit/callback/subscription/test', (ctx) => SubscriptionCallback.test(ctx)).as('mypvit.callback.subscription.test')
@@ -458,9 +459,9 @@ router.group(() => {
   // ----------------------------------------------------------
   // PAIEMENT MYPVIT
   // ----------------------------------------------------------
-  router.post('/orders/pay/mobile-money', [PayMobileMoneyController as any, 'pay']).as('orders.pay.mobile-money')
-  router.post('/orders/pay/qr-code', [PayQRCodeController as any, 'pay']).as('orders.pay.qr-code')
-  router.post('/orders/pay/link', [PayLinkController as any, 'pay']).as('orders.pay.link')
+  router.post('/orders/pay/mobile-money', [PayMobileMoneyController, 'pay']).as('orders.pay.mobile-money')
+  router.post('/orders/pay/qr-code', [PayQRCodeController, 'pay']).as('orders.pay.qr-code')
+  router.post('/orders/pay/link', [PayLinkController, 'pay']).as('orders.pay.link')
 
   // ============================================================
   // ABONNEMENTS (SUBSCRIPTIONS)
@@ -471,7 +472,7 @@ router.group(() => {
   router.get('/subscriptions/stats/:userId', (ctx) => Subscription.getStats(ctx)).as('subscriptions.stats')
   router.post('/subscriptions/subscribe', (ctx) => Subscription.subscribe(ctx)).as('subscriptions.subscribe')
   router.post('/subscriptions/pay/qr', (ctx) => SubscriptionQR.pay(ctx)).as('subscriptions.pay.qr')
-  router.post('/subscriptions/pay/link', [PayLinkSubscriptionController as any, 'paySubscription']).as('subscriptions.pay.link')
+  router.post('/subscriptions/pay/link', [PayLinkSubscriptionController, 'paySubscription']).as('subscriptions.pay.link')
   router.get('/subscriptions/:id/payment-status', (ctx) => Subscription.checkPaymentStatus(ctx)).as('subscriptions.payment-status')
   router.post('/subscriptions/:id/add-product', (ctx) => Subscription.addProductToBoost(ctx)).as('subscriptions.add-product')
   router.post('/subscriptions/:id/remove-product', (ctx) => Subscription.removeProductFromBoost(ctx)).as('subscriptions.remove-product')
@@ -516,7 +517,7 @@ router.group(() => {
   // ----------------------------------------------------------
   // VÉRIFICATION STATUT PAIEMENT (PROXY PVIT)
   // ----------------------------------------------------------
-  router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).as('payments.status.verify')
+  router.get('/payments/status/verify', [CheckStatusController, 'verify']).as('payments.status.verify')
 
   // ----------------------------------------------------------
   // VÉRIFICATION STATUT PAIEMENT (EXISTANT)
@@ -561,7 +562,7 @@ router.group(() => {
   // CONTRATS MARCHANDS (COMPLET)
   // ============================================================
   
-  // Routes pour le Dashboard (admin) - existantes
+  // Routes pour le Dashboard (admin)
   router.get('/merchant/contract/:id/sign', [DashboardViewController, 'signContract']).as('merchant.contract.sign')
   router.post('/merchant/contract/:id/send', [DashboardViewController, 'sendContractEmail']).as('merchant.contract.send')
   router.get('/merchant/contract/:id/status', [DashboardViewController, 'getContractStatus']).as('merchant.contract.status')
