@@ -216,11 +216,6 @@ router.group(() => {
   router.get('/client/:id', [UsersController, 'show']).as('client.show')
 
   // ----------------------------------------------------------
-  // SHOPS (UTILISÉ PAR LE FRONTEND)
-  // ----------------------------------------------------------
-  router.get('/shops/user/:userId', [ShopController, 'apiIndex']).as('shops.by-user')
-
-  // ----------------------------------------------------------
   // PANIER
   // ----------------------------------------------------------
   router.get('/cart/:userId', [CartController, 'getCart']).as('cart.get')
@@ -315,14 +310,14 @@ router.group(() => {
     router.get('give-change/:reference/status', [GiveChangeController, 'checkStatus']).as('merchant.give-change.status')
     router.get('give-change/history', [GiveChangeController, 'history']).as('merchant.give-change.history')
     router.get('give-change/stats', [GiveChangeController, 'stats']).as('merchant.give-change.stats')
-    
+
     // Zones de livraison
     router.get('/:userId/delivery-zones', [MerchantDashboardController, 'getDeliveryZones'])
     router.post('/:userId/delivery-zones', [MerchantDashboardController, 'upsertDeliveryZone'])
     router.put('/:userId/delivery-zones', [MerchantDashboardController, 'updateDeliveryZones'])
     router.delete('/:userId/delivery-zones', [MerchantDashboardController, 'removeDeliveryZone'])
     router.get('/:userId/delivery-fee', [MerchantDashboardController, 'calculateDeliveryFee'])
-    
+
     router.post('give-change/:id/cancel', [GiveChangeController, 'cancel']).as('merchant.give-change.cancel')
   }).prefix('/merchant')
   router.get('/merchant/dashboard/withdrawal-stats', [MerchantDashboardController, 'getWithdrawalStats']).as('merchant.dashboard.withdrawal-stats')
@@ -423,7 +418,8 @@ router.group(() => {
   router.get('/shop', [ShopController, 'apiIndex']).as('api.shop.index')
   router.get('/shop/coupons', [ShopController, 'apiCoupons']).as('api.shop.coupons')
   router.get('/shop/promotions', [ShopController, 'apiPromotions']).as('api.shop.promotions')
-  router.get('/shops/user/:userId', [ShopController, 'getByUser']).as('shops.by-user')
+  // FIX: suppression de la route dupliquée hors groupe et correction du nom de méthode
+  router.get('/shops/user/:userId', [ShopController, 'apiIndex']).as('shops.by-user')
 
   // ----------------------------------------------------------
   // MYPVIT
@@ -561,17 +557,34 @@ router.group(() => {
   // ============================================================
   // CONTRATS MARCHANDS (COMPLET)
   // ============================================================
-  
+
   // Routes pour le Dashboard (admin)
   router.get('/merchant/contract/:id/sign', [DashboardViewController, 'signContract']).as('merchant.contract.sign')
   router.post('/merchant/contract/:id/send', [DashboardViewController, 'sendContractEmail']).as('merchant.contract.send')
   router.get('/merchant/contract/:id/status', [DashboardViewController, 'getContractStatus']).as('merchant.contract.status')
 
   // Routes pour l'API Frontend (VendorContractPage)
-  router.post('/contracts/sign-and-send', [ContractsController, 'signAndSend']).as('contracts.sign-and-send')
-  router.post('/contracts/sign', [ContractsController, 'sign']).as('contracts.sign')
-  router.post('/contracts/sign/:id', [ContractsController, 'sign']).as('contracts.sign.by-id')
-  router.post('/contracts/send-email', [ContractsController, 'sendEmail']).as('contracts.send-email')
+  // FIX: utilisation de ctx wrappers pour éviter les erreurs TS sur les méthodes du ContractsController
+  router.post('/contracts/sign-and-send', async (ctx) => {
+    const { default: Controller } = await ContractsController()
+    return new Controller().signAndSend(ctx)
+  }).as('contracts.sign-and-send')
+
+  router.post('/contracts/sign', async (ctx) => {
+    const { default: Controller } = await ContractsController()
+    return new Controller().sign(ctx)
+  }).as('contracts.sign')
+
+  router.post('/contracts/sign/:id', async (ctx) => {
+    const { default: Controller } = await ContractsController()
+    return new Controller().sign(ctx)
+  }).as('contracts.sign.by-id')
+
+  router.post('/contracts/send-email', async (ctx) => {
+    const { default: Controller } = await ContractsController()
+    return new Controller().sendEmail(ctx)
+  }).as('contracts.send-email')
+
   router.get('/contract/by-name/:name', [ContractsController, 'getByName']).as('contracts.by-name')
 
   // ----------------------------------------------------------
