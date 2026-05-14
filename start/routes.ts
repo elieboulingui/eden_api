@@ -19,6 +19,7 @@ import SubscriptionController from '#controllers/SubscriptionController'
 const Subscription = new SubscriptionController()
 import SubscriptionCallbackController from '#controllers/SubscriptionCallbackController'
 const SubscriptionCallback = new SubscriptionCallbackController()
+import ContractsController from '#controllers/ContractsController'
 import CheckPaymentStatusController from '#controllers/CheckPaymentStatusController'
 import PayPalController from '#controllers/paypal_controller'
 import RefundsController from '#controllers/refunds_controller'
@@ -564,9 +565,13 @@ router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).
   // Calcule les frais de livraison pour une zone spécifique
   router.get('/merchant/:merchantId/delivery-fee', [MerchantDeliveryController, 'getDeliveryFee'])
   
-  // POST /api/cart/delivery-fees
-  // Calcule les frais pour tous les marchands du panier
-  // Body: { productIds: string[], zone: string }
+// ----------------------------------------------------------
+// CONTRATS
+// ----------------------------------------------------------
+router.get('/client/:id', [ContractsController, 'getClientById']).as('client.show')
+router.get('/shops/user/:userId', [ContractsController, 'getShopByUser']).as('shops.user')
+router.get('/contract/by-name/:name', [ContractsController, 'getByName']).as('contract.by-name')
+router.post('/contracts/sign-and-send', [ContractsController, 'signAndSend']).as('contracts.sign-and-send')
   router.get('/contract/by-name/:name', [ContractsController, 'getByName'])
   router.post('/cart/delivery-fees', [MerchantDeliveryController, 'calculateCartDeliveryFees'])
   
