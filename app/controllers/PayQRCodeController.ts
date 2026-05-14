@@ -45,9 +45,6 @@ export default class PayQRCodeController {
       }))
       console.log('🛒 Items:', cartItems.length)
 
-      // Sauvegarder les items du panier pour usage ultérieur
-      const cartItemsCopy = [...cart.items]
-
       // ÉTAPE 2 : Produits
       let subtotal = 0
       const validProducts: { product: Product; quantity: number }[] = []
@@ -150,8 +147,8 @@ export default class PayQRCodeController {
 
       await order.load('items')
 
-      // ✅ ÉTAPE 8 : VIDER LE PANIER (MAINTENANT SEULEMENT)
-      console.log('🗑️ ÉTAPE 8: Vidage panier (après génération QR code réussie)...')
+      // ✅ ÉTAPE 8 : VIDER LE PANIER
+      console.log('🗑️ ÉTAPE 8: Vidage panier...')
       await CartItem.query().where('cart_id', cart.id).delete()
       console.log('🗑️ Panier vidé avec succès')
 
@@ -167,18 +164,11 @@ export default class PayQRCodeController {
       
       if (qrResult.reference_id) {
         try {
-          console.log('📤 Envoi requête statut:')
-          console.log('   Transaction ID:', qrResult.reference_id)
-          console.log('   Compte:', GIMAC_ACCOUNT)
-          console.log('   X-Secret:', xSecret.substring(0, 15) + '...')
-          
           const statusResult = await PvitStatusService.checkStatus(
             xSecret,
             qrResult.reference_id,
             GIMAC_ACCOUNT
           )
-          
-          console.log('📥 Résultat statut:', JSON.stringify(statusResult, null, 2))
           
           paymentStatus = {
             checked: true,
@@ -198,20 +188,18 @@ export default class PayQRCodeController {
               description: `✅ Paiement immédiat - GIMAC - ${statusResult.data?.amount ?? 0} FCFA`,
               tracked_at: DateTime.now()
             })
-            
-            console.log('✅ Paiement déjà confirmé !')
           }
           
-        } catch (statusError: any) {
-          console.log('⚠️ Erreur vérification statut:', statusError.message)
+        } catch (statusError) {
+          console.log('⚠️ Erreur vérification statut:', statusError instanceof Error ? statusError.message : 'Erreur inconnue')
           paymentStatus = {
             checked: false,
-            error: statusError.message
+            error: statusError instanceof Error ? statusError.message : 'Erreur inconnue'
           }
         }
       }
 
-      // ✅ RÉPONSE AVEC X-SECRET, OPÉRATEUR, IDS PVIT ET STATUT
+      // ✅ RÉPONSE
       return response.status(201).json({
         success: true,
         message: '✅ QR Code GIMAC généré !',
@@ -222,47 +210,38 @@ export default class PayQRCodeController {
           status: order.status,
           itemsCount: validProducts.length,
           
-          // ✅ OPÉRATEUR
           operator: {
             name: 'GIMAC',
             code: 'GIMAC_PAY',
             accountCode: GIMAC_ACCOUNT
           },
           
-          // ✅ X-SECRET
           x_secret: xSecret,
           
-          // ✅ IDS PVIT
-          pvit_reference_id: qrResult.reference_id,                    // ID PVIT (PAY...)
-          merchant_reference_id: qrResult.merchant_reference_id,        // Votre REF...
+          pvit_reference_id: qrResult.reference_id,
+          merchant_reference_id: qrResult.merchant_reference_id,
           
-          // ✅ QR CODE
           qr_code: {
             data: qrResult.data,
             format: qrResult.format,
-            reference_id: qrResult.reference_id,                        // ID PVIT ← Pour checkPvitStatus
-            merchant_reference_id: qrResult.merchant_reference_id,      // Votre REF
+            reference_id: qrResult.reference_id,
+            merchant_reference_id: qrResult.merchant_reference_id,
             amount: subtotal,
             expires_in: 600,
             mime_type: 'image/png'
           },
           
-          // ✅ STATUT
           payment_status: paymentStatus
         }
       })
 
-    } catch (error: any) {
-      console.error('🔴 ERREUR:', error.message)
-      console.error('🔴 STACK:', error.stack)
-      
-      // ⚠️ IMPORTANT: En cas d'erreur, NE PAS vider le panier
-      // Le panier reste intact pour que l'utilisateur puisse réessayer
+    } catch (error) {
+      console.error('🔴 ERREUR:', error instanceof Error ? error.message : 'Erreur inconnue')
       
       return response.status(500).json({
         success: false,
-        message: 'Erreur: ' + error.message,
-        error: error.message
+        message: 'Erreur: ' + (error instanceof Error ? error.message : 'Erreur inconnue'),
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
       })
     }
   }
