@@ -1,4 +1,4 @@
-// app/controllers/PayQRCodeController.ts - CORRIGÉ (avec IDs PVIT complets)
+// app/controllers/PayQRCodeController.ts - CORRIGÉ
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -44,6 +44,9 @@ export default class PayQRCodeController {
         quantity: item.quantity,
       }))
       console.log('🛒 Items:', cartItems.length)
+
+      // Sauvegarder les items du panier pour usage ultérieur
+      const cartItemsCopy = [...cart.items]
 
       // ÉTAPE 2 : Produits
       let subtotal = 0
@@ -100,13 +103,8 @@ export default class PayQRCodeController {
       }
       console.log('📦 OrderItems OK')
 
-      // ÉTAPE 5 : Vider panier
-      console.log('🗑️ ÉTAPE 5: Vidage panier...')
-      await CartItem.query().where('cart_id', cart.id).delete()
-      console.log('🗑️ Panier vidé')
-
-      // ÉTAPE 6 : Tracking
-      console.log('📊 ÉTAPE 6: Tracking...')
+      // ÉTAPE 5 : Tracking (pending)
+      console.log('📊 ÉTAPE 5: Tracking...')
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
@@ -115,8 +113,8 @@ export default class PayQRCodeController {
       })
       console.log('📊 Tracking OK')
 
-      // ÉTAPE 7 : QR Code GIMAC
-      console.log('🔑 ÉTAPE 7: QR Code GIMAC...')
+      // ÉTAPE 6 : QR Code GIMAC (avant de vider le panier)
+      console.log('🔑 ÉTAPE 6: QR Code GIMAC...')
       
       await MypvitSecretService.forceRenewal()
       
@@ -135,7 +133,7 @@ export default class PayQRCodeController {
       console.log('🔑 Reference ID:', qrResult.reference_id)
       console.log('🔑 Merchant Reference ID:', qrResult.merchant_reference_id)
 
-      // ÉTAPE 8 : Sauvegarder la référence
+      // ÉTAPE 7 : Sauvegarder la référence
       if (qrResult.reference_id) {
         order.payment_reference_id = qrResult.reference_id
         order.status = 'pending_payment'
@@ -151,6 +149,11 @@ export default class PayQRCodeController {
       })
 
       await order.load('items')
+
+      // ✅ ÉTAPE 8 : VIDER LE PANIER (MAINTENANT SEULEMENT)
+      console.log('🗑️ ÉTAPE 8: Vidage panier (après génération QR code réussie)...')
+      await CartItem.query().where('cart_id', cart.id).delete()
+      console.log('🗑️ Panier vidé avec succès')
 
       // ✅ ÉTAPE 9 : RÉCUPÉRER LE X-SECRET
       console.log('🔑 Récupération du X-Secret...')
@@ -252,6 +255,10 @@ export default class PayQRCodeController {
     } catch (error: any) {
       console.error('🔴 ERREUR:', error.message)
       console.error('🔴 STACK:', error.stack)
+      
+      // ⚠️ IMPORTANT: En cas d'erreur, NE PAS vider le panier
+      // Le panier reste intact pour que l'utilisateur puisse réessayer
+      
       return response.status(500).json({
         success: false,
         message: 'Erreur: ' + error.message,
