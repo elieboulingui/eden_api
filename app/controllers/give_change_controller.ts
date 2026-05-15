@@ -10,6 +10,7 @@ import MypvitSecretService from '../services/mypvit_secret_service.js'
 import MypvitTransactionService from '../services/mypvit_transaction_service.js'
 
 const MIN_WITHDRAWAL_AMOUNT = 150
+const WITHDRAWAL_FEE_RATE = 0.02 // 2% pour l'admin
 
 export default class GiveChangeController {
 
@@ -25,6 +26,49 @@ export default class GiveChangeController {
       return { operator: 'MOOV_MONEY', operatorCode: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
     }
     return { operator: 'AIRTEL_MONEY', operatorCode: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
+  }
+
+  // 🆕 Envoie les 2% à l'admin
+  private async creditAdminFee(amount: number, userId: string, userName: string): Promise<void> {
+    try {
+      const adminFee = amount * WITHDRAWAL_FEE_RATE
+      
+      console.log(`\n💼 FRAIS DE RETRAIT (2%):`)
+      console.log(`  - Montant retiré: ${amount} XAF`)
+      console.log(`  - Frais admin (2%): ${adminFee} XAF`)
+
+      // Chercher l'admin
+      const adminUser = await User.query()
+        .where('role', 'superadmin')
+        .orWhere('role', 'admin')
+        .first()
+
+      if (!adminUser) {
+        console.log('⚠️ Aucun admin trouvé pour créditer les frais')
+        return
+      }
+
+      let wallet = await Wallet.findBy('user_id', adminUser.id)
+
+      if (!wallet) {
+        wallet = await Wallet.create({
+          user_id: adminUser.id,
+          balance: 0,
+          currency: 'XAF',
+          status: 'active',
+        })
+        console.log(`💼 Wallet admin créé pour ${adminUser.full_name}`)
+      }
+
+      const oldBalance = wallet.balance
+      wallet.balance += adminFee
+      await wallet.save()
+
+      console.log(`💰 Wallet Admin (${adminUser.full_name}): ${oldBalance} → ${wallet.balance} XAF`)
+      console.log(`✅ Frais de retrait (2%) crédités à l'admin\n`)
+    } catch (error: any) {
+      console.error(`🔴 Erreur crédit frais admin:`, error.message)
+    }
   }
 
   async giveChange({ request, response }: HttpContext) {
@@ -58,7 +102,6 @@ export default class GiveChangeController {
       // ÉTAPE 2: VÉRIFICATION KYC DU MARCHAND
       // ==========================================
       
-      // Vérifier si le compte est vérifié (is_verified = true)
       if (!user.is_verified) {
         console.log('❌ Compte non vérifié (is_verified = false):', user.id)
         return response.status(403).json({
@@ -74,7 +117,6 @@ export default class GiveChangeController {
         })
       }
 
-      // Vérifier si le statut de vérification est "approved"
       if (user.verification_status !== 'approved') {
         console.log('❌ Vérification non approuvée:', user.id, 'Status:', user.verification_status)
         
@@ -105,7 +147,6 @@ export default class GiveChangeController {
         })
       }
 
-      // Vérifier si le rôle de l'utilisateur permet les retraits
       if (user.role !== 'marchant' && user.role !== 'merchant') {
         console.log('❌ Rôle non autorisé:', user.role)
         return response.status(403).json({
@@ -120,8 +161,6 @@ export default class GiveChangeController {
         })
       }
 
-      // CORRECTION: Vérifier si le compte est actif
-      // Utiliser account_status au lieu de status, ou vérifier si la propriété existe
       const accountStatus = (user as any).account_status || (user as any).status || 'active'
       
       if (accountStatus !== 'active') {
@@ -220,21 +259,34 @@ export default class GiveChangeController {
       // ==========================================
 
       if (paymentResult.status === 'SUCCESS') {
+        // 🆕 Calculer les frais (2%)
+        const adminFee = Number(amount) * WITHDRAWAL_FEE_RATE
+        const netAmount = Number(amount) - adminFee
+
+        console.log(`💰 Détail retrait:`)
+        console.log(`  - Montant demandé: ${Number(amount)} XAF`)
+        console.log(`  - Frais admin (2%): ${adminFee} XAF`)
+        console.log(`  - Montant net: ${netAmount} XAF`)
+
+        // Débiter le wallet du montant total
         await wallet.subtractBalance(Number(amount))
+        
+        // 🆕 Envoyer les 2% à l'admin
+        await this.creditAdminFee(Number(amount), user.id, user.full_name || user.email || 'Marchand')
         
         const withdrawal = await Withdrawal.create({
           user_id: user.id, 
           wallet_id: wallet.id, 
           amount: Number(amount), 
-          fee: 0,
-          net_amount: Number(amount), 
+          fee: adminFee,
+          net_amount: netAmount, 
           currency: 'XAF', 
           status: 'completed',
           payment_method: opInfo.operator, 
           operator: opInfo.operator,
           account_number: customer_account_number.replace(/\s/g, ''),
           account_name: user.full_name || user.email || 'Marchand',
-          notes: notes || `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator}`,
+          notes: notes || `Retrait ${user.full_name || 'Marchand'} - ${opInfo.operator} - Frais: ${adminFee} FCFA (2%)`,
           ip_address: request.ip(),
           transaction_id: paymentResult.reference_id,
           processed_at: DateTime.now(),
@@ -246,7 +298,7 @@ export default class GiveChangeController {
           action: 'completed',
           new_status: 'completed', 
           amount: Number(amount),
-          notes: `✅ Retrait réussi - ${opInfo.operator} - Réf: ${paymentResult.reference_id} - Marchand vérifié`,
+          notes: `✅ Retrait réussi - ${opInfo.operator} - Réf: ${paymentResult.reference_id} - Frais admin: ${adminFee} FCFA (2%) - Montant net: ${netAmount} FCFA`,
           ip_address: request.ip(),
         })
 
@@ -254,10 +306,12 @@ export default class GiveChangeController {
 
         return response.status(200).json({
           success: true,
-          message: `✅ Retrait de ${Number(amount).toLocaleString()} FCFA effectué avec succès via ${opInfo.operator}`,
+          message: `✅ Retrait de ${Number(amount).toLocaleString()} FCFA effectué avec succès via ${opInfo.operator} (Frais: ${adminFee} FCFA)`,
           data: {
             withdrawal_id: withdrawal.id, 
-            amount: Number(amount), 
+            amount: Number(amount),
+            fee: adminFee,
+            net_amount: netAmount,
             status: 'completed',
             new_balance: Number(wallet.balance), 
             operator: opInfo.operator,
@@ -279,7 +333,6 @@ export default class GiveChangeController {
     } catch (error: any) {
       console.error('🔴 Erreur give-change:', error.message)
       
-      // Gestion spécifique des erreurs de connexion
       if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
         return response.status(503).json({ 
           success: false, 
