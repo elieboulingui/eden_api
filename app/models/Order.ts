@@ -18,7 +18,6 @@ export default class Order extends BaseModel {
   @column()
   declare user_id: string | null
 
-  // ✅ NOUVEAU : Colonne pour les commandes invité
   @column({ columnName: 'guest_order_id' })
   declare guestOrderId: string | null
 
@@ -36,6 +35,21 @@ export default class Order extends BaseModel {
 
   @column()
   declare shipping_cost: number
+
+  // 🆕 Livreur assigné à la commande
+  @column({ columnName: 'livreur_id' })
+  declare livreur_id: string | null
+
+  // 🆕 Métadonnées (JSON) pour stocker des infos supplémentaires
+  @column({
+    columnName: 'metadata',
+    consume: (value: any) => {
+      if (typeof value === 'string') return JSON.parse(value)
+      if (value && typeof value === 'object') return value
+      return {}
+    }
+  })
+  declare metadata: Record<string, any> | null
 
   @column()
   declare delivery_method: string
@@ -70,7 +84,7 @@ export default class Order extends BaseModel {
   @column()
   declare notes: string | null
 
-  // ✅ CHAMPS POUR LE PAIEMENT MYPVIT
+  // CHAMPS PAIEMENT MYPVIT
   @column()
   declare payment_transaction_id: string | null
 
@@ -119,7 +133,7 @@ export default class Order extends BaseModel {
   @column()
   declare payment_retry_count: number | null
 
-  // ✅ CHAMPS POUR LE SUIVI LIVRAISON
+  // CHAMPS SUIVI LIVRAISON
   @column()
   declare shipping_carrier: string | null
 
@@ -132,7 +146,7 @@ export default class Order extends BaseModel {
   @column()
   declare shipping_confirmed_at: DateTime | null
 
-  // ✅ CHAMPS POUR LE RETRAIT EN MAGASIN
+  // CHAMPS RETRAIT EN MAGASIN
   @column()
   declare pickup_store_name: string | null
 
@@ -148,7 +162,7 @@ export default class Order extends BaseModel {
   @column()
   declare picked_up_at: DateTime | null
 
-  // ✅ CHAMPS ADMINISTRATIFS
+  // CHAMPS ADMINISTRATIFS
   @column()
   declare admin_notes: string | null
 
@@ -167,7 +181,6 @@ export default class Order extends BaseModel {
   @column()
   declare user_agent: string | null
 
-  // ✅ CHAMPS MANQUANTS POUR LE DASHBOARD
   @column()
   declare tax_amount: number
 
@@ -199,7 +212,7 @@ export default class Order extends BaseModel {
   declare paypal_order_id: string | null
 
   @column()
-  declare status_history: any // ou JSON
+  declare status_history: any
 
   @column.dateTime({ autoCreate: true })
   declare created_at: DateTime
@@ -209,13 +222,11 @@ export default class Order extends BaseModel {
 
   // ==================== RELATIONS ====================
 
-  // Relation vers l'utilisateur (peut être null pour les invités)
   @belongsTo(() => User, {
     foreignKey: 'user_id'
   })
   declare user: BelongsTo<typeof User>
 
-  // ✅ NOUVEAU : Relation vers la commande invité
   @belongsTo(() => GuestOrder, {
     foreignKey: 'guest_order_id'
   })
@@ -231,7 +242,6 @@ export default class Order extends BaseModel {
   })
   declare tracking: HasMany<typeof OrderTracking>
 
-  // ✅ CORRECTION : Relation Refund correctement placée dans la section relations
   @hasMany(() => Refund, {
     foreignKey: 'order_id'
   })
@@ -253,72 +263,42 @@ export default class Order extends BaseModel {
 
   // ==================== MÉTHODES UTILITAIRES ====================
 
-  /**
-   * Vérifier si la commande a été passée par un invité
-   */
   isGuestOrder(): boolean {
     return this.user_id === null && this.guestOrderId !== null
   }
 
-  /**
-   * Vérifier si la commande est payée
-   */
   isPaid(): boolean {
     return this.payment_status === 'SUCCESS' || this.status === 'paid'
   }
 
-  /**
-   * Vérifier si la commande est en attente
-   */
   isPending(): boolean {
     return this.status === 'pending' || this.status === 'pending_payment'
   }
 
-  /**
-   * Vérifier si la commande est livrée
-   */
   isDelivered(): boolean {
     return this.status === 'delivered'
   }
 
-  /**
-   * Vérifier si la commande est annulée
-   */
   isCancelled(): boolean {
     return this.status === 'cancelled'
   }
 
-  /**
-   * Vérifier si la commande peut être annulée
-   */
   canBeCancelled(): boolean {
     return ['pending', 'pending_payment', 'paid'].includes(this.status)
   }
 
-  /**
-   * Obtenir le total formaté
-   */
   getFormattedTotal(): string {
     return `${this.total.toLocaleString()} FCFA`
   }
 
-  /**
-   * Obtenir le sous-total formaté
-   */
   getFormattedSubtotal(): string {
     return `${this.subtotal.toLocaleString()} FCFA`
   }
 
-  /**
-   * Obtenir les frais de livraison formatés
-   */
   getFormattedShippingCost(): string {
     return this.shipping_cost === 0 ? 'Gratuit' : `${this.shipping_cost.toLocaleString()} FCFA`
   }
 
-  /**
-   * Obtenir le libellé de la méthode de paiement
-   */
   getPaymentMethodLabel(): string {
     const methods: Record<string, string> = {
       airtel: 'Airtel Money',
@@ -332,9 +312,6 @@ export default class Order extends BaseModel {
     return methods[this.payment_method] || this.payment_method || 'Non renseigné'
   }
 
-  /**
-   * Obtenir le libellé de la méthode de livraison
-   */
   getDeliveryMethodLabel(): string {
     const methods: Record<string, string> = {
       pickup: 'Retrait en magasin',
@@ -344,9 +321,6 @@ export default class Order extends BaseModel {
     return methods[this.delivery_method] || this.delivery_method || 'Standard'
   }
 
-  /**
-   * Obtenir le libellé du statut
-   */
   getStatusLabel(): string {
     const labels: Record<string, string> = {
       pending: 'En attente',
@@ -361,37 +335,22 @@ export default class Order extends BaseModel {
     return labels[this.status] || this.status
   }
 
-  /**
-   * Obtenir le type de client (connecté ou invité)
-   */
   getCustomerType(): string {
     return this.isGuestOrder() ? 'Invité' : 'Client connecté'
   }
 
-  /**
-   * Obtenir le nom du client (priorité au customer_name)
-   */
   getCustomerName(): string {
     return this.customer_name || 'Client'
   }
 
-  /**
-   * Obtenir l'email du client
-   */
   getCustomerEmail(): string {
     return this.customer_email || 'non-renseigné@email.com'
   }
 
-  /**
-   * Obtenir le téléphone du client
-   */
   getCustomerPhone(): string {
     return this.customer_phone || 'Non renseigné'
   }
 
-  /**
-   * Vérifier si la commande est éligible pour un remboursement
-   */
   isRefundable(): boolean {
     return this.isPaid() && !this.isDelivered() && !this.isCancelled()
   }
