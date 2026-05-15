@@ -377,6 +377,8 @@ declare has_livreur: boolean
     user.total_earnings = user.total_earnings ?? 0
     user.rating = user.rating ?? 0
     user.total_ratings = user.total_ratings ?? 0
+    user.has_livreur = user.has_livreur ?? false  // 🆕 Ajout
+
   }
 
   // ============================================================
