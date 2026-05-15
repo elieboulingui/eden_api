@@ -2,7 +2,6 @@
 
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
-import Shop from '#models/shop'
 import Contract from '#models/contract'
 import { DateTime } from 'luxon'
 
@@ -16,7 +15,6 @@ export default class ContractsController {
     try {
       const user = await User.query()
         .where('id', params.id)
-        .preload('shop')
         .first()
 
       if (!user) {
@@ -31,7 +29,8 @@ export default class ContractsController {
         data: user
       })
 
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur',
@@ -46,6 +45,8 @@ export default class ContractsController {
    */
   async getShopByUser({ params, response }: HttpContext) {
     try {
+      // Cherche la boutique via une requête directe
+      const Shop = (await import('#models/shop')).default
       const shop = await Shop.query()
         .where('user_id', params.userId)
         .first()
@@ -55,7 +56,8 @@ export default class ContractsController {
         data: shop || null
       })
 
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur',
@@ -71,15 +73,15 @@ export default class ContractsController {
   async getByName({ params, response }: HttpContext) {
     try {
       const contracts = await Contract.query()
-        .whereJson('vendor_info', { companyName: params.name })
-        .orWhereJson('vendor_info', { managerName: params.name })
+        .where('vendor_info', 'like', `%${params.name}%`)
 
       return response.json({
         success: true,
         data: contracts
       })
 
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur',
@@ -118,17 +120,17 @@ export default class ContractsController {
         userId: userId || null,
         contractNumber: contractNumber,
         contractType: contractType,
-        vendorInfo: vendorInfo,
+        vendorInfo: typeof vendorInfo === 'string' ? JSON.parse(vendorInfo) : vendorInfo,
         signature: signature,
         status: 'signed',
         signedAt: DateTime.fromISO(signedAt),
         expiresAt: DateTime.now().plus({ years: 1 }),
         adminEmail: adminEmail,
         vendorEmail: vendorEmail,
-        metadata: {
+        metadata: JSON.stringify({
           signedFrom: request.ip(),
           userAgent: request.header('User-Agent')
-        }
+        })
       })
 
       console.log(`✅ Contrat ${contractNumber} signé par ${vendorEmail}`)
@@ -145,7 +147,8 @@ export default class ContractsController {
         }
       })
 
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error
       console.error('❌ Erreur signature contrat:', error)
       return response.status(500).json({
         success: false,
@@ -168,7 +171,8 @@ export default class ContractsController {
         success: true,
         data: contracts
       })
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur',
@@ -196,7 +200,8 @@ export default class ContractsController {
         success: true,
         data: contract
       })
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error
       return response.status(500).json({
         success: false,
         message: 'Erreur serveur',
