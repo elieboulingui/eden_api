@@ -38,7 +38,6 @@ export default class ContractsController {
 
   /**
    * GET /api/shops/user/:userId
-   * Retourne les infos basiques du vendeur
    */
   async getShopByUser({ params, response }: HttpContext) {
     try {
@@ -116,10 +115,10 @@ export default class ContractsController {
         expiresAt: DateTime.now().plus({ years: 1 }),
         adminEmail,
         vendorEmail,
-        metadata: JSON.stringify({
+        metadata: {
           signedFrom: request.ip(),
           userAgent: request.header('User-Agent')
-        })
+        }
       })
 
       return response.json({
