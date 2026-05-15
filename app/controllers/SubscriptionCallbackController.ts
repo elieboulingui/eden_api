@@ -1,6 +1,8 @@
 // app/controllers/SubscriptionCallbackController.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import Subscription from '#models/Subscription'
+import User from '#models/user'
+import Wallet from '#models/wallet'
 import BoostService from '../services/BoostService.js'
 import { DateTime } from 'luxon'
 
@@ -39,6 +41,7 @@ export default class SubscriptionCallbackController {
         plan: subscription.planName,
         type: subscription.subscriptionType,
         status: subscription.status,
+        price: subscription.price,
       })
 
       // Traiter selon le statut
@@ -55,6 +58,12 @@ export default class SubscriptionCallbackController {
           callbackStatus: status,
         }
         await subscription.save()
+
+        // 🆕 ENVOYER L'ARGENT À L'ADMIN
+        await this.creditAdminWallet(
+          subscription.price, 
+          `Abonnement ${subscription.planName} - Marchand: ${subscription.userId}`
+        )
 
         // Activer le boost selon le type
         if (subscription.subscriptionType === 'all_products') {
@@ -132,6 +141,49 @@ export default class SubscriptionCallbackController {
         message: 'Erreur lors du traitement du callback',
         error: error.message,
       })
+    }
+  }
+
+  /**
+   * 🆕 Crédite le wallet de l'admin avec le montant de l'abonnement
+   */
+  private async creditAdminWallet(amount: number, description: string): Promise<void> {
+    try {
+      console.log(`\n💼 ENVOI ABONNEMENT À L'ADMIN:`)
+      console.log(`  - Montant: ${amount} XAF`)
+      console.log(`  - Description: ${description}`)
+
+      // Chercher l'admin
+      const adminUser = await User.query()
+        .where('role', 'superadmin')
+        .orWhere('role', 'admin')
+        .first()
+
+      if (!adminUser) {
+        console.log('⚠️ Aucun admin trouvé pour créditer le wallet')
+        return
+      }
+
+      let wallet = await Wallet.findBy('user_id', adminUser.id)
+
+      if (!wallet) {
+        wallet = await Wallet.create({
+          user_id: adminUser.id,
+          balance: 0,
+          currency: 'XAF',
+          status: 'active',
+        })
+        console.log(`💼 Wallet admin créé pour ${adminUser.full_name}`)
+      }
+
+      const oldBalance = wallet.balance
+      wallet.balance += amount
+      await wallet.save()
+
+      console.log(`💰 Wallet Admin (${adminUser.full_name}): ${oldBalance} → ${wallet.balance} XAF`)
+      console.log(`✅ Paiement abonnement crédité à l'admin\n`)
+    } catch (error: any) {
+      console.error(`🔴 Erreur crédit wallet admin:`, error.message)
     }
   }
 
