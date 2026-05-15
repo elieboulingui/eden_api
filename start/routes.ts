@@ -3,6 +3,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
+import LivreurDashboardController from '#controllers/LivreurDashboardController'
 import ContractsController from '#controllers/ContractsController'
 const MerchantDeliveryController = () => import('#controllers/MerchantDeliveryController')
 const CheckoutController = () => import('#controllers/checkout_controller')
@@ -572,6 +573,29 @@ router.get('/shops/user/:userId', [ContractsController, 'getShopByUser']).as('sh
 router.post('/contracts/sign-and-send', [ContractsController, 'signAndSend']).as('contracts.sign-and-send')
   router.get('/contract/by-name/:name', [ContractsController, 'getByName'])
   router.post('/cart/delivery-fees', [MerchantDeliveryController, 'calculateCartDeliveryFees'])
+
+  router.get('/livreur/dashboard/stats', [LivreurDashboardController, 'stats'])
+
+// Liste des livraisons (avec filtre ?status=pending|active|delivered)
+router.get('/livreur/dashboard/deliveries', [LivreurDashboardController, 'deliveries'])
+
+// Détail d'une livraison
+router.get('/livreur/dashboard/delivery/:id', [LivreurDashboardController, 'deliveryDetail'])
+
+// Mettre à jour le statut d'une livraison
+router.put('/livreur/dashboard/delivery/:id/status', [LivreurDashboardController, 'updateDeliveryStatus'])
+
+// Activer/désactiver le statut en ligne
+router.put('/livreur/dashboard/online', [LivreurDashboardController, 'toggleOnline'])
+
+// Mettre à jour la position GPS
+router.put('/livreur/dashboard/location', [LivreurDashboardController, 'updateLocation'])
+
+// Historique des gains (?period=day|week|month)
+router.get('/livreur/dashboard/earnings', [LivreurDashboardController, 'earnings'])
+
+// Mettre à jour le profil
+router.put('/livreur/dashboard/profile', [LivreurDashboardController, 'updateProfile'])
   
 
 }).prefix('/api') 
