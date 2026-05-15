@@ -7,12 +7,16 @@ import Cart from '#models/Cart'
 import CartItem from '#models/CartItem'
 import User from '#models/user'
 import Product from '#models/Product'
+import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
 import MypvitSecretService from '../services/mypvit_secret_service.js'
 import axios from 'axios'
+import crypto from 'node:crypto'
+import hash from '@adonisjs/core/services/hash'
 
 const CALLBACK_URL_CODE = '9ZOXW'
 const MYPVIT_CODE_URL = 'MTX1MTKQQCULKA3W'
+const ADMIN_COMMISSION_RATE = 0.03 // 3% pour l'admin
 
 const LINK_TYPES: Record<string, string> = {
   'web': 'WEB',
@@ -28,7 +32,6 @@ export default class PayLinkController {
 
   private detectOperatorGabon(phoneNumber?: string): { name: string; code: string; accountCode: string } {
     if (!phoneNumber) {
-      // 🔄 Par défaut : GIMAC
       return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
     }
 
@@ -37,17 +40,14 @@ export default class PayLinkController {
     if (clean.startsWith('241')) local = clean.substring(3)
     if (local.startsWith('0')) local = local.substring(1)
 
-    // 📱 MOOV MONEY (06xxxxxxxx)
     if (local.startsWith('06') || local.startsWith('6')) {
       return { name: 'MOOV_MONEY', code: 'MOOV_MONEY', accountCode: 'ACC_69EFB143D4F54' }
     }
     
-    // 📱 AIRTEL MONEY (07xxxxxxxx)
     if (local.startsWith('07') || local.startsWith('7')) {
       return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
     }
     
-    // 🏦 GIMAC (par défaut : numéros fixes, autres formats, cartes bancaires)
     return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
   }
 
@@ -61,7 +61,6 @@ export default class PayLinkController {
     }
   }
 
-  // ✅ Vérifie le stock SANS décrémenter
   private async checkStock(userId: string): Promise<{ 
     ok: boolean
     errors: string[]
@@ -103,16 +102,36 @@ export default class PayLinkController {
     return { ok: errors.length === 0, errors, cart }
   }
 
-  // ✅ Crée les OrderItems à partir du panier SANS décrémenter le stock
-  private async buildItemsFromCart(order: Order, cart: Cart): Promise<{ subtotal: number; count: number }> {
+  private async buildItemsFromCart(order: Order, cart: Cart): Promise<{ 
+    subtotal: number
+    count: number
+    merchantIds: string[]
+    merchantProducts: Map<string, { productId: string; productName: string; price: number; quantity: number; subtotal: number }[]>
+  }> {
     let subtotal = 0
     let count = 0
+    const merchantIds = new Set<string>()
+    const merchantProducts = new Map<string, { productId: string; productName: string; price: number; quantity: number; subtotal: number }[]>()
 
     for (const item of cart.items) {
       const p = await Product.findBy('id', item.product_id)
       if (!p) continue
 
+      merchantIds.add(p.user_id)
+
+      if (!merchantProducts.has(p.user_id)) {
+        merchantProducts.set(p.user_id, [])
+      }
+      
       const itemTotal = p.price * item.quantity
+      merchantProducts.get(p.user_id)!.push({
+        productId: p.id,
+        productName: p.name,
+        price: p.price,
+        quantity: item.quantity,
+        subtotal: itemTotal
+      })
+
       subtotal += itemTotal
 
       await OrderItem.create({
@@ -124,14 +143,81 @@ export default class PayLinkController {
         subtotal: itemTotal
       })
 
-      // ✅ Stock NON décrémenté ici - sera fait par le callback après confirmation
       count++
     }
 
-    return { subtotal, count }
+    return { subtotal, count, merchantIds: Array.from(merchantIds), merchantProducts }
   }
 
-  // ==================== PAIEMENT PAR LIEN ====================
+  // 🆕 Créer un livreur Eden automatiquement
+  private async createEdenLivreur(): Promise<User> {
+    console.log('🆕 Création d\'un nouveau livreur Eden...')
+    
+    const livreurId = crypto.randomUUID()
+    const email = `edenlivreur_${Date.now()}@edenmarket.com`
+    const password = crypto.randomUUID()
+    
+    const livreur = await User.create({
+      id: livreurId,
+      full_name: `Livreur Eden ${Date.now().toString().slice(-6)}`,
+      email: email,
+      password: password,
+      role: 'edenlivreur',
+      is_verified: true,
+      is_available: true,
+      is_online: true,
+      verification_status: 'approved',
+      total_deliveries: 0,
+      total_earnings: 0,
+      rating: 0,
+      total_ratings: 0,
+      is_phone_verified: false,
+      is_email_verified: false,
+      certify_truth: true,
+      accept_escrow: true,
+    })
+    
+    console.log(`✅ Livreur Eden créé: ${livreur.full_name} (${livreur.id})`)
+    
+    // Créer son wallet
+    await Wallet.create({
+      user_id: livreur.id,
+      balance: 0,
+      currency: 'XAF',
+      status: 'active',
+    })
+    
+    console.log(`💼 Wallet créé pour ${livreur.full_name}`)
+    
+    return livreur
+  }
+
+  // Crédite le wallet d'un utilisateur
+  private async creditWallet(userId: string, amount: number, description: string): Promise<void> {
+    try {
+      let wallet = await Wallet.findBy('user_id', userId)
+      
+      if (!wallet) {
+        wallet = await Wallet.create({
+          user_id: userId,
+          balance: 0,
+          currency: 'XAF',
+          status: 'active',
+        })
+        console.log(`  💼 Nouveau wallet créé pour ${userId}`)
+      }
+
+      const oldBalance = wallet.balance
+      wallet.balance += amount
+      await wallet.save()
+
+      console.log(`  💰 Wallet ${userId}: ${oldBalance} → ${wallet.balance} XAF (${description})`)
+    } catch (error: any) {
+      console.error(`  🔴 Erreur crédit wallet ${userId}:`, error.message)
+      throw error
+    }
+  }
+
   async pay({ request, response }: HttpContext) {
     console.log('🔗 ========== PAIEMENT PAR LIEN ==========')
 
@@ -161,7 +247,7 @@ export default class PayLinkController {
         })
       }
 
-      // ✅ 1. RÉCUPÉRER LE PANIER DE L'UTILISATEUR
+      // 1. RÉCUPÉRER LE PANIER DE L'UTILISATEUR
       const { ok, errors, cart } = await this.checkStock(userId)
       
       if (!ok) {
@@ -228,14 +314,121 @@ export default class PayLinkController {
         payment_operator_simple: operatorInfo.name
       })
 
-      // 7. Créer les OrderItems à partir du panier
-      const { count } = await this.buildItemsFromCart(order, cart)
+      // 7. Créer les OrderItems et récupérer les infos par marchand
+      const { count, merchantIds, merchantProducts } = await this.buildItemsFromCart(order, cart)
 
-      // 8. Vider le panier après création de la commande
+      console.log('🏪 Marchands dans la commande:', merchantIds)
+
+      // ============================================================
+      // 8. DISTRIBUTION DE L'ARGENT
+      // ============================================================
+      
+      // 8a. Commission admin (3% du total)
+      const adminCommission = total * ADMIN_COMMISSION_RATE
+      console.log(`\n💼 ===== DISTRIBUTION FINANCIÈRE =====`)
+      console.log(`📊 Total commande: ${total} XAF`)
+      console.log(`🏛️ Commission admin (3%): ${adminCommission} XAF`)
+      
+      // Créditer l'admin
+      const adminUser = await User.query()
+        .where('role', 'superadmin')
+        .orWhere('role', 'admin')
+        .first()
+      
+      if (adminUser) {
+        await this.creditWallet(adminUser.id, adminCommission, `Commission 3% - Commande #${orderNumber}`)
+      }
+
+      // 8b. Distribuer le prix des produits aux marchands
+      console.log(`\n📦 DISTRIBUTION AUX MARCHANDS:`)
+      
+      const totalAfterCommission = total - adminCommission
+      const commissionRatio = totalAfterCommission / total
+      
+      for (const merchantId of merchantIds) {
+        const merchant = await User.findBy('id', merchantId)
+        if (!merchant) continue
+
+        const products = merchantProducts.get(merchantId) || []
+        let merchantTotal = 0
+        
+        for (const product of products) {
+          merchantTotal += product.subtotal
+        }
+        
+        const merchantAmount = merchantTotal * commissionRatio
+        
+        console.log(`  👤 ${merchant.full_name}:`)
+        console.log(`     - Produits: ${products.map(p => p.productName).join(', ')}`)
+        console.log(`     - Montant: ${merchantAmount.toFixed(0)} XAF`)
+        
+        await this.creditWallet(merchant.id, merchantAmount, `Vente produits - Commande #${orderNumber}`)
+      }
+
+      // 8c. Distribuer les frais de livraison
+      if (deliveryPrice > 0) {
+        console.log(`\n🚚 FRAIS DE LIVRAISON: ${deliveryPrice} XAF`)
+        
+        let needEdenLivreur = false
+        
+        for (const merchantId of merchantIds) {
+          const merchant = await User.findBy('id', merchantId)
+          
+          if (merchant) {
+            console.log(`  👤 ${merchant.full_name} | has_livreur: ${merchant.has_livreur}`)
+            
+            if (merchant.has_livreur) {
+              // ✅ Le marchand a son propre livreur → lui envoyer les frais
+              const deliveryShare = deliveryPrice / merchantIds.length
+              console.log(`  ✅ Livreur personnel → +${deliveryShare} XAF`)
+              await this.creditWallet(merchant.id, deliveryShare, `Frais livraison (livreur personnel) - Commande #${orderNumber}`)
+            } else {
+              // ❌ Pas de livreur → il faut un livreur Eden
+              needEdenLivreur = true
+            }
+          }
+        }
+        
+        // Si au moins un marchand n'a pas de livreur → chercher/créer un edenlivreur
+        if (needEdenLivreur) {
+          console.log(`  🔍 Recherche d'un edenlivreur...`)
+          
+          let edenLivreur = await User.query()
+            .where('role', 'edenlivreur')
+            .where('is_verified', true)
+            .first()
+          
+          // Si aucun edenlivreur trouvé → en créer un
+          if (!edenLivreur) {
+            console.log(`  ⚠️ Aucun edenlivreur trouvé → Création automatique...`)
+            edenLivreur = await this.createEdenLivreur()
+          } else {
+            console.log(`  🛵 EdenLivreur trouvé: ${edenLivreur.full_name} (${edenLivreur.id})`)
+          }
+          
+          // Envoyer les frais de livraison au edenlivreur
+          await this.creditWallet(edenLivreur.id, deliveryPrice, `Frais livraison - Commande #${orderNumber}`)
+          
+          // Mettre à jour la commande avec l'ID du livreur
+          order.livreur_id = edenLivreur.id
+          await order.save()
+          
+          await OrderTracking.create({
+            order_id: order.id,
+            status: 'pending',
+            description: `🛵 Livreur Eden assigné: ${edenLivreur.full_name}`,
+            tracked_at: DateTime.now(),
+          })
+        }
+      }
+
+      console.log(`\n✅ Distribution terminée`)
+
+      // 9. Vider le panier
       await CartItem.query().where('cart_id', cart.id).delete()
       console.log('🛒 Panier vidé')
 
-      // 9. Tracking initial
+      // 10. Tracking initial
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
@@ -243,8 +436,8 @@ export default class PayLinkController {
         tracked_at: DateTime.now(),
       })
 
-      // 10. Générer le lien de paiement
-      console.log(`🔑 Génération lien ${linkTypeCode}...`)
+      // 11. Générer le lien de paiement
+      console.log(`\n🔑 Génération lien ${linkTypeCode}...`)
 
       const linkPayload: any = {
         amount: total,
@@ -290,7 +483,7 @@ export default class PayLinkController {
         url: linkResult.url
       })
 
-      // 11. Mettre à jour la commande avec la référence de paiement
+      // 12. Mettre à jour la commande
       if (linkResult.merchant_reference_id) {
         order.payment_reference_id = linkResult.merchant_reference_id
         order.payment_operator_simple = operatorInfo.name
@@ -316,6 +509,9 @@ export default class PayLinkController {
           orderId: order.id,
           orderNumber: order.order_number,
           total: order.total,
+          subtotal: order.subtotal,
+          shippingCost: order.shipping_cost,
+          adminCommission: adminCommission,
           status: 'pending_payment',
           customerName: order.customer_name,
           paymentMethod: `link_${linkType}_${operatorInfo.name.toLowerCase()}`,
