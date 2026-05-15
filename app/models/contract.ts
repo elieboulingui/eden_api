@@ -1,37 +1,35 @@
 // app/models/contract.ts
 
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
-import type { BelongsTo } from '@adonisjs/lucid/orm'
-import Client from '#models/client'
+import { BaseModel, column } from '@adonisjs/lucid/orm'
 
 export default class Contract extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string // UUID = string
 
   @column()
-  declare userId: number
+  declare userId: string | null // UUID = string
 
   @column()
   declare contractNumber: string
 
   @column()
-  declare contractType: string // 'vendor_partnership', 'subscription', etc.
+  declare contractType: string
 
   @column()
-  declare vendorInfo: object // Informations du vendeur (JSON)
+  declare vendorInfo: object
 
   @column()
-  declare signature: string // Base64 de la signature
+  declare signature: string
 
   @column()
-  declare status: 'draft' | 'signed' | 'sent' | 'expired' | 'cancelled'
+  declare status: string
 
-  @column()
+  @column.dateTime()
   declare signedAt: DateTime
 
-  @column()
-  declare expiresAt: DateTime
+  @column.dateTime()
+  declare expiresAt: DateTime | null
 
   @column()
   declare adminEmail: string
@@ -50,10 +48,4 @@ export default class Contract extends BaseModel {
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
-
-  // Relations
-  @belongsTo(() => Client, {
-    foreignKey: 'userId',
-  })
-  declare client: BelongsTo<typeof Client>
 }
