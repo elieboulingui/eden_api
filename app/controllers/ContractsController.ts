@@ -9,13 +9,10 @@ export default class ContractsController {
   
   /**
    * GET /api/client/:id
-   * Récupère les infos d'un utilisateur/client
    */
   async getClientById({ params, response }: HttpContext) {
     try {
-      const user = await User.query()
-        .where('id', params.id)
-        .first()
+      const user = await User.find(params.id)
 
       if (!user) {
         return response.status(404).json({
@@ -41,19 +38,15 @@ export default class ContractsController {
 
   /**
    * GET /api/shops/user/:userId
-   * Récupère la boutique d'un utilisateur
+   * Retourne les infos basiques du vendeur
    */
   async getShopByUser({ params, response }: HttpContext) {
     try {
-      // Cherche la boutique via une requête directe
-      const Shop = (await import('#models/shop')).default
-      const shop = await Shop.query()
-        .where('user_id', params.userId)
-        .first()
+      const user = await User.find(params.userId)
 
       return response.json({
         success: true,
-        data: shop || null
+        data: user || null
       })
 
     } catch (err) {
@@ -68,7 +61,6 @@ export default class ContractsController {
 
   /**
    * GET /api/contract/by-name/:name
-   * Recherche un contrat par le nom du vendeur
    */
   async getByName({ params, response }: HttpContext) {
     try {
@@ -92,7 +84,6 @@ export default class ContractsController {
 
   /**
    * POST /api/contracts/sign-and-send
-   * Signe et sauvegarde un contrat
    */
   async signAndSend({ request, response }: HttpContext) {
     try {
@@ -107,37 +98,33 @@ export default class ContractsController {
         vendorEmail
       } = request.body()
 
-      // Validation
       if (!vendorInfo || !signature || !vendorEmail || !contractNumber) {
         return response.status(400).json({
           success: false,
-          message: 'Données manquantes : vendorInfo, signature, vendorEmail, contractNumber sont requis'
+          message: 'Données manquantes'
         })
       }
 
-      // Sauvegarder le contrat
       const contract = await Contract.create({
         userId: userId || null,
-        contractNumber: contractNumber,
-        contractType: contractType,
+        contractNumber,
+        contractType,
         vendorInfo: typeof vendorInfo === 'string' ? JSON.parse(vendorInfo) : vendorInfo,
-        signature: signature,
+        signature,
         status: 'signed',
         signedAt: DateTime.fromISO(signedAt),
         expiresAt: DateTime.now().plus({ years: 1 }),
-        adminEmail: adminEmail,
-        vendorEmail: vendorEmail,
+        adminEmail,
+        vendorEmail,
         metadata: JSON.stringify({
           signedFrom: request.ip(),
           userAgent: request.header('User-Agent')
         })
       })
 
-      console.log(`✅ Contrat ${contractNumber} signé par ${vendorEmail}`)
-
       return response.json({
         success: true,
-        message: 'Contrat signé et sauvegardé avec succès',
+        message: 'Contrat signé avec succès',
         data: {
           id: contract.id,
           contractNumber: contract.contractNumber,
@@ -149,10 +136,10 @@ export default class ContractsController {
 
     } catch (err) {
       const error = err as Error
-      console.error('❌ Erreur signature contrat:', error)
+      console.error('Erreur signature contrat:', error)
       return response.status(500).json({
         success: false,
-        message: 'Erreur lors de la signature du contrat',
+        message: 'Erreur serveur',
         error: error.message
       })
     }
@@ -160,12 +147,10 @@ export default class ContractsController {
 
   /**
    * GET /api/contracts
-   * Liste tous les contrats
    */
   async index({ response }: HttpContext) {
     try {
-      const contracts = await Contract.query()
-        .orderBy('created_at', 'desc')
+      const contracts = await Contract.query().orderBy('created_at', 'desc')
 
       return response.json({
         success: true,
@@ -183,7 +168,6 @@ export default class ContractsController {
 
   /**
    * GET /api/contracts/:id
-   * Affiche un contrat spécifique
    */
   async show({ params, response }: HttpContext) {
     try {
