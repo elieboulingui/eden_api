@@ -56,6 +56,9 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column.date({ columnName: 'birth_date' })
   declare birth_date: DateTime | null
 
+  @column({ columnName: 'has_livreur' })
+declare has_livreur: boolean
+
   @column({ columnName: 'id_number' })
   declare id_number: string | null
 
