@@ -56,6 +56,7 @@ const ALLOWED_USER_FIELDS = [
   'is_available', 'is_online',
   'current_latitude', 'current_longitude',
   'total_deliveries', 'total_earnings', 'rating', 'total_ratings',
+  'has_livreur', // 🆕 AJOUT
 ]
 
 export default class NewAccountController {
@@ -69,6 +70,7 @@ export default class NewAccountController {
       console.log('  - email:', rawData.email)
       console.log('  - role:', rawData.role)
       console.log('  - partner_code:', rawData.partner_code || 'null (non défini)')
+      console.log('  - has_livreur:', rawData.has_livreur) // 🆕 LOG
 
       // Vérifier email si présent
       if (rawData.email) {
@@ -193,6 +195,7 @@ export default class NewAccountController {
         total_earnings: 'total_earnings',
         rating: 'rating',
         total_ratings: 'total_ratings',
+        has_livreur: 'has_livreur', // 🆕 AJOUT
       }
 
       // Construire userData en filtrant
@@ -265,9 +268,14 @@ export default class NewAccountController {
         if (userData.total_ratings === undefined) {
           userData.total_ratings = 0
         }
+        // 🆕 Valeur par défaut pour has_livreur
+        if (userData.has_livreur === undefined) {
+          userData.has_livreur = false
+        }
         console.log('🛵 [NewAccountController] Compte livreur - statut:', userData.verification_status)
         console.log('  - Véhicule:', userData.vehicle_type || 'Non défini')
         console.log('  - Disponibilité:', userData.availability || 'Non défini')
+        console.log('  - has_livreur:', userData.has_livreur) // 🆕 LOG
       }
 
       // Log des champs filtrés
@@ -317,6 +325,7 @@ export default class NewAccountController {
       console.log('  - Partenaire:', user.partner_code || 'Aucun')
       console.log('  - Est marchand:', user.isMerchant)
       console.log('  - Est livreur:', user.isLivreur)
+      console.log('  - has_livreur:', user.has_livreur) // 🆕 LOG
 
       // Créer wallet si marchand
       let wallet = null
@@ -379,6 +388,7 @@ export default class NewAccountController {
           ...(user.isLivreur && { 
             vehicle_type: user.vehicle_type,
             availability: user.availability,
+            has_livreur: user.has_livreur, // 🆕 AJOUT
           }),
           verification_status: user.verification_status,
         },
