@@ -19,7 +19,6 @@ import SubscriptionController from '#controllers/SubscriptionController'
 const Subscription = new SubscriptionController()
 import SubscriptionCallbackController from '#controllers/SubscriptionCallbackController'
 const SubscriptionCallback = new SubscriptionCallbackController()
-import ContractsController from '#controllers/ContractsController'
 import CheckPaymentStatusController from '#controllers/CheckPaymentStatusController'
 import PayPalController from '#controllers/paypal_controller'
 import RefundsController from '#controllers/refunds_controller'
