@@ -1,7 +1,7 @@
-// app/controllers/ContractsController.ts (version complète)
+// app/controllers/ContractsController.ts
 
 import type { HttpContext } from '@adonisjs/core/http'
-import Client from '#models/client'
+import User from '#models/user'
 import Shop from '#models/shop'
 import Contract from '#models/contract'
 import { DateTime } from 'luxon'
@@ -10,24 +10,25 @@ export default class ContractsController {
   
   /**
    * GET /api/client/:id
+   * Récupère les infos d'un utilisateur/client
    */
   async getClientById({ params, response }: HttpContext) {
     try {
-      const client = await Client.query()
+      const user = await User.query()
         .where('id', params.id)
         .preload('shop')
         .first()
 
-      if (!client) {
+      if (!user) {
         return response.status(404).json({
           success: false,
-          message: 'Client non trouvé'
+          message: 'Utilisateur non trouvé'
         })
       }
 
       return response.json({
         success: true,
-        data: client
+        data: user
       })
 
     } catch (error) {
@@ -41,6 +42,7 @@ export default class ContractsController {
 
   /**
    * GET /api/shops/user/:userId
+   * Récupère la boutique d'un utilisateur
    */
   async getShopByUser({ params, response }: HttpContext) {
     try {
@@ -48,16 +50,9 @@ export default class ContractsController {
         .where('user_id', params.userId)
         .first()
 
-      if (!shop) {
-        return response.status(404).json({
-          success: false,
-          message: 'Boutique non trouvée'
-        })
-      }
-
       return response.json({
         success: true,
-        data: shop
+        data: shop || null
       })
 
     } catch (error) {
@@ -71,12 +66,13 @@ export default class ContractsController {
 
   /**
    * GET /api/contract/by-name/:name
+   * Recherche un contrat par le nom du vendeur
    */
   async getByName({ params, response }: HttpContext) {
     try {
-      const contracts = await Client.query()
-        .where('full_name', 'like', `%${params.name}%`)
-        .orWhere('company_name', 'like', `%${params.name}%`)
+      const contracts = await Contract.query()
+        .whereJson('vendor_info', { companyName: params.name })
+        .orWhereJson('vendor_info', { managerName: params.name })
 
       return response.json({
         success: true,
@@ -94,6 +90,7 @@ export default class ContractsController {
 
   /**
    * POST /api/contracts/sign-and-send
+   * Signe et sauvegarde un contrat
    */
   async signAndSend({ request, response }: HttpContext) {
     try {
@@ -116,7 +113,7 @@ export default class ContractsController {
         })
       }
 
-      // Sauvegarder le contrat en base de données
+      // Sauvegarder le contrat
       const contract = await Contract.create({
         userId: userId || null,
         contractNumber: contractNumber,
@@ -125,7 +122,7 @@ export default class ContractsController {
         signature: signature,
         status: 'signed',
         signedAt: DateTime.fromISO(signedAt),
-        expiresAt: DateTime.now().plus({ years: 1 }), // Contrat valable 1 an
+        expiresAt: DateTime.now().plus({ years: 1 }),
         adminEmail: adminEmail,
         vendorEmail: vendorEmail,
         metadata: {
@@ -134,8 +131,7 @@ export default class ContractsController {
         }
       })
 
-      // TODO: Génération du PDF
-      // TODO: Envoi des emails
+      console.log(`✅ Contrat ${contractNumber} signé par ${vendorEmail}`)
 
       return response.json({
         success: true,
@@ -150,7 +146,7 @@ export default class ContractsController {
       })
 
     } catch (error) {
-      console.error('Erreur signature contrat:', error)
+      console.error('❌ Erreur signature contrat:', error)
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la signature du contrat',
@@ -161,11 +157,11 @@ export default class ContractsController {
 
   /**
    * GET /api/contracts
+   * Liste tous les contrats
    */
   async index({ response }: HttpContext) {
     try {
       const contracts = await Contract.query()
-        .preload('client')
         .orderBy('created_at', 'desc')
 
       return response.json({
@@ -183,13 +179,11 @@ export default class ContractsController {
 
   /**
    * GET /api/contracts/:id
+   * Affiche un contrat spécifique
    */
   async show({ params, response }: HttpContext) {
     try {
-      const contract = await Contract.query()
-        .where('id', params.id)
-        .preload('client')
-        .first()
+      const contract = await Contract.find(params.id)
 
       if (!contract) {
         return response.status(404).json({
