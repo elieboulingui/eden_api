@@ -569,7 +569,6 @@ router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).
 // ----------------------------------------------------------
 router.get('/client/:id', [ContractsController, 'getClientById']).as('client.show')
 router.get('/shops/user/:userId', [ContractsController, 'getShopByUser']).as('shops.user')
-router.get('/contract/by-name/:name', [ContractsController, 'getByName']).as('contract.by-name')
 router.post('/contracts/sign-and-send', [ContractsController, 'signAndSend']).as('contracts.sign-and-send')
   router.get('/contract/by-name/:name', [ContractsController, 'getByName'])
   router.post('/cart/delivery-fees', [MerchantDeliveryController, 'calculateCartDeliveryFees'])
