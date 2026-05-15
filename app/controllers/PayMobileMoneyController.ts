@@ -7,16 +7,13 @@ import Cart from '#models/Cart'
 import CartItem from '#models/CartItem'
 import User from '#models/user'
 import Product from '#models/Product'
-import Wallet from '#models/wallet'
 import KYC from '#models/kyc'
 import { DateTime } from 'luxon'
 import MypvitSecretService from '../services/mypvit_secret_service.js'
 import MypvitTransactionService from '../services/mypvit_transaction_service.js'
 import MypvitKYCService from '../services/mypvit_kyc_service.js'
-import crypto from 'node:crypto'
 
 const CALLBACK_URL_CODE = '9ZOXW'
-const ADMIN_COMMISSION_RATE = 0.03 // 3% pour l'admin
 
 function generateOrderNumber(): string {
   return `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
@@ -138,37 +135,15 @@ export default class PayMobileMoneyController {
     return { ok: errors.length === 0, errors, cart }
   }
 
-  private async buildItemsFromCart(order: Order, cart: Cart): Promise<{ 
-    subtotal: number
-    count: number
-    merchantIds: string[]
-    merchantProducts: Map<string, { productId: string; productName: string; price: number; quantity: number; subtotal: number }[]>
-  }> {
+  private async buildItemsFromCart(order: Order, cart: Cart): Promise<{ subtotal: number; count: number }> {
     let subtotal = 0
     let count = 0
-    const merchantIds = new Set<string>()
-    const merchantProducts = new Map<string, { productId: string; productName: string; price: number; quantity: number; subtotal: number }[]>()
 
     for (const item of cart.items) {
       const p = await Product.findBy('id', item.product_id)
       if (!p) continue
 
-      // 🆕 Récupérer l'ID du propriétaire
-      merchantIds.add(p.user_id)
-      
-      if (!merchantProducts.has(p.user_id)) {
-        merchantProducts.set(p.user_id, [])
-      }
-
       const itemTotal = p.price * item.quantity
-      merchantProducts.get(p.user_id)!.push({
-        productId: p.id,
-        productName: p.name,
-        price: p.price,
-        quantity: item.quantity,
-        subtotal: itemTotal
-      })
-
       subtotal += itemTotal
 
       await OrderItem.create({
@@ -183,76 +158,7 @@ export default class PayMobileMoneyController {
       count++
     }
 
-    return { subtotal, count, merchantIds: Array.from(merchantIds), merchantProducts }
-  }
-
-  // 🆕 Créer un livreur Eden automatiquement
-  private async createEdenLivreur(): Promise<User> {
-    console.log('🆕 Création d\'un nouveau livreur Eden...')
-    
-    const livreurId = crypto.randomUUID()
-    const email = `edenlivreur_${Date.now()}@edenmarket.com`
-    const password = crypto.randomUUID()
-    
-    const livreur = await User.create({
-      id: livreurId,
-      full_name: `Livreur Eden ${Date.now().toString().slice(-6)}`,
-      email: email,
-      password: password,
-      role: 'edenlivreur',
-      is_verified: true,
-      is_available: true,
-      is_online: true,
-      verification_status: 'approved',
-      total_deliveries: 0,
-      total_earnings: 0,
-      rating: 0,
-      total_ratings: 0,
-      is_phone_verified: false,
-      is_email_verified: false,
-      certify_truth: true,
-      accept_escrow: true,
-    })
-    
-    console.log(`✅ Livreur Eden créé: ${livreur.full_name} (${livreur.id})`)
-    
-    // Créer son wallet
-    await Wallet.create({
-      user_id: livreur.id,
-      balance: 0,
-      currency: 'XAF',
-      status: 'active',
-    })
-    
-    console.log(`💼 Wallet créé pour ${livreur.full_name}`)
-    
-    return livreur
-  }
-
-  // 🆕 Crédite le wallet d'un utilisateur
-  private async creditWallet(userId: string, amount: number, description: string): Promise<void> {
-    try {
-      let wallet = await Wallet.findBy('user_id', userId)
-      
-      if (!wallet) {
-        wallet = await Wallet.create({
-          user_id: userId,
-          balance: 0,
-          currency: 'XAF',
-          status: 'active',
-        })
-        console.log(`  💼 Nouveau wallet créé pour ${userId}`)
-      }
-
-      const oldBalance = wallet.balance
-      wallet.balance += amount
-      await wallet.save()
-
-      console.log(`  💰 Wallet ${userId}: ${oldBalance} → ${wallet.balance} XAF (${description})`)
-    } catch (error: any) {
-      console.error(`  🔴 Erreur crédit wallet ${userId}:`, error.message)
-      throw error
-    }
+    return { subtotal, count }
   }
 
   // ==================== MÉTHODE PRINCIPALE ====================
@@ -338,10 +244,8 @@ export default class PayMobileMoneyController {
         payment_operator_simple: kyc.operator
       })
 
-      // 7. Créer les OrderItems et récupérer les infos marchands
-      const { count, merchantIds, merchantProducts } = await this.buildItemsFromCart(order, cart)
-
-      console.log('🏪 Marchands dans la commande:', merchantIds)
+      // 7. Créer les OrderItems
+      const { count } = await this.buildItemsFromCart(order, cart)
 
       // 8. Tracking initial
       await OrderTracking.create({
@@ -391,106 +295,6 @@ export default class PayMobileMoneyController {
           tracked_at: DateTime.now(),
         })
 
-        // ============================================================
-        // 🆕 DISTRIBUTION DE L'ARGENT (après paiement réussi)
-        // ============================================================
-        
-        const adminCommission = total * ADMIN_COMMISSION_RATE
-        console.log(`\n💼 ===== DISTRIBUTION FINANCIÈRE =====`)
-        console.log(`📊 Total commande: ${total} XAF`)
-        console.log(`📦 Sous-total produits: ${subtotal} XAF`)
-        console.log(`🚚 Frais livraison: ${shippingCost} XAF`)
-        console.log(`🏛️ Commission admin (3%): ${adminCommission} XAF`)
-        
-        // Créditer l'admin
-        const adminUser = await User.query()
-          .where('role', 'superadmin')
-          .orWhere('role', 'admin')
-          .first()
-        
-        if (adminUser) {
-          await this.creditWallet(adminUser.id, adminCommission, `Commission 3% - Commande #${order.order_number}`)
-        }
-
-        // Distribuer le prix des produits aux marchands
-        console.log(`\n📦 DISTRIBUTION AUX MARCHANDS:`)
-        
-        const totalAfterCommission = total - adminCommission
-        const commissionRatio = totalAfterCommission / total
-        
-        for (const merchantId of merchantIds) {
-          const merchant = await User.findBy('id', merchantId)
-          if (!merchant) continue
-
-          const products = merchantProducts.get(merchantId) || []
-          let merchantTotal = 0
-          
-          for (const product of products) {
-            merchantTotal += product.subtotal
-          }
-          
-          const merchantAmount = merchantTotal * commissionRatio
-          
-          console.log(`  👤 ${merchant.full_name}:`)
-          console.log(`     - Produits: ${products.map(p => p.productName).join(', ')}`)
-          console.log(`     - Montant: ${merchantAmount.toFixed(0)} XAF`)
-          
-          await this.creditWallet(merchant.id, merchantAmount, `Vente produits - Commande #${order.order_number}`)
-        }
-
-        // Distribuer les frais de livraison
-        if (shippingCost > 0) {
-          console.log(`\n🚚 FRAIS DE LIVRAISON: ${shippingCost} XAF`)
-          
-          let needEdenLivreur = false
-          
-          for (const merchantId of merchantIds) {
-            const merchant = await User.findBy('id', merchantId)
-            
-            if (merchant) {
-              console.log(`  👤 ${merchant.full_name} | has_livreur: ${merchant.has_livreur}`)
-              
-              if (merchant.has_livreur) {
-                const deliveryShare = shippingCost / merchantIds.length
-                console.log(`  ✅ Livreur personnel → +${deliveryShare} XAF`)
-                await this.creditWallet(merchant.id, deliveryShare, `Frais livraison (livreur personnel) - Commande #${order.order_number}`)
-              } else {
-                needEdenLivreur = true
-              }
-            }
-          }
-          
-          if (needEdenLivreur) {
-            console.log(`  🔍 Recherche d'un edenlivreur...`)
-            
-            let edenLivreur = await User.query()
-              .where('role', 'edenlivreur')
-              .where('is_verified', true)
-              .first()
-            
-            if (!edenLivreur) {
-              console.log(`  ⚠️ Aucun edenlivreur trouvé → Création automatique...`)
-              edenLivreur = await this.createEdenLivreur()
-            } else {
-              console.log(`  🛵 EdenLivreur trouvé: ${edenLivreur.full_name} (${edenLivreur.id})`)
-            }
-            
-            await this.creditWallet(edenLivreur.id, shippingCost, `Frais livraison - Commande #${order.order_number}`)
-            
-            order.livreur_id = edenLivreur.id
-            await order.save()
-            
-            await OrderTracking.create({
-              order_id: order.id,
-              status: 'pending',
-              description: `🛵 Livreur Eden assigné: ${edenLivreur.full_name}`,
-              tracked_at: DateTime.now(),
-            })
-          }
-        }
-
-        console.log(`\n✅ Distribution terminée`)
-
         await order.load('items')
 
         // ✅ 12. VIDER LE PANIER
@@ -505,9 +309,6 @@ export default class PayMobileMoneyController {
             orderId: order.id,
             orderNumber: order.order_number,
             total: order.total,
-            subtotal: order.subtotal,
-            shippingCost: order.shipping_cost,
-            adminCommission: adminCommission,
             status: 'pending_payment',
             customerName: order.customer_name,
             paymentMethod: kyc.operator,
