@@ -29,7 +29,7 @@ export default class GiveChangeController {
   }
 
   // 🆕 Envoie les 2% à l'admin
-  private async creditAdminFee(amount: number, userId: string, userName: string): Promise<void> {
+  private async creditAdminFee(amount: number, _userId: string, _userName: string): Promise<void> {
     try {
       const adminFee = amount * WITHDRAWAL_FEE_RATE
       
