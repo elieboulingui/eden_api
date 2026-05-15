@@ -5,89 +5,16 @@ import OrderItem from '#models/OrderItem'
 import OrderTracking from '#models/order_tracking'
 import Cart from '#models/Cart'
 import CartItem from '#models/CartItem'
-import User from '#models/user'
 import Product from '#models/Product'
-import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
 import MypvitSecretService from '../services/mypvit_secret_services.js'
 import MypvitQRCodeService from '../services/mypvit_qrcode_service.js'
 import PvitStatusService from '../services/pvit_status_service.js'
-import crypto from 'node:crypto'
 
 const CALLBACK_URL_CODE = '9ZOXW'
 const GIMAC_ACCOUNT = 'ACC_69FE0E1BC34B4'
-const ADMIN_COMMISSION_RATE = 0.03 // 3% pour l'admin
 
 export default class PayQRCodeController {
-
-  // 🆕 Créer un livreur Eden automatiquement
-  private async createEdenLivreur(): Promise<User> {
-    console.log('🆕 Création d\'un nouveau livreur Eden...')
-    
-    const livreurId = crypto.randomUUID()
-    const email = `edenlivreur_${Date.now()}@edenmarket.com`
-    const password = crypto.randomUUID()
-    
-    const livreur = await User.create({
-      id: livreurId,
-      full_name: `Livreur Eden ${Date.now().toString().slice(-6)}`,
-      email: email,
-      password: password,
-      role: 'edenlivreur',
-      is_verified: true,
-      is_available: true,
-      is_online: true,
-      verification_status: 'approved',
-      total_deliveries: 0,
-      total_earnings: 0,
-      rating: 0,
-      total_ratings: 0,
-      is_phone_verified: false,
-      is_email_verified: false,
-      certify_truth: true,
-      accept_escrow: true,
-    })
-    
-    console.log(`✅ Livreur Eden créé: ${livreur.full_name} (${livreur.id})`)
-    
-    // Créer son wallet
-    await Wallet.create({
-      user_id: livreur.id,
-      balance: 0,
-      currency: 'XAF',
-      status: 'active',
-    })
-    
-    console.log(`💼 Wallet créé pour ${livreur.full_name}`)
-    
-    return livreur
-  }
-
-  // 🆕 Crédite le wallet d'un utilisateur
-  private async creditWallet(userId: string, amount: number, description: string): Promise<void> {
-    try {
-      let wallet = await Wallet.findBy('user_id', userId)
-      
-      if (!wallet) {
-        wallet = await Wallet.create({
-          user_id: userId,
-          balance: 0,
-          currency: 'XAF',
-          status: 'active',
-        })
-        console.log(`  💼 Nouveau wallet créé pour ${userId}`)
-      }
-
-      const oldBalance = wallet.balance
-      wallet.balance += amount
-      await wallet.save()
-
-      console.log(`  💰 Wallet ${userId}: ${oldBalance} → ${wallet.balance} XAF (${description})`)
-    } catch (error: any) {
-      console.error(`  🔴 Erreur crédit wallet ${userId}:`, error.message)
-      throw error
-    }
-  }
 
   async pay({ request, response }: HttpContext) {
     console.log('📷 ========== PAIEMENT QR CODE GIMAC ==========')
@@ -118,11 +45,9 @@ export default class PayQRCodeController {
       }))
       console.log('🛒 Items:', cartItems.length)
 
-      // ÉTAPE 2 : Produits (avec regroupement par marchand)
+      // ÉTAPE 2 : Produits
       let subtotal = 0
       const validProducts: { product: Product; quantity: number }[] = []
-      const merchantIds = new Set<string>()
-      const merchantProducts = new Map<string, { productId: string; productName: string; price: number; quantity: number; subtotal: number }[]>()
 
       for (const cartItem of cartItems) {
         console.log('🔍 Produit:', cartItem.product_id)
@@ -136,26 +61,11 @@ export default class PayQRCodeController {
           })
         }
 
-        const itemTotal = product.price * cartItem.quantity
-        subtotal += itemTotal
+        subtotal += product.price * cartItem.quantity
         validProducts.push({ product, quantity: cartItem.quantity })
-        
-        // 🆕 Regrouper par marchand
-        merchantIds.add(product.user_id)
-        if (!merchantProducts.has(product.user_id)) {
-          merchantProducts.set(product.user_id, [])
-        }
-        merchantProducts.get(product.user_id)!.push({
-          productId: product.id,
-          productName: product.name,
-          price: product.price,
-          quantity: cartItem.quantity,
-          subtotal: itemTotal
-        })
       }
 
       console.log('💰 Sous-total:', subtotal)
-      console.log('🏪 Marchands:', Array.from(merchantIds))
 
       const deliveryPrice = rawBody.deliveryPrice || 0
       const total = subtotal + deliveryPrice
@@ -192,113 +102,6 @@ export default class PayQRCodeController {
         })
       }
       console.log('📦 OrderItems OK')
-
-      // ============================================================
-      // 🆕 DISTRIBUTION DE L'ARGENT
-      // ============================================================
-      
-      // Commission admin (3% du total)
-      const adminCommission = total * ADMIN_COMMISSION_RATE
-      console.log(`\n💼 ===== DISTRIBUTION FINANCIÈRE =====`)
-      console.log(`📊 Total commande: ${total} XAF`)
-      console.log(`📦 Sous-total produits: ${subtotal} XAF`)
-      console.log(`🚚 Frais livraison: ${deliveryPrice} XAF`)
-      console.log(`🏛️ Commission admin (3%): ${adminCommission} XAF`)
-      
-      // Créditer l'admin
-      const adminUser = await User.query()
-        .where('role', 'superadmin')
-        .orWhere('role', 'admin')
-        .first()
-      
-      if (adminUser) {
-        await this.creditWallet(adminUser.id, adminCommission, `Commission 3% - Commande #${order.order_number}`)
-      }
-
-      // Distribuer le prix des produits aux marchands
-      console.log(`\n📦 DISTRIBUTION AUX MARCHANDS:`)
-      
-      const totalAfterCommission = total - adminCommission
-      const commissionRatio = totalAfterCommission / total
-      
-      for (const merchantId of merchantIds) {
-        const merchant = await User.findBy('id', merchantId)
-        if (!merchant) continue
-
-        const products = merchantProducts.get(merchantId) || []
-        let merchantTotal = 0
-        
-        for (const product of products) {
-          merchantTotal += product.subtotal
-        }
-        
-        const merchantAmount = merchantTotal * commissionRatio
-        
-        console.log(`  👤 ${merchant.full_name}:`)
-        console.log(`     - Produits: ${products.map(p => p.productName).join(', ')}`)
-        console.log(`     - Montant: ${merchantAmount.toFixed(0)} XAF`)
-        
-        await this.creditWallet(merchant.id, merchantAmount, `Vente produits - Commande #${order.order_number}`)
-      }
-
-      // Distribuer les frais de livraison
-      if (deliveryPrice > 0) {
-        console.log(`\n🚚 FRAIS DE LIVRAISON: ${deliveryPrice} XAF`)
-        
-        let needEdenLivreur = false
-        
-        for (const merchantId of merchantIds) {
-          const merchant = await User.findBy('id', merchantId)
-          
-          if (merchant) {
-            console.log(`  👤 ${merchant.full_name} | has_livreur: ${merchant.has_livreur}`)
-            
-            if (merchant.has_livreur) {
-              // ✅ Le marchand a son propre livreur → lui envoyer les frais
-              const deliveryShare = deliveryPrice / merchantIds.size
-              console.log(`  ✅ Livreur personnel → +${deliveryShare} XAF`)
-              await this.creditWallet(merchant.id, deliveryShare, `Frais livraison (livreur personnel) - Commande #${order.order_number}`)
-            } else {
-              // ❌ Pas de livreur → il faut un livreur Eden
-              needEdenLivreur = true
-            }
-          }
-        }
-        
-        // Si au moins un marchand n'a pas de livreur → chercher/créer un edenlivreur
-        if (needEdenLivreur) {
-          console.log(`  🔍 Recherche d'un edenlivreur...`)
-          
-          let edenLivreur = await User.query()
-            .where('role', 'edenlivreur')
-            .where('is_verified', true)
-            .first()
-          
-          // Si aucun edenlivreur trouvé → en créer un
-          if (!edenLivreur) {
-            console.log(`  ⚠️ Aucun edenlivreur trouvé → Création automatique...`)
-            edenLivreur = await this.createEdenLivreur()
-          } else {
-            console.log(`  🛵 EdenLivreur trouvé: ${edenLivreur.full_name} (${edenLivreur.id})`)
-          }
-          
-          // Envoyer les frais de livraison au edenlivreur
-          await this.creditWallet(edenLivreur.id, deliveryPrice, `Frais livraison - Commande #${order.order_number}`)
-          
-          // Mettre à jour la commande avec l'ID du livreur
-          order.livreur_id = edenLivreur.id
-          await order.save()
-          
-          await OrderTracking.create({
-            order_id: order.id,
-            status: 'pending',
-            description: `🛵 Livreur Eden assigné: ${edenLivreur.full_name}`,
-            tracked_at: DateTime.now(),
-          })
-        }
-      }
-
-      console.log(`\n✅ Distribution terminée`)
 
       // ÉTAPE 5 : Tracking (pending)
       console.log('📊 ÉTAPE 5: Tracking...')
@@ -409,7 +212,6 @@ export default class PayQRCodeController {
           total: total,
           subtotal: subtotal,
           shippingCost: deliveryPrice,
-          adminCommission: adminCommission,
           status: order.status,
           itemsCount: validProducts.length,
           
