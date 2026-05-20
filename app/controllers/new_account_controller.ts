@@ -6,59 +6,6 @@ import jwt from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'linemarket'
 
-// ✅ Liste EXACTE des colonnes qui existent dans la table users
-const ALLOWED_USER_FIELDS = [
-  // Champs de base
-  'full_name', 'email', 'password', 'role', 'phone', 'address',
-  'country', 'neighborhood', 'avatar_url',
-  
-  // Infos personnelles
-  'birth_date', 'id_number', 'id_front_url', 'id_back_url',
-  'selfie_url', 'personal_phone', 'residence_address',
-  'is_phone_verified', 'is_email_verified',
-  
-  // Infos entreprise (marchand)
-  'commercial_name', 'shop_name', 'shop_description', 'vendor_type',
-  'whatsapp_phone', 'is_whatsapp_verified', 'shop_address',
-  'rccm_number', 'rccm_document_url', 'nif_number',
-  
-  // Paiement
-  'payment_method', 'airtel_number', 'moov_number',
-  'account_holder_name', 'bank_name', 'rib_document_url',
-  
-  // Boutique physique
-  'shop_latitude', 'shop_longitude',
-  'facade_photo1_url', 'facade_photo2_url',
-  'interior_photo1_url', 'interior_photo2_url',
-  'seeg_or_lease_url',
-  
-  // Vendeur en ligne
-  'stock_address', 'address_proof_url',
-  'facebook_url', 'instagram_url', 'tiktok_url', 'stock_video_url',
-  
-  // Références
-  'reference_1_name', 'reference_1_phone',
-  'reference_2_name', 'reference_2_phone',
-  
-  // Autres
-  'logo_url', 'cover_photo_url',
-  'signature', 'certify_truth', 'accept_escrow',
-  
-  // Statuts
-  'verification_status', 'is_verified',
-
-  // Partenaire (marchand uniquement)
-  'partner_code',
-
-  // Champs livreur
-  'vehicle_type', 'license_number', 'license_document_url',
-  'vehicle_document_url', 'availability',
-  'is_available', 'is_online',
-  'current_latitude', 'current_longitude',
-  'total_deliveries', 'total_earnings', 'rating', 'total_ratings',
-  'has_livreur',
-]
-
 export default class NewAccountController {
   async store({ request, response }: HttpContext) {
     console.log('🟢 [NewAccountController] ===== DÉBUT INSCRIPTION =====')
@@ -96,10 +43,10 @@ export default class NewAccountController {
       const isMerchant = role === 'merchant'
       const isLivreur = role === 'livreur'
 
-      // ✅ Construire userData avec SEULEMENT les champs qui existent
+      // ✅ Construire userData avec mapping des champs
       const userData: Record<string, any> = {}
 
-      // Mapping des champs frontend -> DB (uniquement ceux qui existent)
+      // Mapping des champs frontend -> DB
       const fieldMapping: Record<string, string> = {
         // Communs
         'full_name': 'full_name',
@@ -124,20 +71,20 @@ export default class NewAccountController {
         'residence_address': 'residence_address',
         
         // Entreprise (marchand)
-        'company_name': 'commercial_name',  // frontend -> DB
+        'company_name': 'commercial_name',
         'commercial_name': 'commercial_name',
         'shop_name': 'shop_name',
-        'products_sold': 'shop_description',  // frontend -> DB
+        'products_sold': 'shop_description',
         'shop_description': 'shop_description',
-        'business_type': 'vendor_type',  // frontend -> DB (converti)
+        'business_type': 'vendor_type',
         'vendor_type': 'vendor_type',
-        'company_phone': 'whatsapp_phone',  // frontend -> DB
+        'company_phone': 'whatsapp_phone',
         'whatsapp_phone': 'whatsapp_phone',
-        'business_address': 'shop_address',  // frontend -> DB
+        'business_address': 'shop_address',
         'shop_address': 'shop_address',
-        'business_document_url': 'rccm_document_url',  // frontend -> DB
+        'business_document_url': 'rccm_document_url',
         'rccm_document_url': 'rccm_document_url',
-        'business_sector': 'shop_description',  // frontend -> DB
+        'business_sector': 'shop_description',
         
         // Photos
         'logo_url': 'logo_url',
@@ -148,7 +95,7 @@ export default class NewAccountController {
         'facade_photo2_url': 'facade_photo2_url',
         'interior_photo1_url': 'interior_photo1_url',
         'interior_photo2_url': 'interior_photo2_url',
-        'seeg_document_url': 'seeg_or_lease_url',  // frontend -> DB
+        'seeg_document_url': 'seeg_or_lease_url',
         'seeg_or_lease_url': 'seeg_or_lease_url',
         
         // Vendeur en ligne
