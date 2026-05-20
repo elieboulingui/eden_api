@@ -56,6 +56,82 @@
   </div>
 </section>
 
+<!-- 🆕 SECTION MARCHANDS ACTIFS ET INACTIFS -->
+<section class="home-section" style="padding: 0 30px 40px;">
+  <header class="home-section-head" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px; flex-wrap: wrap; gap: 16px;">
+    <div>
+      <h2 style="font-size: 24px; font-weight: 700;">🛍️ Gestion des marchands</h2>
+      <p style="color: #64748b;">{{ totalMerchants ?? '0' }} marchands au total</p>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <button onclick="filterMerchants('all')" id="filterAllBtn" class="filter-btn" style="background: #3b82f6; color: white; padding: 8px 16px; border: none; border-radius: 10px; cursor: pointer;">Tous ({{ totalMerchants ?? '0' }})</button>
+      <button onclick="filterMerchants('active')" id="filterActiveBtn" class="filter-btn" style="background: #10b981; color: white; padding: 8px 16px; border: none; border-radius: 10px; cursor: pointer;">✅ Actifs ({{ activeMerchantsCount ?? '0' }})</button>
+      <button onclick="filterMerchants('inactive')" id="filterInactiveBtn" class="filter-btn" style="background: #ef4444; color: white; padding: 8px 16px; border: none; border-radius: 10px; cursor: pointer;">❌ Inactifs ({{ inactiveMerchantsCount ?? '0' }})</button>
+      <button onclick="filterMerchants('pending')" id="filterPendingBtn" class="filter-btn" style="background: #f59e0b; color: white; padding: 8px 16px; border: none; border-radius: 10px; cursor: pointer;">⏳ En attente ({{ pendingMerchantsCount ?? '0' }})</button>
+    </div>
+  </header>
+
+  <div id="merchantsGrid" class="home-grid home-grid-products" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 24px;">
+    @each(merchant in allMerchants)
+      @let(statusClass = merchant.verification_status === 'verified' || merchant.is_verified ? 'active' : (merchant.verification_status === 'pending' ? 'pending' : 'inactive'))
+      @let(statusColor = statusClass === 'active' ? '#10b981' : (statusClass === 'pending' ? '#f59e0b' : '#ef4444'))
+      @let(statusIcon = statusClass === 'active' ? '✅' : (statusClass === 'pending' ? '⏳' : '❌'))
+      @let(statusText = statusClass === 'active' ? 'Actif' : (statusClass === 'pending' ? 'En attente' : 'Inactif'))
+      
+      <div class="tile tile-product merchant-card" data-status="{{ statusClass }}" style="background: white; border-radius: 16px; padding: 20px; border-left: 4px solid {{ statusColor }}; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); transition: all 0.2s ease;">
+        <div class="tile-body">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <div style="width: 56px; height: 56px; background: linear-gradient(135deg, {{ statusColor }}, {{ statusColor }}80); border-radius: 16px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 20px;">
+                {{ merchant.initials ?? substr(merchant.full_name, 0, 2) ?? '🏪' }}
+              </div>
+              <div>
+                <h3 class="tile-title" style="margin: 0; font-size: 1rem; font-weight: 700;">{{ merchant.full_name ?? merchant.company_name ?? merchant.shop_name }}</h3>
+                <p style="margin: 4px 0 0; font-size: 0.7rem; color: #64748b;">{{ merchant.email }}</p>
+              </div>
+            </div>
+            <span class="status-pill" style="background: {{ statusColor }}20; color: {{ statusColor }}; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.7rem; white-space: nowrap;">
+              {{ statusIcon }} {{ statusText }}
+            </span>
+          </div>
+          
+          <div style="margin: 12px 0;">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
+              <span style="background: #f1f5f9; padding: 4px 10px; border-radius: 20px; font-size: 11px;">🏢 {{ merchant.commercial_name ?? merchant.shop_name ?? 'N/A' }}</span>
+              <span style="background: #f1f5f9; padding: 4px 10px; border-radius: 20px; font-size: 11px;">📞 {{ merchant.whatsapp_phone ?? merchant.phone ?? 'N/A' }}</span>
+            </div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+              <span style="background: #f1f5f9; padding: 4px 10px; border-radius: 20px; font-size: 11px;">📍 {{ merchant.shop_address ?? merchant.residence_address ?? 'N/A' }}</span>
+              <span style="background: #f1f5f9; padding: 4px 10px; border-radius: 20px; font-size: 11px;">📅 {{ merchant.created_at_formatted ?? 'N/A' }}</span>
+            </div>
+          </div>
+          
+          @if(merchant.verification_status === 'pending')
+            <div style="margin: 12px 0;">
+              <div style="background: #fef3c7; border-radius: 8px; padding: 8px; text-align: center;">
+                <p style="margin: 0; font-size: 11px; color: #d97706;">⏳ En attente de vérification</p>
+              </div>
+            </div>
+          @endif
+          
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button onclick="toggleMerchantStatus({{ merchant.id }}, '{{ statusClass }}')" 
+                    style="flex: 1; background: {{ statusClass === 'active' ? '#ef4444' : '#10b981' }}; color: white; border: none; border-radius: 10px; padding: 8px 12px; font-size: 12px; cursor: pointer;">
+              {{ statusClass === 'active' ? '❌ Désactiver' : (statusClass === 'pending' ? '✅ Approuver' : '✅ Activer') }}
+            </button>
+            <button onclick="viewMerchantDetails({{ merchant.id }})" 
+                    style="flex: 1; background: #3b82f6; color: white; border: none; border-radius: 10px; padding: 8px 12px; font-size: 12px; cursor: pointer;">
+              🔍 Voir détails
+            </button>
+          </div>
+        </div>
+      </div>
+    @else
+      <p class="home-empty">Aucun marchand enregistré.</p>
+    @end
+  </div>
+</section>
+
 <!-- Section Statut des commandes -->
 <section class="home-section" style="padding: 0 30px 40px;">
   <header class="home-section-head" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px;">
@@ -307,17 +383,33 @@
   </div>
 </div>
 
+<!-- MODAL pour les détails du marchand -->
+<div id="merchantModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1001; justify-content: center; align-items: center; overflow-y: auto;">
+  <div style="background: white; border-radius: 24px; max-width: 900px; width: 90%; margin: 40px auto; max-height: 90vh; overflow-y: auto; position: relative;">
+    <div style="position: sticky; top: 0; background: white; padding: 20px 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+      <h2 style="margin: 0; font-size: 24px; font-weight: 700; color: #1e293b;">🏪 Détails du marchand</h2>
+      <button onclick="closeMerchantModal()" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #64748b;">&times;</button>
+    </div>
+    <div id="merchantModalContent" style="padding: 24px;">
+      <div style="text-align: center; padding: 40px;">
+        <div class="loader" style="border: 3px solid #f3f3f3; border-top: 3px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+        <p>Chargement des détails...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
   }
   
-  .subscription-card {
+  .subscription-card, .merchant-card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
   
-  .subscription-card:hover {
+  .subscription-card:hover, .merchant-card:hover {
     transform: translateY(-4px);
     box-shadow: 0 12px 20px -8px rgba(0,0,0,0.15);
   }
@@ -333,6 +425,19 @@
 
   select[disabled]:hover {
     cursor: not-allowed;
+  }
+  
+  .filter-btn {
+    transition: all 0.2s ease;
+  }
+  
+  .filter-btn:hover {
+    opacity: 0.8;
+    transform: translateY(-2px);
+  }
+  
+  .filter-btn.active {
+    box-shadow: 0 0 0 2px white, 0 0 0 4px currentColor;
   }
 
   @media (max-width: 768px) {
@@ -353,6 +458,183 @@
 </style>
 
 <script>
+// 🆕 Filtrage des marchands
+let currentMerchantFilter = 'all';
+
+function filterMerchants(filter) {
+  currentMerchantFilter = filter;
+  const cards = document.querySelectorAll('.merchant-card');
+  
+  // Mettre à jour l'apparence des boutons
+  document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+  if (filter === 'all') document.getElementById('filterAllBtn')?.classList.add('active');
+  else if (filter === 'active') document.getElementById('filterActiveBtn')?.classList.add('active');
+  else if (filter === 'inactive') document.getElementById('filterInactiveBtn')?.classList.add('active');
+  else if (filter === 'pending') document.getElementById('filterPendingBtn')?.classList.add('active');
+  
+  cards.forEach(card => {
+    const status = card.dataset.status;
+    if (filter === 'all') {
+      card.style.display = 'block';
+    } else if (filter === 'active' && status === 'active') {
+      card.style.display = 'block';
+    } else if (filter === 'inactive' && status === 'inactive') {
+      card.style.display = 'block';
+    } else if (filter === 'pending' && status === 'pending') {
+      card.style.display = 'block';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+}
+
+// 🆕 Changer le statut d'un marchand
+async function toggleMerchantStatus(merchantId, currentStatus) {
+  let newStatus = '';
+  let actionText = '';
+  
+  if (currentStatus === 'active') {
+    newStatus = 'inactive';
+    actionText = 'désactiver';
+  } else if (currentStatus === 'pending') {
+    newStatus = 'active';
+    actionText = 'approuver';
+  } else {
+    newStatus = 'active';
+    actionText = 'activer';
+  }
+  
+  if (!confirm(`Êtes-vous sûr de vouloir ${actionText} ce marchand ?`)) return;
+  
+  try {
+    const response = await fetch(`/api/admin/merchants/${merchantId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify({ status: newStatus })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      alert(`✅ Marchand ${actionText} avec succès !`);
+      location.reload();
+    } else {
+      alert('Erreur: ' + (result.message || 'Impossible de changer le statut'));
+    }
+  } catch (error) {
+    console.error('❌ Erreur réseau:', error);
+    alert('Erreur réseau. Veuillez réessayer.');
+  }
+}
+
+// 🆕 Voir les détails d'un marchand
+async function viewMerchantDetails(merchantId) {
+  const modal = document.getElementById('merchantModal');
+  const modalContent = document.getElementById('merchantModalContent');
+  
+  modal.style.display = 'flex';
+  modalContent.innerHTML = `
+    <div style="text-align: center; padding: 40px;">
+      <div class="loader" style="border: 3px solid #f3f3f3; border-top: 3px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+      <p>Chargement des détails...</p>
+    </div>
+  `;
+  
+  try {
+    const response = await fetch(`/api/admin/merchants/${merchantId}`);
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      displayMerchantDetails(result.data);
+    } else {
+      modalContent.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;"><p>❌ Erreur lors du chargement des détails</p><button onclick="closeMerchantModal()" style="margin-top: 16px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer;">Fermer</button></div>`;
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    modalContent.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;"><p>❌ Erreur réseau</p><button onclick="closeMerchantModal()" style="margin-top: 16px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer;">Fermer</button></div>`;
+  }
+}
+
+// 🆕 Afficher les détails du marchand
+function displayMerchantDetails(merchant) {
+  const modalContent = document.getElementById('merchantModalContent');
+  
+  const statusColor = merchant.status === 'active' ? '#10b981' : merchant.status === 'pending' ? '#f59e0b' : '#ef4444';
+  const statusIcon = merchant.status === 'active' ? '✅' : merchant.status === 'pending' ? '⏳' : '❌';
+  const statusText = merchant.status === 'active' ? 'Actif' : merchant.status === 'pending' ? 'En attente' : 'Inactif';
+  
+  modalContent.innerHTML = `
+    <div style="margin-bottom: 24px;">
+      <div style="background: linear-gradient(135deg, ${statusColor}, ${statusColor}80); border-radius: 16px; padding: 20px; color: white; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+          <div>
+            <p style="opacity: 0.8; margin: 0 0 4px;">Marchand</p>
+            <h3 style="margin: 0; font-size: 22px;">${escapeHtml(merchant.full_name || merchant.company_name)}</h3>
+            <p style="margin: 4px 0 0; opacity: 0.8;">${escapeHtml(merchant.email)}</p>
+          </div>
+          <span style="background: rgba(255,255,255,0.2); color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px;">
+            ${statusIcon} ${statusText}
+          </span>
+        </div>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-bottom: 20px;">
+        <div style="background: #f8fafc; border-radius: 12px; padding: 16px;">
+          <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Nom commercial</p>
+          <p style="font-weight: 700; font-size: 16px; margin: 0;">${escapeHtml(merchant.commercial_name || merchant.shop_name || 'N/A')}</p>
+        </div>
+        <div style="background: #f8fafc; border-radius: 12px; padding: 16px;">
+          <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Téléphone WhatsApp</p>
+          <p style="font-weight: 700; font-size: 16px; margin: 0;">${escapeHtml(merchant.whatsapp_phone || merchant.phone || 'N/A')}</p>
+        </div>
+        <div style="background: #f8fafc; border-radius: 12px; padding: 16px;">
+          <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">RCCM</p>
+          <p style="font-weight: 700; font-size: 16px; margin: 0;">${escapeHtml(merchant.rccm_number || 'Non renseigné')}</p>
+        </div>
+      </div>
+      
+      <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+        <h4 style="margin: 0 0 12px; color: #1e293b;">📍 Adresse</h4>
+        <p style="margin: 0;">${escapeHtml(merchant.shop_address || merchant.business_address || merchant.residence_address || 'Non renseignée')}</p>
+      </div>
+      
+      <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+        <h4 style="margin: 0 0 12px; color: #1e293b;">📦 Produits</h4>
+        <p style="margin: 0;">${merchant.products_count ?? '0'} produits en vente</p>
+      </div>
+      
+      <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+        <h4 style="margin: 0 0 12px; color: #1e293b;">📅 Dates</h4>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+          <div>
+            <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Inscription</p>
+            <p style="font-weight: 600; margin: 0;">${merchant.created_at_formatted || 'N/A'}</p>
+          </div>
+          <div>
+            <p style="color: #64748b; margin: 0 0 4px; font-size: 12px;">Dernière activité</p>
+            <p style="font-weight: 600; margin: 0;">${merchant.last_activity || 'N/A'}</p>
+          </div>
+        </div>
+      </div>
+      
+      <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+        <button onclick="closeMerchantModal()" style="padding: 10px 20px; background: #e2e8f0; border: none; border-radius: 10px; cursor: pointer;">Fermer</button>
+        <button onclick="toggleMerchantStatus(${merchant.id}, '${merchant.status}'); closeMerchantModal();" 
+                style="padding: 10px 20px; background: ${merchant.status === 'active' ? '#ef4444' : '#10b981'}; color: white; border: none; border-radius: 10px; cursor: pointer;">
+          ${merchant.status === 'active' ? '❌ Désactiver' : (merchant.status === 'pending' ? '✅ Approuver' : '✅ Activer')}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function closeMerchantModal() {
+  document.getElementById('merchantModal').style.display = 'none';
+}
+
 // Fonction pour mettre à jour le statut d'une commande
 async function updateOrderStatus(orderId, newStatus) {
   const statusLabels = {
@@ -425,7 +707,6 @@ async function openSubscriptionModal(subscriptionId) {
   }
 }
 
-// Fonction pour afficher les détails dans la modal
 function displaySubscriptionDetails(sub) {
   const modalContent = document.getElementById('modalContent');
   
@@ -511,7 +792,6 @@ function displaySubscriptionDetails(sub) {
   `;
 }
 
-// Fonction pour fermer la modal
 function closeSubscriptionModal() {
   document.getElementById('subscriptionModal').style.display = 'none';
 }
@@ -523,7 +803,12 @@ document.getElementById('subscriptionModal').addEventListener('click', function(
   }
 });
 
-// Fonction d'échappement pour éviter les injections XSS
+document.getElementById('merchantModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeMerchantModal();
+  }
+});
+
 function escapeHtml(text) {
   if (!text) return '';
   const div = document.createElement('div');
@@ -549,6 +834,9 @@ document.addEventListener('DOMContentLoaded', function() {
     select.addEventListener('change', listener);
     select._listener = listener;
   });
+  
+  // Activer le filtre "Tous" par défaut
+  filterMerchants('all');
 });
 </script>
 @end
