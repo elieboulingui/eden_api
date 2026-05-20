@@ -6,11 +6,11 @@ import jwt from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'linemarket'
 
-// ✅ Liste des colonnes autorisées dans la table users (basée sur ce que le frontend envoie)
+// ✅ Liste EXACTE des colonnes qui existent dans la table users
 const ALLOWED_USER_FIELDS = [
   // Champs de base
   'full_name', 'email', 'password', 'role', 'phone', 'address',
-  'country', 'neighborhood', 'avatar_url', 'photo_url',
+  'country', 'neighborhood', 'avatar_url',
   
   // Infos personnelles
   'birth_date', 'id_number', 'id_front_url', 'id_back_url',
@@ -18,10 +18,9 @@ const ALLOWED_USER_FIELDS = [
   'is_phone_verified', 'is_email_verified',
   
   // Infos entreprise (marchand)
-  'company_name', 'commercial_name', 'shop_name', 'business_sector',
-  'shop_description', 'products_sold', 'business_type', 'vendor_type',
-  'company_phone', 'whatsapp_phone', 'business_address', 'shop_address',
-  'business_document_url', 'rccm_document_url', 'rccm_number', 'nif_number',
+  'commercial_name', 'shop_name', 'shop_description', 'vendor_type',
+  'whatsapp_phone', 'is_whatsapp_verified', 'shop_address',
+  'rccm_number', 'rccm_document_url', 'nif_number',
   
   // Paiement
   'payment_method', 'airtel_number', 'moov_number',
@@ -31,7 +30,7 @@ const ALLOWED_USER_FIELDS = [
   'shop_latitude', 'shop_longitude',
   'facade_photo1_url', 'facade_photo2_url',
   'interior_photo1_url', 'interior_photo2_url',
-  'seeg_or_lease_url', 'seeg_document_url',
+  'seeg_or_lease_url',
   
   // Vendeur en ligne
   'stock_address', 'address_proof_url',
@@ -51,7 +50,7 @@ const ALLOWED_USER_FIELDS = [
   // Partenaire (marchand uniquement)
   'partner_code',
 
-  // 🆕 CHAMPS LIVREUR
+  // Champs livreur
   'vehicle_type', 'license_number', 'license_document_url',
   'vehicle_document_url', 'availability',
   'is_available', 'is_online',
@@ -67,17 +66,15 @@ export default class NewAccountController {
     try {
       const rawData = request.body()
       
-      console.log('📥 [NewAccountController] Données brutes reçues:')
+      console.log('📥 Données brutes reçues:')
       console.log('  - email:', rawData.email)
       console.log('  - role:', rawData.role)
-      console.log('  - partner_code:', rawData.partner_code || 'null')
       console.log('  - has_livreur:', rawData.has_livreur)
 
       // Vérifier email
       if (rawData.email) {
         const existingUser = await User.findBy('email', rawData.email)
         if (existingUser) {
-          console.log('❌ Email déjà utilisé')
           return response.status(400).json({
             success: false,
             message: 'Cet email est déjà utilisé',
@@ -93,115 +90,135 @@ export default class NewAccountController {
           role = 'merchant'
         } else if (lowerRole === 'livreur') {
           role = 'livreur'
-        } else if (lowerRole === 'admin') {
-          role = 'admin'
         }
       }
 
       const isMerchant = role === 'merchant'
       const isLivreur = role === 'livreur'
 
-      // ✅ Construire userData directement à partir des champs du frontend
+      // ✅ Construire userData avec SEULEMENT les champs qui existent
       const userData: Record<string, any> = {}
 
-      // Liste des champs que le frontend peut envoyer (copier-coller depuis le frontend)
-      const frontendFields = [
+      // Mapping des champs frontend -> DB (uniquement ceux qui existent)
+      const fieldMapping: Record<string, string> = {
         // Communs
-        'full_name', 'email', 'password', 'role', 'country', 'neighborhood',
-        'phone', 'address', 'photo_url', 'avatar_url', 'is_phone_verified', 'is_email_verified',
+        'full_name': 'full_name',
+        'email': 'email',
+        'password': 'password',
+        'country': 'country',
+        'neighborhood': 'neighborhood',
+        'phone': 'phone',
+        'address': 'address',
+        'photo_url': 'avatar_url',
+        'clientPhotoUrl': 'avatar_url',
+        'livreurPhotoUrl': 'avatar_url',
+        'avatar_url': 'avatar_url',
         
-        // Client
-        'clientPhone', 'clientAddress', 'clientPhotoUrl',
+        // Infos personnelles
+        'birth_date': 'birth_date',
+        'id_number': 'id_number',
+        'id_front_url': 'id_front_url',
+        'id_back_url': 'id_back_url',
+        'selfie_url': 'selfie_url',
+        'personal_phone': 'personal_phone',
+        'residence_address': 'residence_address',
         
-        // Marchand - Personnel
-        'birth_date', 'id_number', 'id_front_url', 'id_back_url',
-        'selfie_url', 'personal_phone', 'residence_address',
+        // Entreprise (marchand)
+        'company_name': 'commercial_name',  // frontend -> DB
+        'commercial_name': 'commercial_name',
+        'shop_name': 'shop_name',
+        'products_sold': 'shop_description',  // frontend -> DB
+        'shop_description': 'shop_description',
+        'business_type': 'vendor_type',  // frontend -> DB (converti)
+        'vendor_type': 'vendor_type',
+        'company_phone': 'whatsapp_phone',  // frontend -> DB
+        'whatsapp_phone': 'whatsapp_phone',
+        'business_address': 'shop_address',  // frontend -> DB
+        'shop_address': 'shop_address',
+        'business_document_url': 'rccm_document_url',  // frontend -> DB
+        'rccm_document_url': 'rccm_document_url',
+        'business_sector': 'shop_description',  // frontend -> DB
         
-        // Marchand - Entreprise
-        'company_name', 'business_sector', 'products_sold', 'business_type',
-        'company_phone', 'business_address', 'business_document_url',
-        'logo_url', 'cover_photo_url',
+        // Photos
+        'logo_url': 'logo_url',
+        'cover_photo_url': 'cover_photo_url',
         
         // Boutique physique
-        'facade_photo1_url', 'facade_photo2_url',
-        'interior_photo1_url', 'interior_photo2_url', 'seeg_document_url',
+        'facade_photo1_url': 'facade_photo1_url',
+        'facade_photo2_url': 'facade_photo2_url',
+        'interior_photo1_url': 'interior_photo1_url',
+        'interior_photo2_url': 'interior_photo2_url',
+        'seeg_document_url': 'seeg_or_lease_url',  // frontend -> DB
+        'seeg_or_lease_url': 'seeg_or_lease_url',
         
         // Vendeur en ligne
-        'stock_address', 'address_proof_url',
-        'facebook_url', 'instagram_url', 'tiktok_url', 'stock_video_url',
-        'reference_1_name', 'reference_1_phone',
-        'reference_2_name', 'reference_2_phone',
+        'stock_address': 'stock_address',
+        'address_proof_url': 'address_proof_url',
+        'facebook_url': 'facebook_url',
+        'instagram_url': 'instagram_url',
+        'tiktok_url': 'tiktok_url',
+        'stock_video_url': 'stock_video_url',
+        
+        // Références
+        'reference_1_name': 'reference_1_name',
+        'reference_1_phone': 'reference_1_phone',
+        'reference_2_name': 'reference_2_name',
+        'reference_2_phone': 'reference_2_phone',
         
         // Signature
-        'signature', 'certify_truth', 'accept_escrow', 'has_livreur',
+        'signature': 'signature',
+        'certify_truth': 'certify_truth',
+        'accept_escrow': 'accept_escrow',
+        'has_livreur': 'has_livreur',
         
         // Livreur
-        'livreurPhone', 'vehicle_type', 'license_number',
-        'license_document_url', 'vehicle_document_url', 'livreurPhotoUrl', 'availability',
+        'vehicle_type': 'vehicle_type',
+        'license_number': 'license_number',
+        'license_document_url': 'license_document_url',
+        'vehicle_document_url': 'vehicle_document_url',
+        'availability': 'availability',
         
         // Statuts
-        'verification_status', 'is_verified', 'is_whatsapp_verified',
-        
-        // Partner
-        'partner_code',
-      ]
+        'verification_status': 'verification_status',
+        'is_verified': 'is_verified',
+        'is_phone_verified': 'is_phone_verified',
+        'is_email_verified': 'is_email_verified',
+        'is_whatsapp_verified': 'is_whatsapp_verified',
+      }
 
-      // Copier tous les champs du frontend qui sont dans ALLOWED_USER_FIELDS
-      for (const key of frontendFields) {
-        if (rawData[key] !== undefined && rawData[key] !== null && rawData[key] !== '') {
-          // Mapper les noms de champs si nécessaire
-          let dbField = key
-          
-          // Mappings spécifiques
-          const mappings: Record<string, string> = {
-            'clientPhone': 'phone',
-            'clientAddress': 'address',
-            'clientPhotoUrl': 'avatar_url',
-            'livreurPhone': 'phone',
-            'livreurPhotoUrl': 'avatar_url',
-            'company_name': 'commercial_name',
-            'business_sector': 'shop_description',
-            'products_sold': 'shop_description',
-            'company_phone': 'whatsapp_phone',
-            'business_address': 'shop_address',
-            'seeg_document_url': 'seeg_or_lease_url',
-            'photo_url': 'avatar_url',
-          }
-          
-          dbField = mappings[key] || key
-          
-          if (ALLOWED_USER_FIELDS.includes(dbField)) {
-            userData[dbField] = rawData[key]
-          }
+      // Appliquer le mapping
+      for (const [frontField, dbField] of Object.entries(fieldMapping)) {
+        if (rawData[frontField] !== undefined && rawData[frontField] !== null && rawData[frontField] !== '') {
+          userData[dbField] = rawData[frontField]
         }
       }
 
-      // ✅ Traitement spécial pour les URLs de photo
-      if (rawData.photo_url && !userData.avatar_url) {
-        userData.avatar_url = rawData.photo_url
-      }
-      if (rawData.clientPhotoUrl && !userData.avatar_url) {
-        userData.avatar_url = rawData.clientPhotoUrl
-      }
-      if (rawData.livreurPhotoUrl && !userData.avatar_url) {
-        userData.avatar_url = rawData.livreurPhotoUrl
+      // Conversion spéciale pour business_type -> vendor_type
+      if (rawData.business_type) {
+        if (rawData.business_type === 'physique') {
+          userData.vendor_type = 'boutique_physique'
+        } else if (rawData.business_type === 'ligne') {
+          userData.vendor_type = 'vendeur_ligne'
+        }
       }
 
       // ✅ PARTNER_CODE pour les marchands
       if (isMerchant) {
         userData.partner_code = rawData.partner_code || 'eden_client_nathjosh'
         console.log('🔗 Partner code:', userData.partner_code)
-      } else {
-        userData.partner_code = null
       }
 
-      // ✅ Statuts par défaut
+      // ✅ Valeurs par défaut
+      userData.role = role
+      userData.is_phone_verified = userData.is_phone_verified ?? false
+      userData.is_email_verified = userData.is_email_verified ?? false
+      userData.is_whatsapp_verified = userData.is_whatsapp_verified ?? false
+
       if (isMerchant || isLivreur) {
         userData.verification_status = userData.verification_status || 'pending'
-        userData.is_verified = userData.is_verified || false
+        userData.is_verified = userData.is_verified ?? false
       }
 
-      // ✅ Valeurs par défaut pour livreur
       if (isLivreur) {
         userData.is_available = userData.is_available ?? true
         userData.is_online = userData.is_online ?? false
@@ -212,22 +229,15 @@ export default class NewAccountController {
         userData.has_livreur = userData.has_livreur ?? false
       }
 
-      // ✅ S'assurer que les champs requis sont présents
-      if (!userData.full_name && rawData.full_name) {
-        userData.full_name = rawData.full_name
-      }
-      if (!userData.full_name && rawData.first_name && rawData.last_name) {
-        userData.full_name = `${rawData.first_name} ${rawData.last_name}`.trim()
-      }
+      // S'assurer que full_name est présent
       if (!userData.full_name) {
-        userData.full_name = 'Utilisateur'
-      }
-
-      if (!userData.email && rawData.email) {
-        userData.email = rawData.email
-      }
-      if (!userData.password && rawData.password) {
-        userData.password = rawData.password
+        if (rawData.full_name) {
+          userData.full_name = rawData.full_name
+        } else if (rawData.first_name && rawData.last_name) {
+          userData.full_name = `${rawData.first_name} ${rawData.last_name}`.trim()
+        } else {
+          userData.full_name = 'Utilisateur'
+        }
       }
 
       // Vérifier les champs requis
@@ -244,19 +254,16 @@ export default class NewAccountController {
         })
       }
 
-      // Définir le rôle
-      userData.role = role
-
-      console.log('✅ [NewAccountController] Données finales pour la DB:')
-      console.log('  - Nombre de champs:', Object.keys(userData).length)
+      console.log('✅ Données finales pour la DB:')
       console.log('  - Champs:', Object.keys(userData).join(', '))
       console.log('  - Role:', userData.role)
+      console.log('  - vendor_type:', userData.vendor_type || 'non défini')
       console.log('  - has_livreur:', userData.has_livreur)
 
       // Créer l'utilisateur
       const user = await User.create(userData)
 
-      console.log('✅ Utilisateur créé avec succès! ID:', user.id)
+      console.log('✅ Utilisateur créé! ID:', user.id)
 
       // Créer le wallet pour marchand ou livreur
       let wallet = null
@@ -270,8 +277,7 @@ export default class NewAccountController {
           })
           console.log(`💰 Wallet créé pour ${role}`)
         } catch (walletError: unknown) {
-          const error = walletError as Error
-          console.error('⚠️ Erreur création wallet:', error.message)
+          console.error('⚠️ Erreur création wallet:', (walletError as Error).message)
         }
       }
 
@@ -287,7 +293,7 @@ export default class NewAccountController {
         { expiresIn: '7d' }
       )
 
-      console.log('🟢 [NewAccountController] ===== FIN INSCRIPTION =====')
+      console.log('🟢 FIN INSCRIPTION - SUCCÈS')
 
       return response.status(201).json({
         success: true,
@@ -310,7 +316,7 @@ export default class NewAccountController {
       })
 
     } catch (error: unknown) {
-      const err = error as any
+      const err = error as Error
       console.error('💥 ERREUR:', err.message)
       console.error('💥 Stack:', err.stack)
 
