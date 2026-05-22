@@ -7,9 +7,9 @@ import User from '#models/user'
 export default class ProductsController {
   
   /**
-   * ✅ Ajouter les infos de livraison à un produit
+   * ✅ Enrichit un produit avec toutes ses informations (images, livraison, etc.)
    */
-  private async enrichProductWithDelivery(product: any, zone?: string): Promise<any> {
+  private async enrichProductWithDelivery(productData: any, zone?: string): Promise<any> {
     let merchant = null
     let deliveryInfo = {
       deliveryZones: [] as { zone: string; fee: number }[],
@@ -17,11 +17,19 @@ export default class ProductsController {
       servesZone: false,
     }
 
+    // Récupérer le produit complet avec ses relations
+    const product = await Product.query()
+      .where('id', productData.id)
+      .preload('user')
+      .preload('categoryRelation')
+      .first()
+
+    if (!product) return productData
+
     if (product.user_id) {
       merchant = await User.find(product.user_id)
       
       if (merchant) {
-        // ✅ Récupérer les zones directement depuis la colonne JSON
         const zones = merchant.delivery_zones || {}
         
         deliveryInfo = {
@@ -35,9 +43,46 @@ export default class ProductsController {
       }
     }
 
+    // ✅ Récupérer toutes les informations du produit
+    const json = product.toJSON()
+    
     return {
-      ...product,
+      ...json,
+      // ✅ Catégorie
       categoryName: product.categoryRelation?.name || null,
+      
+      // ✅ TOUTES LES IMAGES
+      images: product.allImages,
+      imagesCount: product.imagesCount,
+      image_url: product.image_url,
+      image_url_2: product.imageUrl2,
+      image_url_3: product.imageUrl3,
+      image_url_4: product.imageUrl4,
+      image_url_5: product.imageUrl5,
+      
+      // ✅ INFORMATIONS DE BOOST
+      isBoostActive: product.isBoostActive,
+      boostMultiplier: product.boostMultiplier,
+      boostLevel: product.boostLevel,
+      boostBadge: product.boostBadge,
+      boostBadgeConfig: product.boostBadgeConfig,
+      boostCardStyle: product.boostCardStyle,
+      boostRemainingDays: product.boostRemainingDays,
+      boostRemainingHours: product.boostRemainingHours,
+      boostProgressPercentage: product.boostProgressPercentage,
+      boostConversionRate: product.boostConversionRate,
+      boostScore: product.boostScore,
+      boostViews: product.boostViews,
+      boostClicks: product.boostClicks,
+      boostSales: product.boostSales,
+      
+      // ✅ INFORMATIONS SUR LES RÉDUCTIONS
+      discountPercentage: product.discountPercentage,
+      savings: product.savings,
+      hasDiscount: product.hasDiscount,
+      isInStock: product.isInStock,
+      
+      // ✅ MARCHAND
       merchant: merchant ? {
         id: merchant.id,
         full_name: merchant.full_name,
@@ -49,12 +94,13 @@ export default class ProductsController {
         neighborhood: merchant.neighborhood,
         is_verified: merchant.is_verified,
         logo_url: merchant.logo_url,
-        // ✅ Ajouter les zones du marchand
         delivery_zones: Object.entries(merchant.delivery_zones || {}).map(([z, fee]) => ({
           zone: z.charAt(0).toUpperCase() + z.slice(1),
           fee: Number(fee),
         })),
       } : null,
+      
+      // ✅ LIVRAISON
       delivery: deliveryInfo,
     }
   }
@@ -86,7 +132,7 @@ export default class ProductsController {
       const products = await query.paginate(page, limit)
 
       const data = await Promise.all(
-        products.all().map((product) => this.enrichProductWithDelivery(product.toJSON(), zone))
+        products.all().map((product) => this.enrichProductWithDelivery(product, zone))
       )
 
       return response.json({
@@ -131,7 +177,7 @@ export default class ProductsController {
         .limit(limit)
 
       const data = await Promise.all(
-        products.map((product) => this.enrichProductWithDelivery(product.toJSON(), zone))
+        products.map((product) => this.enrichProductWithDelivery(product, zone))
       )
 
       return response.json({
@@ -171,7 +217,7 @@ export default class ProductsController {
         .paginate(page, limit)
 
       const data = await Promise.all(
-        products.all().map((product) => this.enrichProductWithDelivery(product.toJSON(), zone))
+        products.all().map((product) => this.enrichProductWithDelivery(product, zone))
       )
 
       return response.json({
@@ -222,7 +268,6 @@ export default class ProductsController {
       const deliveryFee = merchant.getDeliveryFee(zone)
       const servesZone = merchant.servesZone(zone)
 
-      // ✅ Zones formatées
       const zones = Object.entries(merchant.delivery_zones || {}).map(([z, fee]) => ({
         zone: z.charAt(0).toUpperCase() + z.slice(1),
         fee: Number(fee),
@@ -233,10 +278,21 @@ export default class ProductsController {
         data: {
           product_id: product.id,
           product_name: product.name,
+          // ✅ TOUTES LES IMAGES DU PRODUIT
+          product_images: product.allImages,
+          product_images_count: product.imagesCount,
+          product_image_url: product.image_url,
+          product_image_url_2: product.imageUrl2,
+          product_image_url_3: product.imageUrl3,
+          product_image_url_4: product.imageUrl4,
+          product_image_url_5: product.imageUrl5,
           zone,
           delivery_fee: deliveryFee,
           serves_zone: servesZone,
           merchant_zones: zones,
+          // ✅ INFORMATIONS DE BOOST
+          is_boosted: product.isBoosted,
+          boost_multiplier: product.boostMultiplier,
         },
       })
     } catch (error: unknown) {
@@ -264,7 +320,6 @@ export default class ProductsController {
         })
       }
 
-      // ✅ Zones formatées
       const zones = Object.entries(merchant.delivery_zones || {}).map(([z, fee]) => ({
         zone: z.charAt(0).toUpperCase() + z.slice(1),
         fee: Number(fee),
