@@ -114,12 +114,39 @@ export default class ProductsController {
         }
       }
 
-      // Formatage avec categoryName
+      // Formatage avec categoryName et TOUTES les images
       const data = products.all().map((product) => {
         const json = product.toJSON()
         return {
           ...json,
-          categoryName: product.categoryRelation?.name || null
+          categoryName: product.categoryRelation?.name || null,
+          // ✅ TOUTES LES IMAGES
+          images: product.allImages,
+          imagesCount: product.imagesCount,
+          image_url_2: product.imageUrl2,
+          image_url_3: product.imageUrl3,
+          image_url_4: product.imageUrl4,
+          image_url_5: product.imageUrl5,
+          // ✅ INFORMATIONS DE BOOST
+          isBoostActive: product.isBoostActive,
+          boostMultiplier: product.boostMultiplier,
+          boostLevel: product.boostLevel,
+          boostBadge: product.boostBadge,
+          boostBadgeConfig: product.boostBadgeConfig,
+          boostCardStyle: product.boostCardStyle,
+          boostRemainingDays: product.boostRemainingDays,
+          boostRemainingHours: product.boostRemainingHours,
+          boostProgressPercentage: product.boostProgressPercentage,
+          boostConversionRate: product.boostConversionRate,
+          boostScore: product.boostScore,
+          boostViews: product.boostViews,
+          boostClicks: product.boostClicks,
+          boostSales: product.boostSales,
+          // ✅ AUTRES INFORMATIONS UTILES
+          discountPercentage: product.discountPercentage,
+          savings: product.savings,
+          hasDiscount: product.hasDiscount,
+          isInStock: product.isInStock
         }
       })
 
@@ -170,7 +197,34 @@ export default class ProductsController {
       const json = product.toJSON()
       const data = {
         ...json,
-        categoryName: product.categoryRelation?.name || null
+        categoryName: product.categoryRelation?.name || null,
+        // ✅ TOUTES LES IMAGES
+        images: product.allImages,
+        imagesCount: product.imagesCount,
+        image_url_2: product.imageUrl2,
+        image_url_3: product.imageUrl3,
+        image_url_4: product.imageUrl4,
+        image_url_5: product.imageUrl5,
+        // ✅ INFORMATIONS DE BOOST
+        isBoostActive: product.isBoostActive,
+        boostMultiplier: product.boostMultiplier,
+        boostLevel: product.boostLevel,
+        boostBadge: product.boostBadge,
+        boostBadgeConfig: product.boostBadgeConfig,
+        boostCardStyle: product.boostCardStyle,
+        boostRemainingDays: product.boostRemainingDays,
+        boostRemainingHours: product.boostRemainingHours,
+        boostProgressPercentage: product.boostProgressPercentage,
+        boostConversionRate: product.boostConversionRate,
+        boostScore: product.boostScore,
+        boostViews: product.boostViews,
+        boostClicks: product.boostClicks,
+        boostSales: product.boostSales,
+        // ✅ AUTRES INFORMATIONS UTILES
+        discountPercentage: product.discountPercentage,
+        savings: product.savings,
+        hasDiscount: product.hasDiscount,
+        isInStock: product.isInStock
       }
 
       return response.status(200).json({
@@ -198,6 +252,10 @@ export default class ProductsController {
         'stock',
         'user_id',
         'image_url',
+        'image_url_2',
+        'image_url_3',
+        'image_url_4',
+        'image_url_5',
         'category_id',
         'origin',
         'weight',
@@ -258,7 +316,19 @@ export default class ProductsController {
       const json = product.toJSON()
       const result = {
         ...json,
-        categoryName: product.categoryRelation?.name || null
+        categoryName: product.categoryRelation?.name || null,
+        // ✅ TOUTES LES IMAGES
+        images: product.allImages,
+        imagesCount: product.imagesCount,
+        image_url_2: product.imageUrl2,
+        image_url_3: product.imageUrl3,
+        image_url_4: product.imageUrl4,
+        image_url_5: product.imageUrl5,
+        isBoostActive: product.isBoostActive,
+        discountPercentage: product.discountPercentage,
+        savings: product.savings,
+        hasDiscount: product.hasDiscount,
+        isInStock: product.isInStock
       }
 
       return response.status(201).json({
@@ -312,6 +382,10 @@ export default class ProductsController {
         'description',
         'stock',
         'image_url',
+        'image_url_2',
+        'image_url_3',
+        'image_url_4',
+        'image_url_5',
         'category_id',
         'origin',
         'weight',
@@ -332,7 +406,19 @@ export default class ProductsController {
       const json = product.toJSON()
       const result = {
         ...json,
-        categoryName: product.categoryRelation?.name || null
+        categoryName: product.categoryRelation?.name || null,
+        // ✅ TOUTES LES IMAGES
+        images: product.allImages,
+        imagesCount: product.imagesCount,
+        image_url_2: product.imageUrl2,
+        image_url_3: product.imageUrl3,
+        image_url_4: product.imageUrl4,
+        image_url_5: product.imageUrl5,
+        isBoostActive: product.isBoostActive,
+        discountPercentage: product.discountPercentage,
+        savings: product.savings,
+        hasDiscount: product.hasDiscount,
+        isInStock: product.isInStock
       }
 
       return response.status(200).json({
@@ -451,7 +537,19 @@ export default class ProductsController {
         const json = product.toJSON()
         return {
           ...json,
-          categoryName: product.categoryRelation?.name || null
+          categoryName: product.categoryRelation?.name || null,
+          // ✅ TOUTES LES IMAGES
+          images: product.allImages,
+          imagesCount: product.imagesCount,
+          image_url_2: product.imageUrl2,
+          image_url_3: product.imageUrl3,
+          image_url_4: product.imageUrl4,
+          image_url_5: product.imageUrl5,
+          isBoostActive: product.isBoostActive,
+          discountPercentage: product.discountPercentage,
+          savings: product.savings,
+          hasDiscount: product.hasDiscount,
+          isInStock: product.isInStock
         }
       })
 
