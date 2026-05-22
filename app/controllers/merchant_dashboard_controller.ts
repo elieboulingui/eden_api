@@ -1329,12 +1329,20 @@ export default class MerchantDashboardController {
 async createProduct({ params, request, response }: HttpContext) {
   try {
     const { userId } = params
-    const { name, description, price, stock, category_name, image_url } = request.only([
-      'name', 'description', 'price', 'stock', 'category_name', 'image_url',
+    // ✅ AJOUT des 5 images
+    const { 
+      name, description, price, stock, category_name, 
+      image_url, image_url_2, image_url_3, image_url_4, image_url_5 
+    } = request.only([
+      'name', 'description', 'price', 'stock', 'category_name',
+      'image_url', 'image_url_2', 'image_url_3', 'image_url_4', 'image_url_5'
     ])
 
     console.log('🔵 ========== DÉBUT CRÉATION PRODUIT ==========')
-    console.log('📦 Données reçues:', { userId, name, description, price, stock, category_name, image_url })
+    console.log('📦 Données reçues:', { 
+      userId, name, description, price, stock, category_name,
+      image_url, image_url_2, image_url_3, image_url_4, image_url_5 
+    })
 
     if (!name || name.trim() === '') {
       return response.badRequest({ success: false, message: 'Le nom du produit est requis' })
@@ -1369,13 +1377,18 @@ async createProduct({ params, request, response }: HttpContext) {
       categoryId = category.id
     }
 
-    // Création du produit
+    // ✅ Création du produit avec LES 5 IMAGES
     const productData: any = {
       name: name.trim(),
       description: description || '',
       price: parseFloat(price) || 0,
       stock: parseInt(stock) || 0,
-      image_url: image_url || null,
+      // ✅ LES 5 IMAGES
+      image_url: image_url?.trim() || null,
+      image_url_2: image_url_2?.trim() || null,
+      image_url_3: image_url_3?.trim() || null,
+      image_url_4: image_url_4?.trim() || null,
+      image_url_5: image_url_5?.trim() || null,
       user_id: user.id,
       category_id: categoryId,
       isNew: true,
@@ -1417,6 +1430,15 @@ async createProduct({ params, request, response }: HttpContext) {
       }
     }
 
+    // ✅ Compter les images pour le retour
+    const images = [
+      product.image_url,
+      product.image_url_2,
+      product.image_url_3,
+      product.image_url_4,
+      product.image_url_5
+    ].filter(img => img && img.trim() !== '')
+
     console.log('🔵 ========== FIN CRÉATION PRODUIT (SUCCÈS) ==========')
     
     return response.created({
@@ -1428,7 +1450,14 @@ async createProduct({ params, request, response }: HttpContext) {
         stock: product.stock,
         category_id: product.category_id,
         category_name: category_name || null,
+        // ✅ TOUTES LES IMAGES
+        images: images,
+        images_count: images.length,
         image_url: product.image_url,
+        image_url_2: product.image_url_2,
+        image_url_3: product.image_url_3,
+        image_url_4: product.image_url_4,
+        image_url_5: product.image_url_5,
       },
       message: `Produit "${name}" créé avec succès`,
     })
@@ -1439,12 +1468,10 @@ async createProduct({ params, request, response }: HttpContext) {
     console.error('❌ Code d\'erreur:', error.code)
     console.error('❌ Détails complets:', error)
     
-    // Afficher la requête SQL qui a échoué
     if (error.sql) {
       console.error('❌ SQL échoué:', error.sql)
     }
     
-    // Afficher les paramètres de la requête
     if (error.parameters) {
       console.error('❌ Paramètres:', error.parameters)
     }
@@ -1462,183 +1489,210 @@ async createProduct({ params, request, response }: HttpContext) {
   }
 }
 
-  async updateProduct({ params, request, response }: HttpContext) {
-    try {
-      const { userId, productId } = params
-      const { name, description, price, stock, category_name, image_url } = request.only([
-        'name', 'description', 'price', 'stock', 'category_name', 'image_url'
-      ])
+async updateProduct({ params, request, response }: HttpContext) {
+  try {
+    const { userId, productId } = params
+    // ✅ AJOUT des 5 images
+    const { 
+      name, description, price, stock, category_name,
+      image_url, image_url_2, image_url_3, image_url_4, image_url_5 
+    } = request.only([
+      'name', 'description', 'price', 'stock', 'category_name',
+      'image_url', 'image_url_2', 'image_url_3', 'image_url_4', 'image_url_5'
+    ])
 
-      const user = await User.findBy('id', userId)
+    const user = await User.findBy('id', userId)
 
-      if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
-        return response.forbidden({ success: false, message: 'Non autorisé' })
-      }
+    if (!user || (user.role !== 'marchant' && user.role !== 'merchant')) {
+      return response.forbidden({ success: false, message: 'Non autorisé' })
+    }
 
-      const product = await Product.query()
-        .where('id', productId)
+    const product = await Product.query()
+      .where('id', productId)
+      .where('user_id', user.id)
+      .first()
+
+    if (!product) {
+      return response.notFound({ success: false, message: 'Produit non trouvé' })
+    }
+
+    const oldPrice = product.price
+    let newPrice = oldPrice
+
+    let categoryId: string | null = null
+
+    if (category_name && category_name.trim() !== '') {
+      const category = await Category.query()
+        .where('name', category_name)
         .where('user_id', user.id)
         .first()
 
-      if (!product) {
-        return response.notFound({ success: false, message: 'Produit non trouvé' })
+      if (category) {
+        categoryId = category.id
+      } else {
+        const newCategory = await Category.create({
+          name: category_name,
+          slug: category_name.toLowerCase().replace(/\s+/g, '-'),
+          user_id: user.id,
+        })
+        categoryId = newCategory.id
       }
-
-      const oldPrice = product.price
-      let newPrice = oldPrice
-
-      let categoryId: string | null = null
-
-      if (category_name && category_name.trim() !== '') {
-        const category = await Category.query()
-          .where('name', category_name)
-          .where('user_id', user.id)
-          .first()
-
-        if (category) {
-          categoryId = category.id
-        } else {
-          const newCategory = await Category.create({
-            name: category_name,
-            slug: category_name.toLowerCase().replace(/\s+/g, '-'),
-            user_id: user.id,
-          })
-          categoryId = newCategory.id
-        }
-      }
-
-      if (name) product.name = name
-      if (description !== undefined) product.description = description
-      if (price) {
-        newPrice = parseFloat(price)
-        product.price = newPrice
-      }
-      if (stock !== undefined) product.stock = parseInt(stock)
-      if (image_url !== undefined) product.image_url = image_url
-      if (categoryId) product.category_id = categoryId
-
-      let promotionMessage = ''
-      let promotionCreated: any = null
-      
-      if (price && newPrice < oldPrice) {
-        const reductionPercent = ((oldPrice - newPrice) / oldPrice) * 100
-        
-        product.isOnSale = true
-        product.isNew = false
-        
-        if ('old_price' in product) {
-          product.old_price = oldPrice
-        }
-
-        try {
-          const promoEndDate = DateTime.now().plus({ days: 30 })
-          
-          const promotion = await Promotion.create({
-            title: `🔥 ${reductionPercent.toFixed(0)}% sur ${product.name}`,
-            description: `Profitez de ${reductionPercent.toFixed(0)}% de réduction sur ${product.name} ! Ancien prix: ${oldPrice} FCFA, Nouveau prix: ${newPrice} FCFA. Offre limitée !`,
-            image_url: product.image_url,
-            banner_image: product.image_url,
-            type: 'flash_sale',
-            discount_percentage: Math.round(reductionPercent),
-            discount_amount: oldPrice - newPrice,
-            category: category_name || null,
-            product_ids: JSON.stringify([product.id]),
-            link: `/product/${product.id}`,
-            button_text: '🌐 Voir le produit',
-            min_order_amount: null,
-            start_date: DateTime.now(),
-            end_date: promoEndDate,
-            status: 'active',
-            priority: Math.round(reductionPercent),
-          })
-
-          promotionCreated = {
-            id: promotion.id,
-            title: promotion.title,
-            discount_percentage: promotion.discount_percentage,
-            end_date: promotion.end_date
-          }
-
-          promotionMessage = ` ✅ PROMO CRÉÉE : -${reductionPercent.toFixed(0)}% sur "${product.name}" ! Visible jusqu'au ${promoEndDate.toFormat('dd/MM/yyyy')}.`
-          
-          console.log(`🎉 Promotion créée: ${promotion.title}`)
-        } catch (promoError: any) {
-          console.error('Erreur création promotion:', promoError)
-          promotionMessage = ` ⚠️ Prix réduit de ${reductionPercent.toFixed(0)}% mais la promotion n'a pas pu être créée.`
-        }
-        
-      } else if (price && newPrice >= oldPrice && oldPrice > 0) {
-        product.isOnSale = false
-        
-        try {
-          const existingPromos = await Promotion.query()
-            .where('product_ids', 'LIKE', `%${product.id}%`)
-            .where('status', 'active')
-          
-          for (const promo of existingPromos) {
-            promo.status = 'expired'
-            promo.end_date = DateTime.now()
-            await promo.save()
-            console.log(`🏁 Promotion expirée: ${promo.title}`)
-          }
-
-          if (existingPromos.length > 0) {
-            promotionMessage += ` ${existingPromos.length} promotion(s) désactivée(s).`
-          }
-        } catch (err) {
-          console.error('Erreur désactivation promotions:', err)
-        }
-        
-        if (newPrice === oldPrice) {
-          promotionMessage = ` Prix inchangé (${newPrice} FCFA).` + promotionMessage
-        } else {
-          const increasePercent = ((newPrice - oldPrice) / oldPrice) * 100
-          promotionMessage = ` Prix augmenté de ${increasePercent.toFixed(0)}% (${oldPrice} → ${newPrice} FCFA).` + promotionMessage
-        }
-      }
-
-      await product.save()
-
-      const updatedProduct = await Product.query()
-        .where('id', product.id)
-        .preload('categoryRelation')
-        .first()
-
-      let categoryNameResult = 'Sans catégorie'
-      if (updatedProduct?.categoryRelation) {
-        categoryNameResult = updatedProduct.categoryRelation.name
-      }
-
-      return response.ok({
-        success: true,
-        message: `Produit "${product.name}" mis à jour.${promotionMessage}`,
-        data: {
-          id: product.id,
-          name: product.name,
-          description: product.description,
-          price: product.price,
-          old_price: oldPrice !== newPrice ? oldPrice : undefined,
-          stock: product.stock,
-          image_url: product.image_url,
-          category: categoryNameResult,
-          category_id: product.category_id,
-          is_on_sale: product.isOnSale,
-          is_new: product.isNew,
-          price_changed: oldPrice !== newPrice,
-          reduction_percent: oldPrice > newPrice ? ((oldPrice - newPrice) / oldPrice) * 100 : 0,
-          promotion_active: product.isOnSale,
-          promotion: promotionCreated
-        }
-      })
-    } catch (error: any) {
-      console.error('Erreur updateProduct:', error)
-      return response.internalServerError({
-        success: false,
-        message: error.message
-      })
     }
-  }
 
+    // Mise à jour des champs de base
+    if (name) product.name = name
+    if (description !== undefined) product.description = description
+    if (price) {
+      newPrice = parseFloat(price)
+      product.price = newPrice
+    }
+    if (stock !== undefined) product.stock = parseInt(stock)
+    if (categoryId) product.category_id = categoryId
+
+    // ✅ MISE À JOUR DES 5 IMAGES
+    if (image_url !== undefined) product.image_url = image_url?.trim() || null
+    if (image_url_2 !== undefined) product.image_url_2 = image_url_2?.trim() || null
+    if (image_url_3 !== undefined) product.image_url_3 = image_url_3?.trim() || null
+    if (image_url_4 !== undefined) product.image_url_4 = image_url_4?.trim() || null
+    if (image_url_5 !== undefined) product.image_url_5 = image_url_5?.trim() || null
+
+    let promotionMessage = ''
+    let promotionCreated: any = null
+    
+    if (price && newPrice < oldPrice) {
+      const reductionPercent = ((oldPrice - newPrice) / oldPrice) * 100
+      
+      product.isOnSale = true
+      product.isNew = false
+      
+      if ('old_price' in product) {
+        product.old_price = oldPrice
+      }
+
+      try {
+        const promoEndDate = DateTime.now().plus({ days: 30 })
+        
+        const promotion = await Promotion.create({
+          title: `🔥 ${reductionPercent.toFixed(0)}% sur ${product.name}`,
+          description: `Profitez de ${reductionPercent.toFixed(0)}% de réduction sur ${product.name} ! Ancien prix: ${oldPrice} FCFA, Nouveau prix: ${newPrice} FCFA. Offre limitée !`,
+          image_url: product.image_url,
+          banner_image: product.image_url,
+          type: 'flash_sale',
+          discount_percentage: Math.round(reductionPercent),
+          discount_amount: oldPrice - newPrice,
+          category: category_name || null,
+          product_ids: JSON.stringify([product.id]),
+          link: `/product/${product.id}`,
+          button_text: '🌐 Voir le produit',
+          min_order_amount: null,
+          start_date: DateTime.now(),
+          end_date: promoEndDate,
+          status: 'active',
+          priority: Math.round(reductionPercent),
+        })
+
+        promotionCreated = {
+          id: promotion.id,
+          title: promotion.title,
+          discount_percentage: promotion.discount_percentage,
+          end_date: promotion.end_date
+        }
+
+        promotionMessage = ` ✅ PROMO CRÉÉE : -${reductionPercent.toFixed(0)}% sur "${product.name}" ! Visible jusqu'au ${promoEndDate.toFormat('dd/MM/yyyy')}.`
+        
+        console.log(`🎉 Promotion créée: ${promotion.title}`)
+      } catch (promoError: any) {
+        console.error('Erreur création promotion:', promoError)
+        promotionMessage = ` ⚠️ Prix réduit de ${reductionPercent.toFixed(0)}% mais la promotion n'a pas pu être créée.`
+      }
+      
+    } else if (price && newPrice >= oldPrice && oldPrice > 0) {
+      product.isOnSale = false
+      
+      try {
+        const existingPromos = await Promotion.query()
+          .where('product_ids', 'LIKE', `%${product.id}%`)
+          .where('status', 'active')
+        
+        for (const promo of existingPromos) {
+          promo.status = 'expired'
+          promo.end_date = DateTime.now()
+          await promo.save()
+          console.log(`🏁 Promotion expirée: ${promo.title}`)
+        }
+
+        if (existingPromos.length > 0) {
+          promotionMessage += ` ${existingPromos.length} promotion(s) désactivée(s).`
+        }
+      } catch (err) {
+        console.error('Erreur désactivation promotions:', err)
+      }
+      
+      if (newPrice === oldPrice) {
+        promotionMessage = ` Prix inchangé (${newPrice} FCFA).` + promotionMessage
+      } else {
+        const increasePercent = ((newPrice - oldPrice) / oldPrice) * 100
+        promotionMessage = ` Prix augmenté de ${increasePercent.toFixed(0)}% (${oldPrice} → ${newPrice} FCFA).` + promotionMessage
+      }
+    }
+
+    await product.save()
+
+    const updatedProduct = await Product.query()
+      .where('id', product.id)
+      .preload('categoryRelation')
+      .first()
+
+    let categoryNameResult = 'Sans catégorie'
+    if (updatedProduct?.categoryRelation) {
+      categoryNameResult = updatedProduct.categoryRelation.name
+    }
+
+    // ✅ Compter les images pour le retour
+    const images = [
+      product.image_url,
+      product.image_url_2,
+      product.image_url_3,
+      product.image_url_4,
+      product.image_url_5
+    ].filter(img => img && img.trim() !== '')
+
+    return response.ok({
+      success: true,
+      message: `Produit "${product.name}" mis à jour.${promotionMessage}`,
+      data: {
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        old_price: oldPrice !== newPrice ? oldPrice : undefined,
+        stock: product.stock,
+        // ✅ TOUTES LES IMAGES
+        images: images,
+        images_count: images.length,
+        image_url: product.image_url,
+        image_url_2: product.image_url_2,
+        image_url_3: product.image_url_3,
+        image_url_4: product.image_url_4,
+        image_url_5: product.image_url_5,
+        category: categoryNameResult,
+        category_id: product.category_id,
+        is_on_sale: product.isOnSale,
+        is_new: product.isNew,
+        price_changed: oldPrice !== newPrice,
+        reduction_percent: oldPrice > newPrice ? ((oldPrice - newPrice) / oldPrice) * 100 : 0,
+        promotion_active: product.isOnSale,
+        promotion: promotionCreated
+      }
+    })
+  } catch (error: any) {
+    console.error('Erreur updateProduct:', error)
+    return response.internalServerError({
+      success: false,
+      message: error.message
+    })
+  }
+}
   async deleteProduct({ params, response }: HttpContext) {
     try {
       const { userId, productId } = params
