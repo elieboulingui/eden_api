@@ -361,6 +361,221 @@ export default class Product extends BaseModel {
   }
 
   // ============================================================
+  // MÉTHODES - GESTION DES IMAGES MULTIPLES
+  // ============================================================
+
+  /**
+   * Ajoute une image au produit
+   * @param imageUrl URL de l'image à ajouter
+   * @returns la position de l'image ajoutée (1-5) ou null si plein
+   */
+  async addImage(imageUrl: string): Promise<number | null> {
+    if (!imageUrl) return null
+    
+    if (!this.image_url) {
+      this.image_url = imageUrl
+      await this.save()
+      return 1
+    }
+    if (!this.imageUrl2) {
+      this.imageUrl2 = imageUrl
+      await this.save()
+      return 2
+    }
+    if (!this.imageUrl3) {
+      this.imageUrl3 = imageUrl
+      await this.save()
+      return 3
+    }
+    if (!this.imageUrl4) {
+      this.imageUrl4 = imageUrl
+      await this.save()
+      return 4
+    }
+    if (!this.imageUrl5) {
+      this.imageUrl5 = imageUrl
+      await this.save()
+      return 5
+    }
+    return null // Plus de place (max 5 images)
+  }
+
+  /**
+   * Ajoute plusieurs images en une fois
+   * @param imageUrls Liste des URLs d'images
+   * @returns Nombre d'images ajoutées
+   */
+  async addMultipleImages(imageUrls: string[]): Promise<number> {
+    let added = 0
+    for (const url of imageUrls) {
+      const result = await this.addImage(url)
+      if (result) added++
+    }
+    return added
+  }
+
+  /**
+   * Supprime une image du produit par sa position (1-5)
+   * @param position Position de l'image (1 = image principale)
+   */
+  async removeImage(position: number): Promise<boolean> {
+    switch (position) {
+      case 1:
+        this.image_url = null
+        break
+      case 2:
+        this.imageUrl2 = null
+        break
+      case 3:
+        this.imageUrl3 = null
+        break
+      case 4:
+        this.imageUrl4 = null
+        break
+      case 5:
+        this.imageUrl5 = null
+        break
+      default:
+        return false
+    }
+    
+    await this.save()
+    await this.reorderImages()
+    return true
+  }
+
+  /**
+   * Supprime une image spécifique par son URL
+   * @param imageUrl URL de l'image à supprimer
+   */
+  async removeImageByUrl(imageUrl: string): Promise<boolean> {
+    if (this.image_url === imageUrl) {
+      this.image_url = null
+      await this.save()
+      await this.reorderImages()
+      return true
+    }
+    if (this.imageUrl2 === imageUrl) {
+      this.imageUrl2 = null
+      await this.save()
+      await this.reorderImages()
+      return true
+    }
+    if (this.imageUrl3 === imageUrl) {
+      this.imageUrl3 = null
+      await this.save()
+      await this.reorderImages()
+      return true
+    }
+    if (this.imageUrl4 === imageUrl) {
+      this.imageUrl4 = null
+      await this.save()
+      await this.reorderImages()
+      return true
+    }
+    if (this.imageUrl5 === imageUrl) {
+      this.imageUrl5 = null
+      await this.save()
+      await this.reorderImages()
+      return true
+    }
+    return false
+  }
+
+  /**
+   * Réordonne les images pour combler les trous
+   */
+  async reorderImages(): Promise<void> {
+    const images = this.allImages
+    
+    // Réinitialiser toutes les positions
+    this.image_url = null
+    this.imageUrl2 = null
+    this.imageUrl3 = null
+    this.imageUrl4 = null
+    this.imageUrl5 = null
+    
+    // Replacer les images dans l'ordre
+    if (images.length > 0) this.image_url = images[0]
+    if (images.length > 1) this.imageUrl2 = images[1]
+    if (images.length > 2) this.imageUrl3 = images[2]
+    if (images.length > 3) this.imageUrl4 = images[3]
+    if (images.length > 4) this.imageUrl5 = images[4]
+    
+    await this.save()
+  }
+
+  /**
+   * Échange deux images
+   * @param pos1 Position 1 (1-5)
+   * @param pos2 Position 2 (1-5)
+   */
+  async swapImages(pos1: number, pos2: number): Promise<boolean> {
+    const images = this.allImages
+    if (pos1 < 1 || pos1 > 5 || pos2 < 1 || pos2 > 5) return false
+    if (pos1 > images.length || pos2 > images.length) return false
+    
+    const temp = images[pos1 - 1]
+    images[pos1 - 1] = images[pos2 - 1]
+    images[pos2 - 1] = temp
+    
+    await this.setImagesFromArray(images)
+    return true
+  }
+
+  /**
+   * Définit toutes les images à partir d'un tableau
+   * @param images Tableau d'URLs (max 5)
+   */
+  async setImagesFromArray(images: string[]): Promise<void> {
+    // Limiter à 5 images
+    const limited = images.slice(0, 5)
+    
+    this.image_url = limited[0] || null
+    this.imageUrl2 = limited[1] || null
+    this.imageUrl3 = limited[2] || null
+    this.imageUrl4 = limited[3] || null
+    this.imageUrl5 = limited[4] || null
+    
+    await this.save()
+  }
+
+  /**
+   * Met à jour l'image principale
+   * @param imageUrl Nouvelle URL de l'image principale
+   */
+  async setMainImage(imageUrl: string): Promise<boolean> {
+    if (!imageUrl) return false
+    
+    // Vérifier si cette image existe déjà dans le produit
+    const existingIndex = this.allImages.findIndex(img => img === imageUrl)
+    
+    if (existingIndex === -1) {
+      // L'image n'existe pas, l'ajouter en première position
+      const currentImages = this.allImages
+      currentImages.unshift(imageUrl)
+      await this.setImagesFromArray(currentImages)
+    } else if (existingIndex > 0) {
+      // L'image existe mais n'est pas en première position, l'échanger
+      await this.swapImages(1, existingIndex + 1)
+    }
+    
+    return true
+  }
+
+  /**
+   * Vide toutes les images du produit
+   */
+  async clearAllImages(): Promise<void> {
+    this.image_url = null
+    this.imageUrl2 = null
+    this.imageUrl3 = null
+    this.imageUrl4 = null
+    this.imageUrl5 = null
+    await this.save()
+  }
+
+  // ============================================================
   // MÉTHODES - BOOST
   // ============================================================
 
@@ -494,5 +709,49 @@ export default class Product extends BaseModel {
       })
 
     return Array.isArray(result) ? result.length : 0
+  }
+
+  // ============================================================
+  // MÉTHODES STATIQUES - RECHERCHE PAR IMAGES
+  // ============================================================
+
+  /**
+   * Trouve les produits qui ont une image
+   */
+  static async getProductsWithImages(limit: number = 50): Promise<Product[]> {
+    return Product.query()
+      .whereNotNull('image_url')
+      .where('is_archived', false)
+      .where('status', 'active')
+      .limit(limit)
+  }
+
+  /**
+   * Trouve les produits qui ont des images multiples
+   */
+  static async getProductsWithMultipleImages(limit: number = 50): Promise<Product[]> {
+    return Product.query()
+      .whereNotNull('image_url')
+      .whereNotNull('image_url_2')
+      .orWhereNotNull('image_url_3')
+      .orWhereNotNull('image_url_4')
+      .orWhereNotNull('image_url_5')
+      .where('is_archived', false)
+      .where('status', 'active')
+      .limit(limit)
+  }
+
+  /**
+   * Compte le nombre total d'images dans la base
+   */
+  static async getTotalImagesCount(): Promise<number> {
+    const products = await Product.query()
+      .where('is_archived', false)
+      .where('status', 'active')
+      .select('image_url', 'image_url_2', 'image_url_3', 'image_url_4', 'image_url_5')
+    
+    return products.reduce((total, product) => {
+      return total + product.allImages.length
+    }, 0)
   }
 }
