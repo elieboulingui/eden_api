@@ -11,7 +11,7 @@ export default class Product extends BaseModel {
   static table = 'products'
 
   @column({ isPrimary: true })
-  declare id: string
+  declare id: string 
 
   @column()
   declare name: string
