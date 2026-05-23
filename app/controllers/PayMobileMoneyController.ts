@@ -8,35 +8,33 @@ import Cart from '#models/Cart'
 import CartItem from '#models/CartItem'
 import User from '#models/user'
 import Product from '#models/Product'
-import KYC from '#models/kyc'
 import { DateTime } from 'luxon'
 import MypvitSecretService from '../services/mypvit_secret_service.js'
 import MypvitTransactionService from '../services/mypvit_transaction_service.js'
-import MypvitKYCService from '../services/mypvit_kyc_service.js'
 
 const CALLBACK_URL_CODE = '9ZOXW'
 
 function generateOrderNumber(): string {
   const value = `CMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-  console.log('generateOrderNumber:', value)
+  console.log('[ORDER_NUMBER]', value)
   return value
 }
 
 export default class PayMobileMoneyController {
 
   private async renewSecretIfNeeded(phoneNumber?: string): Promise<void> {
-    console.log('[SECRET] renewSecretIfNeeded start', phoneNumber)
+    console.log('[SECRET] renew start', phoneNumber)
 
     try {
       await MypvitSecretService.renewSecret(phoneNumber)
-      console.log('[SECRET] renewed OK')
+      console.log('[SECRET] renewed ok')
     } catch (error: any) {
       console.log('[SECRET] error', error.message)
     }
   }
 
   private detectOperatorGabon(phoneNumber: string) {
-    console.log('[OPERATOR] detect start:', phoneNumber)
+    console.log('[OPERATOR] detect:', phoneNumber)
 
     const clean = phoneNumber.replace(/[\s\+\.\-]/g, '')
     let local = clean
@@ -45,10 +43,9 @@ export default class PayMobileMoneyController {
     if (clean.startsWith('+241')) local = clean.substring(4)
     if (local.startsWith('0')) local = local.substring(1)
 
-    console.log('[OPERATOR] cleaned:', local)
+    console.log('[OPERATOR] local:', local)
 
     if (local.startsWith('06') || local.startsWith('6')) {
-      console.log('[OPERATOR] MOOV')
       return {
         name: 'MOOV_MONEY',
         code: 'MOOV_MONEY',
@@ -57,7 +54,6 @@ export default class PayMobileMoneyController {
     }
 
     if (local.startsWith('07') || local.startsWith('7')) {
-      console.log('[OPERATOR] AIRTEL')
       return {
         name: 'AIRTEL_MONEY',
         code: 'AIRTEL_MONEY',
@@ -65,7 +61,6 @@ export default class PayMobileMoneyController {
       }
     }
 
-    console.log('[OPERATOR] GIMAC default')
     return {
       name: 'GIMAC',
       code: 'GIMAC_PAY',
@@ -74,7 +69,7 @@ export default class PayMobileMoneyController {
   }
 
   private async checkCartStock(userId: string) {
-    console.log('[CART] check start', userId)
+    console.log('[CART] check', userId)
 
     const errors: string[] = []
 
@@ -90,8 +85,6 @@ export default class PayMobileMoneyController {
     }
 
     for (const item of cart.items) {
-      console.log('[CART ITEM]', item.product_id, item.quantity)
-
       const product = await Product.findBy('id', item.product_id)
 
       if (!product) {
@@ -108,7 +101,7 @@ export default class PayMobileMoneyController {
   }
 
   private async buildItems(order: Order, cart: Cart) {
-    console.log('[ORDER ITEMS] build start')
+    console.log('[ITEMS] build')
 
     let subtotal = 0
     let count = 0
@@ -136,13 +129,12 @@ export default class PayMobileMoneyController {
       count++
     }
 
-    console.log('[ORDER ITEMS] subtotal:', subtotal, 'count:', count)
-
     return { subtotal, count }
   }
 
   async pay({ request, response }: HttpContext) {
-    console.log('================ PAYMENT START ================')
+
+    console.log('\n================ PAYMENT START ================')
 
     try {
       const payload = request.only([
@@ -162,9 +154,6 @@ export default class PayMobileMoneyController {
       const userId = payload.userId
       const phoneNumber = payload.customerAccountNumber || payload.customerPhone
 
-      console.log('[USER]', userId)
-      console.log('[PHONE]', phoneNumber)
-
       if (!userId || !phoneNumber) {
         return response.badRequest({
           success: false,
@@ -175,8 +164,11 @@ export default class PayMobileMoneyController {
       const { ok, errors, cart } = await this.checkCartStock(userId)
 
       if (!ok || !cart) {
-        console.log('[CART] invalid', errors)
-        return response.badRequest({ success: false, errors })
+        return response.badRequest({
+          success: false,
+          message: 'Panier invalide',
+          errors
+        })
       }
 
       const user = await User.findBy('id', userId)
@@ -194,10 +186,10 @@ export default class PayMobileMoneyController {
         }
       }
 
-      const shipping = Number(payload.deliveryPrice || 1)
-      const total = Number(subtotal) + Number(shipping)
+      const shippingCost = Number(payload.deliveryPrice || 1)
+      const total = Number(subtotal) + Number(shippingCost)
 
-      console.log('[TOTAL]', { subtotal, shipping, total })
+      console.log('[TOTAL]', { subtotal, shippingCost, total })
 
       const order = await Order.create({
         user_id: userId,
@@ -205,11 +197,11 @@ export default class PayMobileMoneyController {
         status: 'pending',
         total,
         subtotal,
-        shipping_cost: shipping,
+        shipping_cost: shippingCost,
         customer_name: user?.full_name || payload.customerName || 'Client',
         customer_phone: phoneNumber,
-        payment_method: kyc.operator,
-        payment_operator_simple: kyc.operator
+        payment_method: kyc.name,
+        payment_operator_simple: kyc.name
       })
 
       console.log('[ORDER CREATED]', order.id)
@@ -223,8 +215,6 @@ export default class PayMobileMoneyController {
         tracked_at: DateTime.now()
       })
 
-      console.log('[TRACKING CREATED]')
-
       const paymentPayload = {
         agent: payload.agent || 'AGENT_DEFAULT',
         amount: total,
@@ -232,29 +222,25 @@ export default class PayMobileMoneyController {
         callback_url_code: CALLBACK_URL_CODE,
         customer_account_number: phoneNumber,
         merchant_operation_account_code: kyc.accountCode,
-        owner_charge: 'CUSTOMER',
+        owner_charge: 'CUSTOMER' as const,
         operator_code: kyc.code
       }
 
       console.log('[PAYMENT PAYLOAD]', paymentPayload)
 
-      const payment = await MypvitTransactionService.processPayment(paymentPayload)
+      const payment =
+        await MypvitTransactionService.processPayment(paymentPayload)
 
       console.log('[PAYMENT RESPONSE]', payment)
 
-      if (!payment) {
-        throw new Error('Payment null')
-      }
+      if (!payment) throw new Error('Payment null')
 
       const xSecret = await MypvitSecretService.getSecret()
 
-      console.log('[XSECRET]', xSecret ? 'OK' : 'NULL')
-
-      if (!xSecret) {
-        throw new Error('XSecret missing')
-      }
+      if (!xSecret) throw new Error('XSecret missing')
 
       if (payment.status !== 'FAILED' && payment.reference_id) {
+
         order.payment_reference_id = payment.reference_id
         order.status = 'pending_payment'
         order.payment_initiated_at = DateTime.now()
@@ -274,8 +260,6 @@ export default class PayMobileMoneyController {
         })
       }
 
-      console.log('[PAYMENT FAILED]')
-
       order.status = 'payment_failed'
       await order.save()
 
@@ -285,6 +269,7 @@ export default class PayMobileMoneyController {
       })
 
     } catch (error: any) {
+
       console.log('[ERROR]', error.message)
       console.log(error)
 
