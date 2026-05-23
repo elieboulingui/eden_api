@@ -192,7 +192,6 @@ export default class PayMobileMoneyController {
 
       console.log('[TOTAL]', { subtotal, shippingCost, total })
 
-      // ✅ CRÉATION CORRECTE - avec les colonnes qui existent
       const order = await Order.create({
         user_id: userId,
         order_number: generateOrderNumber(),
@@ -255,12 +254,25 @@ export default class PayMobileMoneyController {
 
         console.log('[CART CLEARED]')
 
+        // ✅ RÉPONSE COMPLÈTE AVEC x_secret POUR LE FRONTEND
         return response.ok({
           success: true,
-          orderId: order.id,
-          total,
-          itemsCount: count,
-          payment
+          data: {
+            orderId: order.id,
+            orderNumber: order.order_number,
+            total: total,
+            itemsCount: count,
+            customerName: order.customer_name,
+            // ✅ Informations pour le polling du statut
+            x_secret: xSecret,
+            pvit_reference_id: payment.reference_id,
+            operator: {
+              name: kyc.name,
+              code: kyc.code,
+              accountCode: kyc.accountCode
+            },
+            payment: payment
+          }
         })
       }
 
