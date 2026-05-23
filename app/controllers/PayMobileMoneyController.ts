@@ -276,8 +276,14 @@ export default class PayMobileMoneyController {
       console.log('  - Shipping cost:', shippingCost)
       console.log('  - TOTAL:', total)
 
-      // 8. Création commande
+      // 8. Création commande - CORRIGÉ AVEC delivery_method
       console.log('[STEP 8] Création de la commande...')
+      
+      // Vérification des valeurs avant création
+      const deliveryMethod = payload.deliveryMethod || 'standard'
+      console.log('[ORDER] delivery_method utilisé:', deliveryMethod)
+      console.log('[ORDER] shippingAddress utilisé:', payload.shippingAddress || 'Non fourni')
+      
       const order = await Order.create({
         user_id: userId,
         order_number: generateOrderNumber(),
@@ -285,6 +291,9 @@ export default class PayMobileMoneyController {
         total,
         subtotal,
         shipping_cost: shippingCost,
+        delivery_method: deliveryMethod, // ✅ AJOUT OBLIGATOIRE
+        delivery_address: payload.shippingAddress || null, // Ajout au cas où la colonne existe
+        customer_email: payload.customerEmail || user?.email || null, // Ajout au cas où
         customer_name: user?.full_name || payload.customerName || 'Client',
         customer_phone: phoneNumber,
         payment_method: kyc.name,
@@ -295,6 +304,7 @@ export default class PayMobileMoneyController {
       console.log('  - ID:', order.id)
       console.log('  - Order number:', order.order_number)
       console.log('  - Total:', order.total)
+      console.log('  - Delivery method:', order.delivery_method)
 
       // 9. Création des items
       console.log('[STEP 9] Création des items de commande...')
