@@ -82,6 +82,8 @@ export default class MerchantDashboardController {
           weight: product.weight,
           packaging: product.packaging,
           conservation: product.conservation,
+          color: product.color || null,
+          size: product.size || null,
           is_new: product.isNew,
           is_on_sale: product.isOnSale,
           rating: product.rating,
@@ -1190,6 +1192,12 @@ export default class MerchantDashboardController {
         price: p.price,
         stock: p.stock,
         image_url: p.image_url,
+        image_url_2: p.imageUrl2 || null,
+        image_url_3: p.imageUrl3 || null,
+        image_url_4: p.imageUrl4 || null,
+        image_url_5: p.imageUrl5 || null,
+        color: p.color || null,
+        size: p.size || null,
         category: categoryName,
         likes: likesCountMap[p.id] || 0,
         sales: salesCountMap[p.id] || 0,
@@ -1259,7 +1267,6 @@ export default class MerchantDashboardController {
         .paginate(page, limit)
 
       const productArray = products.all()
-
       const productIds = productArray.map(p => p.id)
 
       let favoritesCountMap: Record<string, number> = {}
@@ -1294,6 +1301,12 @@ export default class MerchantDashboardController {
           price: product.price,
           stock: product.stock,
           image_url: product.image_url,
+          image_url_2: product.imageUrl2 || null,
+          image_url_3: product.imageUrl3 || null,
+          image_url_4: product.imageUrl4 || null,
+          image_url_5: product.imageUrl5 || null,
+          color: product.color || null,
+          size: product.size || null,
           category: categoryName,
           category_id: product.category_id,
           likes: favoritesCountMap[product.id] || 0,
@@ -1323,18 +1336,23 @@ export default class MerchantDashboardController {
   async createProduct({ params, request, response }: HttpContext) {
     try {
       const { userId } = params
+
+      // ✅ Récupération avec color et size
       const { 
         name, description, price, stock, category_name, 
-        image_url, image_url_2, image_url_3, image_url_4, image_url_5 
+        image_url, image_url_2, image_url_3, image_url_4, image_url_5,
+        color, size
       } = request.only([
         'name', 'description', 'price', 'stock', 'category_name',
-        'image_url', 'image_url_2', 'image_url_3', 'image_url_4', 'image_url_5'
+        'image_url', 'image_url_2', 'image_url_3', 'image_url_4', 'image_url_5',
+        'color', 'size'
       ])
 
       console.log('🔵 ========== DÉBUT CRÉATION PRODUIT ==========')
       console.log('📦 Données reçues:', { 
         userId, name, description, price, stock, category_name,
-        image_url, image_url_2, image_url_3, image_url_4, image_url_5 
+        image_url, image_url_2, image_url_3, image_url_4, image_url_5,
+        color, size
       })
 
       if (!name || name.trim() === '') {
@@ -1370,7 +1388,7 @@ export default class MerchantDashboardController {
         categoryId = category.id
       }
 
-      // ✅ Création du produit avec les bonnes propriétés du modèle
+      // ✅ Création du produit avec color et size
       const productData: any = {
         name: name.trim(),
         description: description || '',
@@ -1381,6 +1399,8 @@ export default class MerchantDashboardController {
         imageUrl3: image_url_3?.trim() || null,
         imageUrl4: image_url_4?.trim() || null,
         imageUrl5: image_url_5?.trim() || null,
+        color: color || null,
+        size: size || null,
         user_id: user.id,
         category_id: categoryId,
         isNew: true,
@@ -1403,7 +1423,6 @@ export default class MerchantDashboardController {
       }
 
       console.log('📝 Données du produit à insérer:', JSON.stringify(productData, null, 2))
-
       console.log('💾 Tentative d\'insertion dans la base de données...')
       const product = await Product.create(productData)
       console.log('✅ Produit créé avec succès:', { id: product.id, name: product.name })
@@ -1422,7 +1441,6 @@ export default class MerchantDashboardController {
         }
       }
 
-      // ✅ Compter les images pour le retour
       const images = [
         product.image_url,
         product.imageUrl2,
@@ -1442,6 +1460,8 @@ export default class MerchantDashboardController {
           stock: product.stock,
           category_id: product.category_id,
           category_name: category_name || null,
+          color: product.color || null,
+          size: product.size || null,
           images: images,
           images_count: images.length,
           image_url: product.image_url,
@@ -1483,12 +1503,16 @@ export default class MerchantDashboardController {
   async updateProduct({ params, request, response }: HttpContext) {
     try {
       const { userId, productId } = params
+
+      // ✅ Récupération avec color et size
       const { 
         name, description, price, stock, category_name,
-        image_url, image_url_2, image_url_3, image_url_4, image_url_5 
+        image_url, image_url_2, image_url_3, image_url_4, image_url_5,
+        color, size
       } = request.only([
         'name', 'description', 'price', 'stock', 'category_name',
-        'image_url', 'image_url_2', 'image_url_3', 'image_url_4', 'image_url_5'
+        'image_url', 'image_url_2', 'image_url_3', 'image_url_4', 'image_url_5',
+        'color', 'size'
       ])
 
       const user = await User.findBy('id', userId)
@@ -1539,12 +1563,16 @@ export default class MerchantDashboardController {
       if (stock !== undefined) product.stock = parseInt(stock)
       if (categoryId) product.category_id = categoryId
 
-      // ✅ MISE À JOUR DES 5 IMAGES avec les bonnes propriétés
+      // ✅ Mise à jour des 5 images
       if (image_url !== undefined) product.image_url = image_url?.trim() || null
       if (image_url_2 !== undefined) product.imageUrl2 = image_url_2?.trim() || null
       if (image_url_3 !== undefined) product.imageUrl3 = image_url_3?.trim() || null
       if (image_url_4 !== undefined) product.imageUrl4 = image_url_4?.trim() || null
       if (image_url_5 !== undefined) product.imageUrl5 = image_url_5?.trim() || null
+
+      // ✅ Mise à jour color et size
+      if (color !== undefined) product.color = color || null
+      if (size !== undefined) product.size = size || null
 
       let promotionMessage = ''
       let promotionCreated: any = null
@@ -1638,7 +1666,6 @@ export default class MerchantDashboardController {
         categoryNameResult = updatedProduct.categoryRelation.name
       }
 
-      // ✅ Compter les images pour le retour
       const images = [
         product.image_url,
         product.imageUrl2,
@@ -1657,6 +1684,8 @@ export default class MerchantDashboardController {
           price: product.price,
           old_price: oldPrice !== newPrice ? oldPrice : undefined,
           stock: product.stock,
+          color: product.color || null,
+          size: product.size || null,
           images: images,
           images_count: images.length,
           image_url: product.image_url,
