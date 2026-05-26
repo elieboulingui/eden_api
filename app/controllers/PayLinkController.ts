@@ -9,7 +9,7 @@ import CartItem from '#models/CartItem'
 import User from '#models/user'
 import Product from '#models/Product'
 import { DateTime } from 'luxon'
-import MypvitSecretService from '../services/mypvit_secret_service.js'
+import MypvitSecretService from '../services/mypvit_secret_services.js'
 import axios from 'axios'
 
 const CALLBACK_URL_CODE = '9ZOXW'
