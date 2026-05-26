@@ -185,7 +185,7 @@ export default class PayLinkController {
       const shippingCost = Number(payload.deliveryPrice || 0)
       const total = subtotal + shippingCost
 
-      const gimacConfig = this.getGimacConfig()
+      // Supprimé: const gimacConfig = this.getGimacConfig() - non utilisé ici
       
       await this.renewSecretIfNeeded()
 
