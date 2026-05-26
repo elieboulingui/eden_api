@@ -13,8 +13,15 @@ import MypvitSecretService from '../services/mypvit_secret_services.js'
 import axios from 'axios'
 
 const CALLBACK_URL_CODE = '9ZOXW'
-const GIMAC_CODE_URL = 'MTX1MTKQQCULKA3W'
-const GIMAC_ACCOUNT_CODE = 'ACC_69FE0E1BC34B4'
+
+// Configuration GIMAC
+const GIMAC_CONFIG = {
+  name: 'GIMAC',
+  accountCode: 'ACC_69FE0E1BC34B4',
+  // ⚠️ Attention: code différent pour renew-secret et link
+  renewCodeUrl: '6JN5J6U0NBJGKDAQ',  // Pour /renew-secret
+  linkCodeUrl: 'MTX1MTKQQCULKA3W'      // Pour /link
+}
 
 export default class PayLinkController {
 
@@ -28,17 +35,17 @@ export default class PayLinkController {
     console.log('[GENERATE_LINK] reference:', reference)
     console.log('[GENERATE_LINK] phoneNumber:', phoneNumber)
 
-    // GIMAC supporte uniquement WEB
-    const finalService = 'WEB'
-    console.log(`[GENERATE_LINK] Service: ${finalService}`)
+    // GIMAC utilise le service WEB
+    const service = 'WEB'
+    console.log(`[GENERATE_LINK] Service: ${service}`)
 
     const linkPayload = {
       amount: amount,
       product: reference.substring(0, 15),
       reference: `REF${Date.now()}`.substring(0, 15),
-      service: finalService,
+      service: service,
       callback_url_code: CALLBACK_URL_CODE,
-      merchant_operation_account_code: GIMAC_ACCOUNT_CODE,
+      merchant_operation_account_code: GIMAC_CONFIG.accountCode,
       transaction_type: 'PAYMENT',
       owner_charge: 'CUSTOMER',
       success_redirection_url_code: 'W0L8C',
@@ -51,7 +58,8 @@ export default class PayLinkController {
     const secret = await MypvitSecretService.getSecret()
     console.log('[GENERATE_LINK] Secret récupéré')
     
-    const apiUrl = `https://api.mypvit.pro/${GIMAC_CODE_URL}/link`
+    // Utilisation du BON code URL pour link (MTX1MTKQQCULKA3W)
+    const apiUrl = `https://api.mypvit.pro/${GIMAC_CONFIG.linkCodeUrl}/link`
     console.log(`[GENERATE_LINK] URL: ${apiUrl}`)
     
     const linkResponse = await axios.post(
@@ -75,7 +83,7 @@ export default class PayLinkController {
 
   async pay({ request, response }: HttpContext) {
     console.log('\n')
-    console.log('💳 ========== PAYMENT VIA LINK (GIMAC REAL) ==========')
+    console.log('💳 ========== PAYMENT VIA LINK (GIMAC) ==========')
     console.log('[TIMESTAMP]', new Date().toISOString())
 
     try {
@@ -102,6 +110,9 @@ export default class PayLinkController {
           message: 'userId ou phone manquant'
         })
       }
+
+      console.log('[GIMAC] Account Code:', GIMAC_CONFIG.accountCode)
+      console.log('[GIMAC] Link Code URL:', GIMAC_CONFIG.linkCodeUrl)
 
       const cart = await Cart.query()
         .where('user_id', userId)
@@ -195,7 +206,7 @@ export default class PayLinkController {
       
       const reference = `ORD-${order.id.substring(0, 8)}`
 
-      // Génération du lien réel
+      // Génération du lien
       const linkResult = await this.generatePaymentLink(
         total,
         reference,
@@ -223,8 +234,7 @@ export default class PayLinkController {
           paymentMethod: 'gimac_web',
           operator: {
             name: 'GIMAC',
-            code: 'GIMAC_PAY',
-            accountCode: GIMAC_ACCOUNT_CODE
+            accountCode: GIMAC_CONFIG.accountCode
           },
           link: {
             payment_url: linkResult.url,
@@ -245,8 +255,7 @@ export default class PayLinkController {
       return response.internalServerError({
         success: false,
         message: 'Erreur lors du paiement via lien',
-        error: error.response?.data?.message || error.message,
-        details: error.response?.data
+        error: error.response?.data?.message || error.message
       })
     }
   }
