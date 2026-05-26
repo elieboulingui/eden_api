@@ -64,7 +64,10 @@ export default class PayLinkController {
         console.log('[CART] Nombre articles:', cart.items?.length || 0)
       }
 
-      if (!cart || !cart.items || cart.items.length === 0) {  // ✅ CORRECTION: .length === 0 au lieu de comparer le tableau
+      // ✅ CORRECTION ICI - Ligne 510
+      // Au lieu de: if (!cart || !cart.items > 0)
+      // Utilisez:
+      if (!cart || !cart.items || cart.items.length === 0) {
         console.log('[ERROR] ❌ Panier vide')
         return response.badRequest({
           success: false,
@@ -75,7 +78,7 @@ export default class PayLinkController {
 
       // 4. Vérification des stocks
       console.log('[STEP 4] Vérification des stocks...')
-      const errors: string[] = []
+      const stockErrors: string[] = []
       
       for (const item of cart.items) {
         console.log(`[STOCK] Vérification produit: ${item.product_id}, quantité: ${item.quantity}`)
@@ -83,24 +86,25 @@ export default class PayLinkController {
         
         if (!product) {
           console.log(`[STOCK] ❌ Produit non trouvé: ${item.product_id}`)
-          errors.push(`Produit non trouvé`)
+          stockErrors.push(`Produit non trouvé`)
           continue
         }
         
         if (product.stock < item.quantity) {
           console.log(`[STOCK] ❌ Stock insuffisant pour ${product.name}: stock=${product.stock}, demandé=${item.quantity}`)
-          errors.push(`${product.name}: stock insuffisant (${product.stock} disponible, ${item.quantity} demandé)`)
+          stockErrors.push(`${product.name}: stock insuffisant (${product.stock} disponible, ${item.quantity} demandé)`)
         } else {
           console.log(`[STOCK] ✅ Stock OK pour ${product.name}`)
         }
       }
       
-      if (errors.length > 0) {  // ✅ CORRECTION: .length > 0 au lieu de errors > 0
-        console.log('[ERROR] ❌ Erreurs de stock:', errors)
+      // ✅ CORRECTION ICI - utiliser .length
+      if (stockErrors.length > 0) {
+        console.log('[ERROR] ❌ Erreurs de stock:', stockErrors)
         return response.badRequest({
           success: false,
           message: 'Stock insuffisant',
-          errors
+          errors: stockErrors
         })
       }
       console.log('[STEP 4] ✅ Stocks vérifiés avec succès')
@@ -127,27 +131,15 @@ export default class PayLinkController {
         }
       }
       
-      const shippingCost = Number(payload.deliveryPrice || 1)
+      const shippingCost = Number(payload.deliveryPrice || 0)
       const total = subtotal + shippingCost
       
       console.log('[CALCUL] Subtotal:', subtotal)
       console.log('[CALCUL] Shipping cost:', shippingCost)
       console.log('[CALCUL] TOTAL:', total)
 
-      // 7. Création du lien de paiement (simulé pour l'instant)
-      console.log('[STEP 7] Création du lien de paiement...')
-      
-      const paymentLink = {
-        url: `https://payment.mypvit.com/pay/${Date.now()}`,
-        reference: `REF_LINK_${Date.now()}`,
-        amount: total,
-        expires_at: DateTime.now().plus({ hours: 24 }).toISO()
-      }
-      
-      console.log('[PAYMENT_LINK] Lien créé:', paymentLink)
-      
-      // 8. Création de la commande
-      console.log('[STEP 8] Création de la commande...')
+      // 7. Création de la commande
+      console.log('[STEP 7] Création de la commande...')
       
       const order = await Order.create({
         user_id: userId,
@@ -160,27 +152,26 @@ export default class PayLinkController {
         customer_name: user?.full_name || payload.customerName || 'Client',
         customer_phone: phoneNumber,
         payment_method: 'PAYMENT_LINK',
-        payment_operator_simple: 'PAYMENT_LINK',
-        payment_reference_id: paymentLink.reference
+        payment_operator_simple: 'PAYMENT_LINK'
       })
       
       console.log('[ORDER] Commande créée:', order.id, order.order_number)
       
-      // 9. Création des items de commande
-      console.log('[STEP 9] Création des items de commande...')
+      // 8. Création des items de commande
+      console.log('[STEP 8] Création des items de commande...')
       let itemsCount = 0
       
       for (const item of cart.items) {
         const product = await Product.findBy('id', item.product_id)
         if (product) {
-          const total = Number(product.price) * Number(item.quantity)
+          const totalPrice = Number(product.price) * Number(item.quantity)
           await OrderItem.create({
             order_id: order.id,
             product_id: product.id,
             product_name: product.name,
             price: product.price,
             quantity: item.quantity,
-            subtotal: total
+            subtotal: totalPrice
           })
           itemsCount++
           console.log(`  ✅ Item créé: ${product.name} x${item.quantity}`)
@@ -189,8 +180,8 @@ export default class PayLinkController {
       
       console.log('[ITEMS] Nombre d\'items créés:', itemsCount)
       
-      // 10. Création du tracking
-      console.log('[STEP 10] Création du tracking...')
+      // 9. Création du tracking
+      console.log('[STEP 9] Création du tracking...')
       await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
@@ -199,21 +190,27 @@ export default class PayLinkController {
       })
       console.log('[TRACKING] ✅ Tracking créé')
       
-      // 11. Vidage du panier
-      console.log('[STEP 11] Vidage du panier...')
+      // 10. Vidage du panier
+      console.log('[STEP 10] Vidage du panier...')
       const deletedCount = await CartItem.query().where('cart_id', cart.id).delete()
       console.log('[CART] Items supprimés:', deletedCount)
+      
+      // 11. Génération du lien de paiement (URL simulée)
+      const paymentLink = `https://pay.example.com/${order.order_number}`
       
       console.log('✅ ========== PAYMENT LINK CREATED ========== ✅')
       console.log('🔗 ================================================\n')
       
       return response.ok({
         success: true,
-        paymentLink: paymentLink.url,
-        reference: paymentLink.reference,
-        orderId: order.id,
-        total: total,
-        expires_at: paymentLink.expires_at
+        message: 'Lien de paiement créé avec succès',
+        data: {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          paymentLink: paymentLink,
+          total: total,
+          itemsCount: itemsCount
+        }
       })
       
     } catch (error: any) {
@@ -227,134 +224,6 @@ export default class PayLinkController {
         success: false,
         message: 'Erreur lors de la création du lien de paiement',
         error: error.message
-      })
-    }
-  }
-  
-  async verifyPayment({ request, response }: HttpContext) {
-    console.log('\n')
-    console.log('✅ ========== VERIFY PAYMENT START ==========')
-    console.log('[TIMESTAMP]', new Date().toISOString())
-    
-    try {
-      const payload = request.only(['reference', 'orderId'])
-      console.log('[PAYLOAD]', payload)
-      
-      const { reference, orderId } = payload
-      
-      if (!reference && !orderId) {
-        return response.badRequest({
-          success: false,
-          message: 'reference ou orderId requis'
-        })
-      }
-      
-      let order: Order | null = null
-      
-      if (reference) {
-        order = await Order.findBy('payment_reference_id', reference)
-      } else if (orderId) {
-        order = await Order.find(orderId)
-      }
-      
-      if (!order) {
-        return response.notFound({
-          success: false,
-          message: 'Commande non trouvée'
-        })
-      }
-      
-      console.log('[ORDER] trouvée:', order.id, 'status:', order.status)
-      
-      // Simulation de vérification de paiement
-      const isPaid = order.status === 'paid' || order.status === 'pending_payment'
-      
-      return response.ok({
-        success: true,
-        isPaid: isPaid,
-        status: order.status,
-        orderId: order.id
-      })
-      
-    } catch (error: any) {
-      console.log('[ERROR]', error.message)
-      return response.internalServerError({
-        success: false,
-        message: error.message
-      })
-    }
-  }
-  
-  async handlePaymentWebhook({ request, response }: HttpContext) {
-    console.log('\n')
-    console.log('📡 ========== WEBHOOK RECEIVED ==========')
-    console.log('[TIMESTAMP]', new Date().toISOString())
-    
-    try {
-      const webhookData = request.all()
-      console.log('[WEBHOOK_DATA]', JSON.stringify(webhookData, null, 2))
-      
-      const { reference_id, status, transaction_id } = webhookData
-      
-      if (!reference_id) {
-        console.log('[ERROR] Pas de reference_id dans le webhook')
-        return response.badRequest({
-          success: false,
-          message: 'reference_id manquant'
-        })
-      }
-      
-      const order = await Order.findBy('payment_reference_id', reference_id)
-      
-      if (!order) {
-        console.log('[ERROR] Commande non trouvée pour reference:', reference_id)
-        return response.notFound({
-          success: false,
-          message: 'Commande non trouvée'
-        })
-      }
-      
-      console.log('[ORDER] trouvée:', order.id, 'ancien status:', order.status)
-      
-      // Mise à jour du statut
-      if (status === 'SUCCESS' || status === 'COMPLETED') {
-        order.status = 'paid' as const
-        console.log('[UPDATE] Statut mis à jour: paid')
-      } else if (status === 'PENDING') {
-        order.status = 'pending_payment' as const
-        console.log('[UPDATE] Statut mis à jour: pending_payment')
-      } else if (status === 'FAILED') {
-        order.status = 'payment_failed' as const
-        console.log('[UPDATE] Statut mis à jour: payment_failed')
-      }
-      
-      if (transaction_id) {
-        order.payment_transaction_id = transaction_id
-      }
-      
-      await order.save()
-      
-      // Création du tracking
-      await OrderTracking.create({
-        order_id: order.id,
-        status: order.status,
-        description: `Webhook reçu: ${status}`,
-        tracked_at: DateTime.now()
-      })
-      
-      console.log('[WEBHOOK] Traité avec succès')
-      console.log('📡 ========== WEBHOOK PROCESSED ==========\n')
-      
-      return response.ok({
-        success: true,
-        message: 'Webhook traité avec succès'
-      })
-      
-    } catch (error: any) {
-      console.log('[ERROR]', error.message)
-      return response.internalServerError({
-        success: false,
-        message: error.message
       })
     }
   }
