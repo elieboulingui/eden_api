@@ -186,10 +186,16 @@ export default class PayMobileMoneyController {
     console.log('🚀 ========== PAYMENT START ==========')
     console.log('🚀 ========================================')
     console.log('[TIMESTAMP]', new Date().toISOString())
+    console.log('[REQUEST] URL:', request.url())
+    console.log('[REQUEST] Method:', request.method())
+    console.log('[REQUEST] Headers:', JSON.stringify(request.headers(), null, 2))
 
     try {
-      // 1. Récupération du payload
+      // 1. Récupération du payload - Utiliser all() pour voir tout
       console.log('[STEP 1] Récupération du payload...')
+      const allData = request.all()
+      console.log('[ALL_DATA] Toutes les données reçues:', JSON.stringify(allData, null, 2))
+      
       const payload = request.only([
         'userId',
         'customerAccountNumber',
@@ -202,29 +208,65 @@ export default class PayMobileMoneyController {
         'agent'
       ])
 
-      console.log('[PAYLOAD] Contenu complet:', JSON.stringify(payload, null, 2))
+      console.log('[PAYLOAD] Contenu filtré:', JSON.stringify(payload, null, 2))
+      console.log('[PAYLOAD] raw userId:', payload.userId)
+      console.log('[PAYLOAD] typeof userId:', typeof payload.userId)
+      console.log('[PAYLOAD] raw customerAccountNumber:', payload.customerAccountNumber)
+      console.log('[PAYLOAD] raw customerPhone:', payload.customerPhone)
+      console.log('[PAYLOAD] raw shippingAddress:', payload.shippingAddress)
+      console.log('[PAYLOAD] raw deliveryMethod:', payload.deliveryMethod)
+      console.log('[PAYLOAD] raw deliveryPrice:', payload.deliveryPrice)
+      console.log('[PAYLOAD] raw customerName:', payload.customerName)
+      console.log('[PAYLOAD] raw customerEmail:', payload.customerEmail)
+      console.log('[PAYLOAD] raw agent:', payload.agent)
 
+      // 2. Extraction avec vérification
+      console.log('[STEP 2] Extraction des données...')
       const userId = payload.userId
       const phoneNumber = payload.customerAccountNumber || payload.customerPhone
+      
+      console.log('[EXTRACTED] userId =', userId, '(type:', typeof userId, ')')
+      console.log('[EXTRACTED] phoneNumber =', phoneNumber, '(type:', typeof phoneNumber, ')')
+      console.log('[EXTRACTED] shippingAddress =', payload.shippingAddress)
+      console.log('[EXTRACTED] deliveryMethod =', payload.deliveryMethod)
+      console.log('[EXTRACTED] deliveryPrice =', payload.deliveryPrice)
+      console.log('[EXTRACTED] customerName =', payload.customerName)
+      console.log('[EXTRACTED] customerEmail =', payload.customerEmail)
 
-      console.log('[STEP 2] Extraction données:')
-      console.log('  - userId:', userId)
-      console.log('  - phoneNumber (selected):', phoneNumber)
-      console.log('  - customerAccountNumber:', payload.customerAccountNumber)
-      console.log('  - customerPhone:', payload.customerPhone)
-
-      if (!userId || !phoneNumber) {
-        console.log('[ERROR] ❌ userId ou phoneNumber manquant')
+      // Validation
+      console.log('[STEP 2b] Validation des champs obligatoires...')
+      if (!userId) {
+        console.log('[ERROR] ❌ userId manquant')
+        console.log('[ERROR] userId value:', userId)
+        console.log('[ERROR] Toutes les clés reçues:', Object.keys(allData))
         return response.badRequest({
           success: false,
-          message: 'userId ou phone manquant'
+          message: 'userId manquant',
+          receivedFields: Object.keys(allData),
+          requiredFields: ['userId', 'customerAccountNumber ou customerPhone']
         })
       }
+      
+      if (!phoneNumber) {
+        console.log('[ERROR] ❌ phoneNumber manquant')
+        console.log('[ERROR] customerAccountNumber:', payload.customerAccountNumber)
+        console.log('[ERROR] customerPhone:', payload.customerPhone)
+        return response.badRequest({
+          success: false,
+          message: 'Numéro de téléphone manquant. Veuillez fournir customerAccountNumber ou customerPhone',
+          receivedFields: Object.keys(allData)
+        })
+      }
+      
       console.log('[STEP 2] ✅ userId et phoneNumber présents')
 
       // 3. Vérification du stock
-      console.log('[STEP 3] Vérification du stock...')
-      const { ok, errors, cart } = await this.checkCartStock(userId)
+      console.log('[STEP 3] Début vérification stock...')
+      console.log('[STEP 3] Appel checkCartStock avec userId:', userId)
+      const stockResult = await this.checkCartStock(userId)
+      console.log('[STEP 3] Résultat checkCartStock:', JSON.stringify(stockResult, null, 2))
+      
+      const { ok, errors, cart } = stockResult
 
       if (!ok || !cart) {
         console.log('[ERROR] ❌ Panier invalide:', errors)
@@ -235,86 +277,119 @@ export default class PayMobileMoneyController {
         })
       }
       console.log('[STEP 3] ✅ Stock vérifié avec succès')
+      console.log('[STEP 3] Cart ID:', cart.id)
+      console.log('[STEP 3] Cart items count:', cart.items.length)
 
       // 4. Récupération utilisateur
       console.log('[STEP 4] Récupération utilisateur...')
+      console.log('[STEP 4] Recherche User avec id:', userId)
       const user = await User.findBy('id', userId)
       console.log('[USER] Trouvé:', !!user)
       if (user) {
+        console.log('[USER] ID:', user.id)
         console.log('[USER] Nom:', user.full_name)
         console.log('[USER] Email:', user.email)
+        console.log('[USER] Phone:', user.phone)
+      } else {
+        console.log('[USER] ❌ Utilisateur non trouvé pour ID:', userId)
       }
 
       // 5. Détection opérateur
       console.log('[STEP 5] Détection opérateur...')
+      console.log('[STEP 5] Appel detectOperatorGabon avec phoneNumber:', phoneNumber)
       const kyc = this.detectOperatorGabon(phoneNumber)
-      console.log('[KYC] Résultat:', JSON.stringify(kyc, null, 2))
+      console.log('[KYC] Résultat complet:', JSON.stringify(kyc, null, 2))
+      console.log('[KYC] name:', kyc.name)
+      console.log('[KYC] code:', kyc.code)
+      console.log('[KYC] accountCode:', kyc.accountCode)
 
       // 6. Renouvellement secret
       console.log('[STEP 6] Renouvellement secret...')
+      console.log('[STEP 6] Appel renewSecretIfNeeded avec phoneNumber:', phoneNumber)
       await this.renewSecretIfNeeded(phoneNumber)
+      console.log('[STEP 6] ✅ Secret renouvelé (ou tentative faite)')
 
       // 7. Calcul du total
       console.log('[STEP 7] Calcul du total...')
+      console.log('[STEP 7] Cart items à parcourir:', cart.items.length)
       let subtotal = 0
 
-      console.log('[CALCUL] Parcours des articles du panier...')
-      for (const item of cart.items) {
+      for (let i = 0; i < cart.items.length; i++) {
+        const item = cart.items[i]
+        console.log(`[CALCUL] Item ${i+1}/${cart.items.length}: product_id=${item.product_id}, quantity=${item.quantity}`)
         const product = await Product.findBy('id', item.product_id)
         if (product) {
           const itemTotal = Number(product.price) * Number(item.quantity)
-          console.log(`  - ${product.name}: ${product.price} × ${item.quantity} = ${itemTotal}`)
+          console.log(`[CALCUL]   - ${product.name}: ${product.price} × ${item.quantity} = ${itemTotal}`)
           subtotal += itemTotal
+        } else {
+          console.log(`[CALCUL]   - ⚠️ Produit non trouvé pour id: ${item.product_id}`)
         }
       }
 
-      const shippingCost = Number(payload.deliveryPrice || 1)
+      const shippingCostRaw = payload.deliveryPrice
+      console.log('[CALCUL] shippingCost raw:', shippingCostRaw, 'type:', typeof shippingCostRaw)
+      const shippingCost = Number(payload.deliveryPrice || 0)
       const total = Number(subtotal) + Number(shippingCost)
 
       console.log('[CALCUL] Résultat final:')
-      console.log('  - Subtotal:', subtotal)
-      console.log('  - Shipping cost:', shippingCost)
-      console.log('  - TOTAL:', total)
+      console.log('  - Subtotal:', subtotal, 'type:', typeof subtotal)
+      console.log('  - Shipping cost:', shippingCost, 'type:', typeof shippingCost)
+      console.log('  - TOTAL:', total, 'type:', typeof total)
 
-      // 8. Création commande - CORRIGÉ (sans delivery_address)
+      // 8. Création commande
       console.log('[STEP 8] Création de la commande...')
       
       const deliveryMethod = payload.deliveryMethod || 'standard'
       console.log('[ORDER] delivery_method utilisé:', deliveryMethod)
+      console.log('[ORDER] customer_name:', user?.full_name || payload.customerName || 'Client')
+      console.log('[ORDER] customer_phone:', phoneNumber)
+      console.log('[ORDER] payment_method:', kyc.name)
       
-      const order = await Order.create({
+      const orderData = {
         user_id: userId,
         order_number: generateOrderNumber(),
         status: 'pending',
-        total,
-        subtotal,
+        total: total,
+        subtotal: subtotal,
         shipping_cost: shippingCost,
         delivery_method: deliveryMethod,
         customer_name: user?.full_name || payload.customerName || 'Client',
         customer_phone: phoneNumber,
         payment_method: kyc.name,
         payment_operator_simple: kyc.name
-      })
+      }
+      
+      console.log('[ORDER] Données à créer:', JSON.stringify(orderData, null, 2))
+      
+      const order = await Order.create(orderData)
 
       console.log('[ORDER] Commande créée avec succès:')
       console.log('  - ID:', order.id)
       console.log('  - Order number:', order.order_number)
       console.log('  - Total:', order.total)
       console.log('  - Delivery method:', order.delivery_method)
+      console.log('  - Status:', order.status)
 
       // 9. Création des items
       console.log('[STEP 9] Création des items de commande...')
-      const { count } = await this.buildItems(order, cart)
+      console.log('[STEP 9] Appel buildItems avec order.id:', order.id)
+      const buildResult = await this.buildItems(order, cart)
+      const { count } = buildResult
       console.log('[ITEMS] Nombre d\'items créés:', count)
+      console.log('[ITEMS] Subtotal calculé par buildItems:', buildResult.subtotal)
 
       // 10. Tracking
       console.log('[STEP 10] Création du tracking...')
-      await OrderTracking.create({
+      const trackingData = {
         order_id: order.id,
         status: 'pending',
         description: 'Commande créée',
         tracked_at: DateTime.now()
-      })
+      }
+      console.log('[TRACKING] Données:', JSON.stringify(trackingData, null, 2))
+      
+      await OrderTracking.create(trackingData)
       console.log('[TRACKING] ✅ Tracking créé')
 
       // 11. Préparation paiement
@@ -330,27 +405,38 @@ export default class PayMobileMoneyController {
         operator_code: kyc.code
       }
 
-      console.log('[PAYMENT_PAYLOAD]', JSON.stringify(paymentPayload, null, 2))
+      console.log('[PAYMENT_PAYLOAD] Contenu complet:', JSON.stringify(paymentPayload, null, 2))
+      console.log('[PAYMENT_PAYLOAD] amount:', paymentPayload.amount)
+      console.log('[PAYMENT_PAYLOAD] callback_url_code:', paymentPayload.callback_url_code)
+      console.log('[PAYMENT_PAYLOAD] customer_account_number:', paymentPayload.customer_account_number)
+      console.log('[PAYMENT_PAYLOAD] merchant_operation_account_code:', paymentPayload.merchant_operation_account_code)
+      console.log('[PAYMENT_PAYLOAD] operator_code:', paymentPayload.operator_code)
 
       // 12. Appel service paiement
       console.log('[STEP 12] Appel à MypvitTransactionService.processPayment()...')
-      console.log('[API_CALL] Tentative de paiement...')
+      console.log('[API_CALL] Début appel API Mypvit...')
       
       let payment
       try {
         payment = await MypvitTransactionService.processPayment(paymentPayload)
-        console.log('[API_RESPONSE] Réponse reçue:', JSON.stringify(payment, null, 2))
+        console.log('[API_RESPONSE] ✅ Réponse reçue')
+        console.log('[API_RESPONSE] Contenu complet:', JSON.stringify(payment, null, 2))
+        console.log('[API_RESPONSE] status:', payment?.status)
+        console.log('[API_RESPONSE] reference_id:', payment?.reference_id)
       } catch (apiError: any) {
         console.log('[API_ERROR] ❌ Erreur lors de l\'appel API:')
-        console.log('  - Message:', apiError.message)
-        console.log('  - Stack:', apiError.stack)
+        console.log('[API_ERROR] Message:', apiError.message)
+        console.log('[API_ERROR] Stack:', apiError.stack)
+        console.log('[API_ERROR] Response data:', apiError.response?.data)
+        console.log('[API_ERROR] Response status:', apiError.response?.status)
         throw new Error(`Erreur API Mypvit: ${apiError.message}`)
       }
 
       if (!payment) {
-        console.log('[ERROR] ❌ Payment est null')
-        throw new Error('Payment null')
+        console.log('[ERROR] ❌ Payment est null ou undefined')
+        throw new Error('Payment null - pas de réponse de l\'API Mypvit')
       }
+      console.log('[STEP 12] ✅ Payment object valide')
 
       // 13. Récupération secret
       console.log('[STEP 13] Récupération du secret...')
@@ -358,59 +444,93 @@ export default class PayMobileMoneyController {
       try {
         xSecret = await MypvitSecretService.getSecret()
         console.log('[SECRET] Secret récupéré:', xSecret ? '✅ OUI' : '❌ NON')
+        if (xSecret) {
+          console.log('[SECRET] Longueur du secret:', xSecret.length)
+        }
       } catch (secretError: any) {
         console.log('[SECRET_ERROR] ❌ Erreur récupération secret:', secretError.message)
+        console.log('[SECRET_ERROR] Stack:', secretError.stack)
         throw new Error(`Erreur récupération secret: ${secretError.message}`)
       }
 
       if (!xSecret) {
-        console.log('[ERROR] ❌ XSecret missing')
-        throw new Error('XSecret missing')
+        console.log('[ERROR] ❌ XSecret missing - pas de secret disponible')
+        throw new Error('XSecret missing - impossible de continuer le paiement')
       }
+      console.log('[STEP 13] ✅ Secret valide')
 
       // 14. Traitement réponse paiement
       console.log('[STEP 14] Traitement réponse paiement...')
       console.log('[PAYMENT_STATUS] Status:', payment.status)
       console.log('[PAYMENT_REFERENCE] Reference ID:', payment.reference_id)
+      console.log('[PAYMENT] Payment complet:', JSON.stringify(payment, null, 2))
 
       if (payment.status !== 'FAILED' && payment.reference_id) {
         console.log('[SUCCESS] ✅ Paiement initié avec succès')
+        console.log('[SUCCESS] Mise à jour de la commande...')
         
         order.payment_reference_id = payment.reference_id
         order.status = 'pending_payment'
         order.payment_initiated_at = DateTime.now()
 
+        console.log('[ORDER] Avant save:', {
+          id: order.id,
+          payment_reference_id: order.payment_reference_id,
+          status: order.status,
+          payment_initiated_at: order.payment_initiated_at
+        })
+        
         await order.save()
-        console.log('[ORDER] Commande mise à jour avec reference_id:', payment.reference_id)
+        console.log('[ORDER] ✅ Commande mise à jour avec reference_id:', payment.reference_id)
+        console.log('[ORDER] Après save - status:', order.status)
 
         // 15. Vidage panier
         console.log('[STEP 15] Vidage du panier...')
+        console.log('[CART] Cart ID:', cart.id)
+        console.log('[CART] Suppression des CartItems...')
+        
         const deleted = await CartItem.query().where('cart_id', cart.id).delete()
         console.log('[CART] Items supprimés:', deleted)
+        
+        if (deleted > 0) {
+          console.log('[CART] ✅ Panier vidé avec succès')
+        } else {
+          console.log('[CART] ⚠️ Aucun item supprimé ou panier déjà vide')
+        }
 
         console.log('✅ ========== PAYMENT SUCCESS ========== ✅')
         console.log('🚀 ========================================\n')
 
-        return response.ok({
+        const successResponse = {
           success: true,
           orderId: order.id,
-          total,
+          total: total,
           itemsCount: count,
-          payment
-        })
+          payment: payment
+        }
+        console.log('[RESPONSE] Envoi réponse succès:', JSON.stringify(successResponse, null, 2))
+        
+        return response.ok(successResponse)
       }
 
       console.log('[FAILURE] ❌ Paiement échoué - status:', payment.status)
+      console.log('[FAILURE] reference_id:', payment.reference_id)
+      console.log('[FAILURE] Payment complet:', JSON.stringify(payment, null, 2))
+      
       order.status = 'payment_failed'
       await order.save()
+      console.log('[ORDER] Status mis à jour: payment_failed')
 
       console.log('❌ ========== PAYMENT FAILED ========== ❌')
       
-      return response.badRequest({
+      const failureResponse = {
         success: false,
         message: 'Paiement échoué',
         paymentStatus: payment.status
-      })
+      }
+      console.log('[RESPONSE] Envoi réponse échec:', JSON.stringify(failureResponse, null, 2))
+      
+      return response.badRequest(failureResponse)
 
     } catch (error: any) {
       console.log('\n')
@@ -418,18 +538,32 @@ export default class PayMobileMoneyController {
       console.log('[ERROR] Message:', error.message)
       console.log('[ERROR] Stack:', error.stack)
       console.log('[ERROR] Name:', error.name)
+      console.log('[ERROR] Code:', error.code)
+      console.log('[ERROR] Status:', error.status)
       
-      if (error.code) console.log('[ERROR] Code:', error.code)
-      if (error.status) console.log('[ERROR] Status:', error.status)
+      if (error.response) {
+        console.log('[ERROR] Response data:', error.response.data)
+        console.log('[ERROR] Response status:', error.response.status)
+        console.log('[ERROR] Response headers:', error.response.headers)
+      }
+      
+      if (error.request) {
+        console.log('[ERROR] Request was made but no response received')
+        console.log('[ERROR] Request:', error.request)
+      }
       
       console.log('💥 ======================================== 💥\n')
 
-      return response.internalServerError({
+      const errorResponse = {
         success: false,
         message: 'Erreur serveur',
         error: error.message,
         stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      })
+      }
+      
+      console.log('[RESPONSE] Envoi erreur 500:', JSON.stringify(errorResponse, null, 2))
+      
+      return response.internalServerError(errorResponse)
     }
   }
 }
