@@ -16,11 +16,12 @@ const CALLBACK_URL_CODE = '9ZOXW'
 const GIMAC_CODE_URL = 'MTX1MTKQQCULKA3W'
 const GIMAC_ACCOUNT_CODE = 'ACC_69FE0E1BC34B4'
 
-const LINK_TYPES: Record<string, string> = {
-  'web': 'WEB',
-  'visa': 'VISA_MASTERCARD',
-  'rest': 'RESTLINK'
-}
+// Supprimé car plus utilisé - GIMAC utilise uniquement WEB
+// const LINK_TYPES: Record<string, string> = {
+//   'web': 'WEB',
+//   'visa': 'VISA_MASTERCARD',
+//   'rest': 'RESTLINK'
+// }
 
 export default class PayLinkController {
 
@@ -57,32 +58,25 @@ export default class PayLinkController {
   private async generatePaymentLink(
     amount: number,
     reference: string,
-    linkTypeCode: string,
     phoneNumber: string
   ): Promise<any> {
     console.log('[GENERATE_LINK] ========== DEBUT ==========')
     console.log('[GENERATE_LINK] Paramètres reçus:')
     console.log('[GENERATE_LINK]   - amount:', amount)
     console.log('[GENERATE_LINK]   - reference:', reference)
-    console.log('[GENERATE_LINK]   - linkTypeCode original:', linkTypeCode)
     console.log('[GENERATE_LINK]   - phoneNumber:', phoneNumber)
 
     const gimacConfig = this.getGimacConfig()
     
-    // 🔥 CORRECTION: GIMAC supporte uniquement WEB
-    // Quel que soit le type demandé, on force WEB
-    let finalService = 'WEB'
-    if (linkTypeCode !== 'WEB') {
-      console.log(`[GENERATE_LINK] ⚠️ GIMAC ne supporte pas ${linkTypeCode}, forçage à WEB`)
-    }
-    
-    console.log(`[GENERATE_LINK] 🔑 Service final: ${finalService}`)
+    // GIMAC supporte uniquement WEB
+    const finalService = 'WEB'
+    console.log(`[GENERATE_LINK] 🔑 Service: ${finalService}`)
 
     const linkPayload: any = {
       amount: amount,
       product: reference.substring(0, 15),
       reference: `REF${Date.now()}`.substring(0, 15),
-      service: finalService,  // ← Toujours WEB
+      service: finalService,
       callback_url_code: CALLBACK_URL_CODE,
       merchant_operation_account_code: gimacConfig.accountCode,
       transaction_type: 'PAYMENT',
@@ -94,17 +88,17 @@ export default class PayLinkController {
     // Pour WEB, customer_account_number est optionnel mais peut être fourni
     if (phoneNumber) {
       linkPayload.customer_account_number = phoneNumber
-      console.log('[GENERATE_LINK] ✅ Téléphone ajouté pour WEB')
+      console.log('[GENERATE_LINK] ✅ Téléphone ajouté')
     }
 
-    console.log('[GENERATE_LINK] 📤 Payload final:', JSON.stringify(linkPayload, null, 2))
+    console.log('[GENERATE_LINK] 📤 Payload:', JSON.stringify(linkPayload, null, 2))
 
     console.log('[GENERATE_LINK] Appel de MypvitSecretService.getSecret()...')
     const secret = await MypvitSecretService.getSecret()
     console.log('[GENERATE_LINK] ✅ Secret récupéré')
     
     const apiUrl = `https://api.mypvit.pro/${gimacConfig.codeUrl}/link`
-    console.log(`[GENERATE_LINK] 🔗 URL API: ${apiUrl}`)
+    console.log(`[GENERATE_LINK] 🔗 URL: ${apiUrl}`)
     
     console.log('[GENERATE_LINK] Envoi de la requête POST...')
     
@@ -165,7 +159,7 @@ export default class PayLinkController {
 
       const userId = payload.userId
       const phoneNumber = payload.customerAccountNumber || payload.customerPhone
-      let linkType = payload.linkType || 'web'
+      const linkType = payload.linkType || 'web'
 
       if (!userId || !phoneNumber) {
         console.log('[ERROR] ❌ userId ou phoneNumber manquant')
@@ -176,7 +170,7 @@ export default class PayLinkController {
       }
 
       console.log(`[LINK_TYPE] Type demandé par frontend: ${linkType}`)
-      console.log(`[LINK_TYPE] ⚠️ GIMAC utilise uniquement WEB, le type sera forcé`)
+      console.log(`[LINK_TYPE] ⚠️ GIMAC utilise uniquement WEB`)
 
       const cart = await Cart.query()
         .where('user_id', userId)
@@ -184,6 +178,7 @@ export default class PayLinkController {
         .first()
 
       if (!cart || !cart.items || cart.items.length === 0) {
+        console.log('[ERROR] ❌ Panier vide')
         return response.badRequest({
           success: false,
           message: 'Panier vide'
@@ -224,7 +219,7 @@ export default class PayLinkController {
 
       await this.renewSecretIfNeeded()
 
-      // Création de la commande - le payment_method indique le type demandé mais le vrai lien sera WEB
+      // Création de la commande
       const order = await Order.create({
         user_id: userId,
         order_number: `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -237,7 +232,7 @@ export default class PayLinkController {
         customer_phone: phoneNumber,
         customer_email: payload.customerEmail || user?.email,
         shipping_address: payload.shippingAddress,
-        payment_method: `gimac_${linkType}`,  // Garde la trace du type demandé
+        payment_method: `gimac_${linkType}`,
         payment_operator_simple: 'GIMAC'
       })
       
@@ -272,11 +267,10 @@ export default class PayLinkController {
       
       const reference = `ORD-${order.id.substring(0, 8)}`
 
-      // Génération du lien - Le type sera forcé à WEB dans generatePaymentLink
+      // Génération du lien - GIMAC utilise uniquement WEB
       const linkResult = await this.generatePaymentLink(
         total,
         reference,
-        'WEB',  // ← On force WEB directement
         phoneNumber
       )
 
@@ -308,8 +302,8 @@ export default class PayLinkController {
           link: {
             payment_url: linkResult.url,
             reference_id: linkResult.merchant_reference_id || reference,
-            type: 'WEB',  // ← Le vrai type est WEB
-            requested_type: linkType,  // ← Type demandé par le frontend
+            type: 'WEB',
+            requested_type: linkType,
             amount: total,
           },
         }
