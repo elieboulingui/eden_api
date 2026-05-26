@@ -50,7 +50,6 @@ export default class PayLinkController {
       console.log('[RENEW_SECRET] ✅ Secret renouvelé avec succès')
     } catch (error: any) {
       console.log('[RENEW_SECRET] ❌ Erreur renouvellement:', error.message)
-      console.error('[RENEW_SECRET] Stack:', error.stack)
     }
     console.log('[RENEW_SECRET] ========== FIN ==========')
   }
@@ -70,7 +69,7 @@ export default class PayLinkController {
 
     const gimacConfig = this.getGimacConfig()
     
-    console.log(`[GENERATE_LINK] 🔑 Génération lien GIMAC ${linkTypeCode} pour commande:`, reference)
+    console.log(`[GENERATE_LINK] 🔑 Génération lien GIMAC ${linkTypeCode}`)
 
     const linkPayload: any = {
       amount: amount,
@@ -85,29 +84,37 @@ export default class PayLinkController {
       failed_redirection_url_code: 'YTJEI',
     }
 
-    console.log('[GENERATE_LINK] Payload après construction initiale:', JSON.stringify(linkPayload, null, 2))
-
-    // Selon la doc, customer_account_number est optionnel pour WEB
-    if (phoneNumber && linkTypeCode === 'WEB') {
-      linkPayload.customer_account_number = phoneNumber
-      console.log('[GENERATE_LINK] ✅ Téléphone ajouté au payload pour WEB:', phoneNumber)
-    } else {
-      console.log('[GENERATE_LINK] ⚠️ Téléphone NON ajouté (linkTypeCode !== WEB ou pas de téléphone)')
+    // 🔥 CORRECTION: customer_account_number est REQUIS pour VISA_MASTERCARD et RESTLINK
+    // Selon la doc:
+    // - WEB: optionnel
+    // - VISA_MASTERCARD: requis
+    // - RESTLINK: requis
+    if (linkTypeCode === 'WEB') {
+      if (phoneNumber) {
+        linkPayload.customer_account_number = phoneNumber
+        console.log('[GENERATE_LINK] ✅ Téléphone ajouté pour WEB')
+      } else {
+        console.log('[GENERATE_LINK] ⚠️ Pas de téléphone pour WEB (optionnel)')
+      }
+    } else if (linkTypeCode === 'VISA_MASTERCARD' || linkTypeCode === 'RESTLINK') {
+      // Pour VISA_MASTERCARD et RESTLINK, customer_account_number est OBLIGATOIRE
+      if (phoneNumber) {
+        linkPayload.customer_account_number = phoneNumber
+        console.log('[GENERATE_LINK] ✅ Téléphone ajouté (OBLIGATOIRE) pour', linkTypeCode)
+      } else {
+        console.log('[GENERATE_LINK] ❌ ERREUR: phoneNumber requis pour', linkTypeCode)
+        throw new Error(`Le numéro de téléphone est requis pour le service ${linkTypeCode}`)
+      }
     }
 
     console.log('[GENERATE_LINK] 📤 Payload final:', JSON.stringify(linkPayload, null, 2))
 
     console.log('[GENERATE_LINK] Appel de MypvitSecretService.getSecret()...')
     const secret = await MypvitSecretService.getSecret()
-    console.log('[GENERATE_LINK] ✅ Secret récupéré (longueur:', secret?.length || 0, ')')
+    console.log('[GENERATE_LINK] ✅ Secret récupéré')
     
     const apiUrl = `https://api.mypvit.pro/${gimacConfig.codeUrl}/link`
     console.log(`[GENERATE_LINK] 🔗 URL API: ${apiUrl}`)
-    console.log('[GENERATE_LINK] Headers:', {
-      'Content-Type': 'application/json',
-      'X-Secret': secret ? '***' : 'null',
-      'X-Callback-MediaType': 'application/json',
-    })
     
     console.log('[GENERATE_LINK] Envoi de la requête POST...')
     
@@ -125,15 +132,10 @@ export default class PayLinkController {
         }
       )
 
-      console.log('[GENERATE_LINK] ✅ Réponse reçue avec succès')
+      console.log('[GENERATE_LINK] ✅ Réponse reçue')
       console.log('[GENERATE_LINK] Status:', linkResponse.status)
-      console.log('[GENERATE_LINK] Status text:', linkResponse.statusText)
       console.log('[GENERATE_LINK] Data:', JSON.stringify(linkResponse.data, null, 2))
-      console.log('[GENERATE_LINK] ✅ Lien généré:', {
-        status: linkResponse.data.status,
-        url: linkResponse.data.url,
-        reference_id: linkResponse.data.merchant_reference_id
-      })
+      console.log('[GENERATE_LINK] ✅ Lien généré:', linkResponse.data.url)
       
       console.log('[GENERATE_LINK] ========== FIN ==========')
       return linkResponse.data
@@ -152,16 +154,10 @@ export default class PayLinkController {
 
   async pay({ request, response }: HttpContext) {
     console.log('\n')
-    console.log('💳 =========================================================')
     console.log('💳 ========== PAYMENT VIA LINK START (GIMAC) ==========')
-    console.log('💳 =========================================================')
     console.log('[TIMESTAMP]', new Date().toISOString())
-    console.log('[REQUEST] Method:', request.method())
-    console.log('[REQUEST] URL:', request.url())
-    console.log('[REQUEST] Headers:', JSON.stringify(request.headers(), null, 2))
 
     try {
-      console.log('[STEP 1] Récupération du payload...')
       const payload = request.only([
         'userId',
         'customerAccountNumber',
@@ -175,24 +171,12 @@ export default class PayLinkController {
         'linkType'
       ])
 
-      console.log('[PAYLOAD] Contenu complet:', JSON.stringify(payload, null, 2))
-      console.log('[PAYLOAD] Détails:')
-      console.log('  - userId:', payload.userId)
-      console.log('  - customerAccountNumber:', payload.customerAccountNumber)
-      console.log('  - customerPhone:', payload.customerPhone)
-      console.log('  - linkType:', payload.linkType)
-      console.log('  - deliveryPrice:', payload.deliveryPrice)
+      console.log('[PAYLOAD]', JSON.stringify(payload, null, 2))
 
       const userId = payload.userId
       const phoneNumber = payload.customerAccountNumber || payload.customerPhone
       let linkType = payload.linkType || 'web'
       let linkTypeCode = LINK_TYPES[linkType] || 'WEB'
-
-      console.log('[STEP 2] Données extraites:')
-      console.log('  - userId:', userId)
-      console.log('  - phoneNumber:', phoneNumber)
-      console.log('  - linkType:', linkType)
-      console.log('  - linkTypeCode:', linkTypeCode)
 
       if (!userId || !phoneNumber) {
         console.log('[ERROR] ❌ userId ou phoneNumber manquant')
@@ -201,105 +185,57 @@ export default class PayLinkController {
           message: 'userId ou phone manquant'
         })
       }
-      console.log('[STEP 2] ✅ userId et phoneNumber présents')
 
-      console.log('[STEP 3] Vérification du panier...')
-      console.log('[CART] Recherche du panier pour userId:', userId)
+      console.log(`[LINK_TYPE] Type demandé: ${linkTypeCode}`)
+
       const cart = await Cart.query()
         .where('user_id', userId)
         .preload('items')
         .first()
 
-      console.log('[CART] Panier trouvé:', !!cart)
-      if (cart) {
-        console.log('[CART] ID:', cart.id)
-        console.log('[CART] Nombre articles:', cart.items?.length || 0)
-        if (cart.items && cart.items.length > 0) {
-          console.log('[CART] Liste des articles:')
-          cart.items.forEach((item, idx) => {
-            console.log(`  [${idx + 1}] product_id: ${item.product_id}, quantity: ${item.quantity}`)
-          })
-        }
-      }
-
       if (!cart || !cart.items || cart.items.length === 0) {
-        console.log('[ERROR] ❌ Panier vide')
         return response.badRequest({
           success: false,
           message: 'Panier vide'
         })
       }
-      console.log('[STEP 3] ✅ Panier valide')
 
-      console.log('[STEP 4] Vérification des stocks...')
-      const stockErrors: string[] = []
-      
+      // Vérification des stocks
       for (const item of cart.items) {
-        console.log(`[STOCK] Vérification produit ID: ${item.product_id}, quantité demandée: ${item.quantity}`)
         const product = await Product.findBy('id', item.product_id)
-        
         if (!product) {
-          console.log(`[STOCK] ❌ Produit non trouvé: ${item.product_id}`)
-          stockErrors.push(`Produit non trouvé`)
-          continue
+          return response.badRequest({
+            success: false,
+            message: `Produit non trouvé`
+          })
         }
-        
-        console.log(`[STOCK] Produit trouvé: ${product.name}, stock disponible: ${product.stock}`)
         if (product.stock < item.quantity) {
-          console.log(`[STOCK] ❌ Stock insuffisant pour ${product.name}`)
-          stockErrors.push(`${product.name}: stock insuffisant`)
-        } else {
-          console.log(`[STOCK] ✅ Stock OK pour ${product.name}`)
+          return response.badRequest({
+            success: false,
+            message: `${product.name}: stock insuffisant`
+          })
         }
       }
-      
-      if (stockErrors.length > 0) {
-        console.log('[ERROR] ❌ Erreurs de stock:', stockErrors)
-        return response.badRequest({
-          success: false,
-          message: 'Stock insuffisant',
-          errors: stockErrors
-        })
-      }
-      console.log('[STEP 4] ✅ Stocks vérifiés avec succès')
 
-      console.log('[STEP 5] Récupération utilisateur...')
-      console.log('[USER] Recherche utilisateur ID:', userId)
       const user = await User.findBy('id', userId)
-      console.log('[USER] Trouvé:', !!user)
-      if (user) {
-        console.log('[USER] Détails:')
-        console.log('  - ID:', user.id)
-        console.log('  - Nom:', user.full_name)
-        console.log('  - Email:', user.email)
-        console.log('  - Téléphone:', user.phone)
-      }
-
-      console.log('[STEP 6] Calcul du total...')
-      let subtotal = 0
       
+      let subtotal = 0
       for (const item of cart.items) {
         const product = await Product.findBy('id', item.product_id)
         if (product) {
-          const itemTotal = Number(product.price) * Number(item.quantity)
-          console.log(`  - ${product.name}: ${product.price} × ${item.quantity} = ${itemTotal}`)
-          subtotal += itemTotal
+          subtotal += Number(product.price) * Number(item.quantity)
         }
       }
       
       const shippingCost = Number(payload.deliveryPrice || 0)
       const total = subtotal + shippingCost
-      
-      console.log('[CALCUL] Résultat:')
-      console.log('  - Subtotal:', subtotal)
-      console.log('  - Shipping cost:', shippingCost)
-      console.log('  - TOTAL:', total)
 
-      console.log('[STEP 7] Renouvellement du secret...')
+      console.log('[TOTAL]', total)
+
       await this.renewSecretIfNeeded()
 
-      console.log('[STEP 8] Création de la commande...')
-      const orderData = {
+      // Création de la commande
+      const order = await Order.create({
         user_id: userId,
         order_number: `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         status: 'pending' as const,
@@ -313,26 +249,16 @@ export default class PayLinkController {
         shipping_address: payload.shippingAddress,
         payment_method: `gimac_${linkType}`,
         payment_operator_simple: 'GIMAC'
-      }
+      })
       
-      console.log('[ORDER] Données:', JSON.stringify(orderData, null, 2))
-      
-      const order = await Order.create(orderData)
-      
-      console.log('[ORDER] Commande créée avec succès:')
-      console.log('  - ID:', order.id)
-      console.log('  - Order number:', order.order_number)
-      console.log('  - Total:', order.total)
-      console.log('  - Status:', order.status)
+      console.log('[ORDER] Créée:', order.id)
 
-      console.log('[STEP 9] Création des items de commande...')
+      // Création des items
       let itemsCount = 0
-      
       for (const item of cart.items) {
         const product = await Product.findBy('id', item.product_id)
         if (product) {
           const totalPrice = Number(product.price) * Number(item.quantity)
-          console.log(`[ITEM] Création: ${product.name} x${item.quantity} = ${totalPrice}`)
           await OrderItem.create({
             order_id: order.id,
             product_id: product.id,
@@ -342,55 +268,39 @@ export default class PayLinkController {
             subtotal: totalPrice
           })
           itemsCount++
-          console.log(`[ITEM] ✅ Item créé pour ${product.name}`)
         }
       }
       
-      console.log('[ITEMS] Total items créés:', itemsCount)
+      console.log('[ITEMS] Créés:', itemsCount)
 
-      console.log('[STEP 10] Création du tracking...')
-      const trackingData = {
+      await OrderTracking.create({
         order_id: order.id,
         status: 'pending',
         description: `Paiement via lien GIMAC ${linkTypeCode} généré`,
         tracked_at: DateTime.now()
-      }
-      console.log('[TRACKING] Données:', JSON.stringify(trackingData, null, 2))
+      })
       
-      await OrderTracking.create(trackingData)
-      console.log('[TRACKING] ✅ Tracking créé')
-
-      console.log('[STEP 11] Génération du lien de paiement...')
       const reference = `ORD-${order.id.substring(0, 8)}`
-      console.log('[REFERENCE] Générée:', reference)
 
+      // Génération du lien
       const linkResult = await this.generatePaymentLink(
         total,
         reference,
         linkTypeCode,
-        phoneNumber
+        phoneNumber  // ← Le téléphone est passé et sera utilisé pour VISA_MASTERCARD
       )
 
-      console.log('[STEP 12] Mise à jour de la commande...')
       if (linkResult.merchant_reference_id) {
-        console.log('[UPDATE] payment_reference_id:', linkResult.merchant_reference_id)
         order.payment_reference_id = linkResult.merchant_reference_id
         order.status = 'pending_payment' as const
         await order.save()
-        console.log('[UPDATE] ✅ Commande mise à jour')
-      } else {
-        console.log('[UPDATE] ⚠️ Pas de merchant_reference_id reçu')
+        console.log('[UPDATE] Reference_id:', linkResult.merchant_reference_id)
       }
-
-      console.log('[STEP 13] Vidage du panier...')
-      const deletedCount = await CartItem.query().where('cart_id', cart.id).delete()
-      console.log('[CART] Items supprimés:', deletedCount)
-
-      console.log('✅ =========================================================')
-      console.log('✅ ========== PAYMENT LINK GENERATED SUCCESSFULLY ==========')
-      console.log('✅ =========================================================\n')
-
-      const responseData = {
+      
+      await CartItem.query().where('cart_id', cart.id).delete()
+      console.log('[CART] Vidé')
+      
+      return response.ok({
         success: true,
         message: `✅ Paiement via lien GIMAC ${linkTypeCode} généré avec succès !`,
         data: {
@@ -412,28 +322,13 @@ export default class PayLinkController {
             amount: total,
           },
         }
-      }
-      
-      console.log('[RESPONSE] Envoi de la réponse:', JSON.stringify(responseData, null, 2))
-      
-      return response.ok(responseData)
+      })
       
     } catch (error: any) {
-      console.log('\n')
-      console.log('💥 =========================================================')
-      console.log('💥 ========== EXCEPTION CATCHED ========== 💥')
-      console.log('💥 =========================================================')
-      console.log('[ERROR] Message:', error.message)
-      console.log('[ERROR] Stack:', error.stack)
-      console.log('[ERROR] Name:', error.name)
-      if (error.code) console.log('[ERROR] Code:', error.code)
-      if (error.status) console.log('[ERROR] Status:', error.status)
+      console.error('[ERROR]', error.message)
       if (error.response) {
-        console.log('[ERROR] Response data:', JSON.stringify(error.response.data, null, 2))
-        console.log('[ERROR] Response status:', error.response.status)
-        console.log('[ERROR] Response headers:', error.response.headers)
+        console.error('[ERROR] Response:', error.response.data)
       }
-      console.log('💥 =========================================================\n')
       
       return response.internalServerError({
         success: false,
