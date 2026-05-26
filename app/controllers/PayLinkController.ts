@@ -39,7 +39,7 @@ export default class PayLinkController {
     }
     
     if (local.startsWith('07') || local.startsWith('7')) {
-      return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY', accountCode: 'ACC_69EFB0E02FCA3' }
+      return { name: 'AIRTEL_MONEY', code: 'AIRTEL_MONEY', accountCode: 'ACC_69FE0E1BC34B4' }
     }
     
     return { name: 'GIMAC', code: 'GIMAC_PAY', accountCode: 'ACC_69FE0E1BC34B4' }
