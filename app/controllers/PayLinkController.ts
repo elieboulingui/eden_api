@@ -13,7 +13,7 @@ import MypvitSecretService from '../services/mypvit_secret_service.js'
 import axios from 'axios'
 
 const CALLBACK_URL_CODE = '9ZOXW'
-const GIMAC_CODE_URL = '6JN5J6U0NBJGKDAQ'
+const GIMAC_CODE_URL = 'MTX1MTKQQCULKA3W'
 const GIMAC_ACCOUNT_CODE = 'ACC_69FE0E1BC34B4'
 
 const LINK_TYPES: Record<string, string> = {
