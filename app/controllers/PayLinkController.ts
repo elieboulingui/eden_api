@@ -95,8 +95,8 @@ export default class PayLinkController {
     // 3. Logger chaque panier trouvé
     for (const c of allCarts) {
       console.log(`[STOCK] Panier ID: ${c.id}`, {
-        created_at: c.createdAt?.toISO(),
-        updated_at: c.updatedAt?.toISO(),
+        created_at: c.created_at?.toISO(),
+        updated_at: c.updated_at?.toISO(),
         items_count: c.items?.length || 0
       })
       
@@ -106,7 +106,7 @@ export default class PayLinkController {
           console.log(`[STOCK]   Item: ${item.id}`, {
             product_id: item.product_id,
             quantity: item.quantity,
-            created_at: item.createdAt?.toISO()
+            created_at: item.created_at?.toISO()
           })
         }
       }
@@ -299,8 +299,8 @@ export default class PayLinkController {
               stock: product.stock,
               is_archived: product.isArchived
             } : null,
-            created_at: item.createdAt,
-            updated_at: item.updatedAt
+            created_at: item.created_at,
+            updated_at: item.updated_at
           })
         }
         
@@ -309,8 +309,8 @@ export default class PayLinkController {
           user_id: cart.user_id,
           items_count: cart.items.length,
           items: itemsWithProducts,
-          created_at: cart.createdAt,
-          updated_at: cart.updatedAt
+          created_at: cart.created_at,
+          updated_at: cart.updated_at
         })
       }
       
@@ -336,12 +336,13 @@ export default class PayLinkController {
         has_items: allCarts.some(cart => cart.items && cart.items.length > 0)
       })
       
-    } catch (error) {
-      console.error('[DEBUG_CART] Erreur:', error)
+    } catch (error: unknown) {
+      const err = error as Error
+      console.error('[DEBUG_CART] Erreur:', err.message)
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la vérification du panier',
-        error: error.message
+        error: err.message
       })
     }
   }
@@ -425,12 +426,13 @@ export default class PayLinkController {
         }
       })
       
-    } catch (error) {
-      console.error('[CREATE_TEST_CART] Erreur:', error)
+    } catch (error: unknown) {
+      const err = error as Error
+      console.error('[CREATE_TEST_CART] Erreur:', err.message)
       return response.status(500).json({
         success: false,
         message: 'Erreur lors de la création du panier test',
-        error: error.message
+        error: err.message
       })
     }
   }
@@ -734,39 +736,40 @@ export default class PayLinkController {
             address: order.shipping_address,
             price: order.shipping_cost
           },
-          createdAt: order.createdAt,
+          created_at: order.created_at,
         },
       })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as any
       console.log('\n')
       console.log('💥 =========================================================')
       console.log('💥 ========== ERREUR LORS DU PAIEMENT ==========')
       console.log('💥 =========================================================')
-      console.error('[ERROR] Type:', error.constructor.name)
-      console.error('[ERROR] Message:', error.message)
-      console.error('[ERROR] Stack:', error.stack?.split('\n').slice(0, 5).join('\n'))
+      console.error('[ERROR] Type:', err.constructor?.name || 'Unknown')
+      console.error('[ERROR] Message:', err.message)
+      console.error('[ERROR] Stack:', err.stack?.split('\n').slice(0, 5).join('\n'))
       
-      if (error.response) {
-        console.error('[ERROR] Response status:', error.response.status)
-        console.error('[ERROR] Response data:', JSON.stringify(error.response.data, null, 2))
+      if (err.response) {
+        console.error('[ERROR] Response status:', err.response.status)
+        console.error('[ERROR] Response data:', JSON.stringify(err.response.data, null, 2))
       }
       
-      if (error.cause) {
-        console.error('[ERROR] Cause:', error.cause)
+      if (err.cause) {
+        console.error('[ERROR] Cause:', err.cause)
       }
       
       console.log('💥 =========================================================\n')
       
       // Déterminer le message d'erreur approprié
       let errorMessage = 'Erreur lors de la génération du lien de paiement'
-      let errorDetails = error.message
+      let errorDetails = err.message
       
-      if (error.response?.data?.message) {
-        errorDetails = error.response.data.message
+      if (err.response?.data?.message) {
+        errorDetails = err.response.data.message
       }
       
-      if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
         errorMessage = 'Impossible de contacter le service de paiement'
         errorDetails = 'Le service de paiement est momentanément indisponible'
       }
@@ -775,10 +778,10 @@ export default class PayLinkController {
         success: false,
         message: errorMessage,
         error: errorDetails,
-        errorCode: error.code || 'UNKNOWN',
+        errorCode: err.code || 'UNKNOWN',
         timestamp: new Date().toISOString(),
         ...(process.env.NODE_ENV === 'development' && {
-          stack: error.stack?.split('\n')
+          stack: err.stack?.split('\n')
         })
       })
     }
