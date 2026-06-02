@@ -1,4 +1,5 @@
-// app/controllers/CallbackController.ts - VERSION FULL DEBUG LOGS
+// app/controllers/CallbackController.ts - VERSION FULL DEBUG LOGS + NOTIFICATIONS
+
 import type { HttpContext } from '@adonisjs/core/http'
 import Order from '#models/Order'
 import OrderItem from '#models/OrderItem'
@@ -8,6 +9,8 @@ import Product from '#models/Product'
 import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
 import OrderEmailService from '../services/OrderEmailService.js'
+import AdminNotificationService from '../services/AdminNotificationService.js'
+import MerchantNotificationService from '../services/MerchantNotificationService.js'
 import crypto from 'node:crypto'
 
 export default class CallbackController {
@@ -186,22 +189,99 @@ export default class CallbackController {
 
           console.log('\n💼 ===== LANCEMENT DISTRIBUTION =====')
 
-          await this.distributeMoney(order)
+          const merchantEmails = await this.distributeMoney(order)
 
           console.log('✅ Distribution terminée')
+          console.log('📧 Emails marchands récupérés:', merchantEmails)
 
-          console.log('\n📧 ===== ENVOI EMAIL CLIENT =====')
+          // ==========================================
+          // 📧 ENVOI DE TOUS LES EMAILS
+          // ==========================================
+          console.log('\n📧 ===== ENVOI DE TOUS LES EMAILS =====')
 
           try {
-
+            // 1️⃣ EMAIL CLIENT
+            console.log('\n1️⃣ Email de confirmation client...')
             await OrderEmailService.sendOrderConfirmation(order.id)
+            console.log('✅ Email client envoyé avec succès')
 
-            console.log('✅ Email envoyé avec succès')
+            // 2️⃣ EMAILS AUX MARCHANDS via MerchantNotificationService
+            console.log('\n2️⃣ Emails aux marchands...')
+            
+            if (merchantEmails && merchantEmails.length > 0) {
+              // Récupérer tous les items de la commande
+              const orderItems = await OrderItem.query().where('order_id', order.id)
+              
+              // Grouper les produits par marchand
+              const merchantProductsMap = new Map<string, any[]>()
+              
+              for (const item of orderItems) {
+                const product = await Product.find(item.product_id)
+                if (product && product.user_id) {
+                  const merchant = await User.findBy('id', product.user_id)
+                  if (merchant && merchant.email) {
+                    if (!merchantProductsMap.has(merchant.email)) {
+                      merchantProductsMap.set(merchant.email, [])
+                    }
+                    merchantProductsMap.get(merchant.email)!.push({
+                      id: product.id,
+                      name: product.name,
+                      quantity: item.quantity,
+                      price: item.price,
+                      subtotal: item.subtotal,
+                      image: product.image_url || null,
+                    })
+                  }
+                }
+              }
+
+              // Envoyer un email à chaque marchand via le service dédié
+              for (const [email, products] of merchantProductsMap.entries()) {
+                const merchant = await User.query()
+                  .where('email', email)
+                  .first()
+
+                if (merchant) {
+                  const merchantAmount = products.reduce(
+                    (sum: number, p: any) => sum + (p.subtotal || 0), 
+                    0
+                  )
+
+                  console.log(`\n📧 Envoi au marchand: ${merchant.full_name} (${email})`)
+                  console.log(`   Produits: ${products.length}, Montant: ${merchantAmount} FCFA`)
+                  
+                  // Utilisation du service MerchantNotificationService
+                  await MerchantNotificationService.sendNewSaleNotification(
+                    email,
+                    merchant.full_name,
+                    order,
+                    products,
+                    merchantAmount
+                  )
+                  
+                  console.log(`✅ Envoyé à ${email}`)
+                }
+              }
+
+              console.log('✅ Tous les emails marchands envoyés')
+
+            } else {
+              console.log('⚠️ Aucun marchand à notifier')
+            }
+
+            // 3️⃣ EMAILS AUX ADMINS via AdminNotificationService
+            console.log('\n3️⃣ Emails aux administrateurs...')
+            
+            // Utilisation du service AdminNotificationService
+            await AdminNotificationService.sendPaymentNotification(order, amount)
+            console.log('✅ Notifications admin envoyées')
+
+            console.log('\n✅ ===== TOUS LES EMAILS ONT ÉTÉ ENVOYÉS =====')
 
           } catch (emailError: any) {
-
-            console.error('❌ ERREUR EMAIL:')
-            console.error(emailError)
+            console.error('\n❌ ERREUR LORS DE L\'ENVOI DES EMAILS:')
+            console.error('Message:', emailError.message)
+            console.error('Stack:', emailError.stack)
           }
 
         } else if (status === 'failed') {
@@ -223,6 +303,18 @@ export default class CallbackController {
           })
 
           console.log('✅ Tracking payment_failed créé')
+
+          // 🆕 NOTIFIER ADMINS DE L'ÉCHEC
+          console.log('\n📧 ===== NOTIFICATIONS ÉCHEC PAIEMENT =====')
+          try {
+            await AdminNotificationService.sendPaymentFailedNotification(
+              order,
+              `${code} - ${message}`
+            )
+            console.log('✅ Notifications d\'échec envoyées aux admins')
+          } catch (failedEmailError: any) {
+            console.error('❌ Erreur notification échec:', failedEmailError.message)
+          }
 
         } else {
 
@@ -268,7 +360,7 @@ export default class CallbackController {
   // ============================================================
   // 💼 DISTRIBUTION ARGENT
   // ============================================================
-  private async distributeMoney(order: Order) {
+  private async distributeMoney(order: Order): Promise<string[]> {
 
     console.log('\n')
     console.log('💼💼💼💼💼💼💼💼💼💼💼💼💼💼💼💼')
@@ -279,6 +371,8 @@ export default class CallbackController {
     console.log('💰 Total:', order.total)
     console.log('📦 Sous-total:', order.subtotal)
     console.log('🚚 Livraison:', order.shipping_cost)
+
+    const merchantEmails: string[] = []
 
     console.log('\n📥 Récupération des OrderItems...')
 
@@ -323,6 +417,14 @@ export default class CallbackController {
         continue
       }
 
+      // 🆕 RÉCUPÉRER L'EMAIL DU MARCHAND
+      const merchant = await User.findBy('id', product.user_id)
+
+      if (merchant && merchant.email && !merchantEmails.includes(merchant.email)) {
+        console.log(`📧 Email marchand détecté: ${merchant.email}`)
+        merchantEmails.push(merchant.email)
+      }
+
       if (!merchantProducts.has(product.user_id)) {
 
         console.log(`🆕 Nouveau marchand détecté: ${product.user_id}`)
@@ -364,6 +466,7 @@ export default class CallbackController {
     console.log('\n🏪 ===== MARCHANDS =====')
     console.log('📊 Nombre:', merchantIds.length)
     console.log('🆔 IDs:', merchantIds)
+    console.log('📧 Emails:', merchantEmails)
 
     const ADMIN_COMMISSION_RATE = 0.03
 
@@ -402,6 +505,7 @@ export default class CallbackController {
       }
 
       console.log('✅ Marchand trouvé:', merchant.full_name)
+      console.log('📧 Email:', merchant.email)
 
       const products = merchantProducts.get(merchantId) || []
 
@@ -518,6 +622,9 @@ export default class CallbackController {
     }
 
     console.log('\n✅ ===== DISTRIBUTION TERMINÉE =====')
+    console.log('📧 Emails marchands retournés:', merchantEmails)
+
+    return merchantEmails
   }
 
   private async createEdenLivreur(): Promise<User> {
