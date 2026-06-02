@@ -2,9 +2,9 @@
 
 import mail from '@adonisjs/mail/services/main'
 import User from '#models/user'
-import Order from '#models/order'
-import OrderItem from '#models/order_item'
-import Product from '#models/product'
+import Order from '#models/Order'
+import OrderItem from '#models/OrderItem'
+import Product from '#models/Product'
 import env from '#start/env'
 
 export default class AdminNotificationService {
