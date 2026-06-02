@@ -93,8 +93,8 @@ export default class CallbackController {
                 const product = await Product.find(item.product_id)
                 if (product && product.user_id) {
                   const merchant = await User.findBy('id', product.user_id)
-                  if (merchant) {
-                    const email: string = merchant.email
+                  if (merchant && merchant.email) {
+                    const email = merchant.email
                     if (!merchantProductsMap.has(email)) {
                       merchantProductsMap.set(email, [])
                     }
