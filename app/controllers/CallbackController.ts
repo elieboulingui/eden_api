@@ -111,10 +111,10 @@ export default class CallbackController {
 
               for (const email of Object.keys(merchantProductsMap)) {
                 const merchant = await User.query().where('email', email).first()
-                if (merchant) {
+                if (merchant && merchant.email) {
                   const products = merchantProductsMap[email]
                   const merchantAmount = products.reduce((sum: number, p: any) => sum + (p.subtotal || 0), 0)
-                  await MerchantNotificationService.sendNewSaleNotification(email, merchant.full_name, order, products, merchantAmount)
+                  await MerchantNotificationService.sendNewSaleNotification(merchant.email, merchant.full_name, order, products, merchantAmount)
                 }
               }
             }
