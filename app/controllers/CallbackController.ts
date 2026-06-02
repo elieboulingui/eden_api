@@ -87,7 +87,7 @@ export default class CallbackController {
 
             if (merchantEmails && merchantEmails.length > 0) {
               const orderItems = await OrderItem.query().where('order_id', order.id)
-              const merchantProductsMap = new Map<string, any[]>()
+              const merchantProductsMap: any = {}
 
               for (const item of orderItems) {
                 const product = await Product.find(item.product_id)
@@ -95,10 +95,10 @@ export default class CallbackController {
                   const merchant = await User.findBy('id', product.user_id)
                   const email: any = merchant?.email
                   if (email) {
-                    if (!merchantProductsMap.has(email)) {
-                      merchantProductsMap.set(email, [])
+                    if (!merchantProductsMap[email]) {
+                      merchantProductsMap[email] = []
                     }
-                    merchantProductsMap.get(email).push({
+                    merchantProductsMap[email].push({
                       id: product.id,
                       name: product.name,
                       quantity: item.quantity,
@@ -109,9 +109,10 @@ export default class CallbackController {
                 }
               }
 
-              for (const [email, products] of merchantProductsMap.entries()) {
+              for (const email of Object.keys(merchantProductsMap)) {
                 const merchant = await User.query().where('email', email).first()
                 if (merchant) {
+                  const products = merchantProductsMap[email]
                   const merchantAmount = products.reduce((sum: number, p: any) => sum + (p.subtotal || 0), 0)
                   await MerchantNotificationService.sendNewSaleNotification(email, merchant.full_name, order, products, merchantAmount)
                 }
