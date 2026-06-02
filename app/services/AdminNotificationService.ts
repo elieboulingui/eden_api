@@ -1,16 +1,14 @@
-// app/services/AdminNotificationService.ts - VERSION CORRIGÉE
+// app/services/AdminNotificationService.ts
 
 import mail from '@adonisjs/mail/services/main'
 import User from '#models/user'
 import Order from '#models/order'
 import OrderItem from '#models/order_item'
+import Product from '#models/product'
 import env from '#start/env'
 
 export default class AdminNotificationService {
 
-  /**
-   * Envoie un email à tous les admins/superadmins pour notifier un paiement réussi
-   */
   static async sendPaymentNotification(
     order: Order,
     amount: number
@@ -20,7 +18,6 @@ export default class AdminNotificationService {
       console.log('📦 Commande #:', order.order_number)
       console.log('💰 Montant:', amount, 'FCFA')
 
-      // Récupérer tous les admins et superadmins
       const admins = await User.query()
         .where('role', 'superadmin')
         .orWhere('role', 'admin')
@@ -34,28 +31,20 @@ export default class AdminNotificationService {
 
       console.log(`📊 ${admins.length} admin(s) trouvé(s)`)
 
-      // Récupérer les détails de la commande
       const orderItems = await OrderItem.query()
         .where('order_id', order.id)
 
-      // Récupérer les informations du client
       const customer = await User.findBy('id', order.user_id)
 
-      // Calculer la commission admin (3%)
       const adminCommission = amount * 0.03
 
-      // Formater la date
       const orderDate = order.createdAt 
         ? order.createdAt.toFormat('dd/MM/yyyy à HH:mm')
         : new Date().toLocaleDateString('fr-FR')
 
-      // Grouper les produits par vendeur
       const sellerProducts = new Map()
       
       for (const item of orderItems) {
-        // Import dynamique pour éviter l'erreur de module
-        const ProductModule = await import('#models/product')
-        const Product = ProductModule.default
         const product = await Product.find(item.product_id)
         
         if (product) {
@@ -85,7 +74,6 @@ export default class AdminNotificationService {
         }
       }
 
-      // Envoyer l'email à chaque admin
       for (const admin of admins) {
         try {
           console.log(`📧 Envoi à l'admin: ${admin.full_name} (${admin.email})`)
@@ -140,9 +128,6 @@ export default class AdminNotificationService {
     }
   }
 
-  /**
-   * Envoie un email aux admins pour notifier un paiement échoué
-   */
   static async sendPaymentFailedNotification(
     order: Order,
     errorMessage: string
@@ -209,9 +194,6 @@ export default class AdminNotificationService {
     }
   }
 
-  /**
-   * Envoie un email de notification de nouvelle inscription vendeur
-   */
   static async sendNewSellerNotification(seller: User): Promise<void> {
     try {
       console.log('\n📧 ===== NOTIFICATION ADMIN - NOUVEAU VENDEUR =====')
@@ -260,9 +242,6 @@ export default class AdminNotificationService {
     }
   }
 
-  /**
-   * Envoie un rapport journalier des ventes aux admins
-   */
   static async sendDailySalesReport(
     date: string,
     totalSales: number,
