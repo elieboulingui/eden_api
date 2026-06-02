@@ -194,7 +194,7 @@ export default class CallbackController {
     const ADMIN_COMMISSION_RATE = 0.03
     const adminCommission = order.total * ADMIN_COMMISSION_RATE
 
-    await this.creditAdminWallet(adminCommission, `Commission 3% - Commande #${order.order_number}`)
+    await this.creditAdminWallet(adminCommission)
 
     const totalAfterCommission = order.total - adminCommission
     const commissionRatio = totalAfterCommission / order.total
@@ -210,7 +210,7 @@ export default class CallbackController {
       }
 
       const merchantAmount = merchantTotal * commissionRatio
-      await this.creditWallet(merchant.id, merchantAmount, `Vente produits - Commande #${order.order_number}`)
+      await this.creditWallet(merchant.id, merchantAmount)
     }
 
     if (order.shipping_cost > 0) {
@@ -221,7 +221,7 @@ export default class CallbackController {
         if (merchant) {
           if (merchant.has_livreur) {
             const deliveryShare = order.shipping_cost / merchantIds.length
-            await this.creditWallet(merchant.id, deliveryShare, `Frais livraison - Commande #${order.order_number}`)
+            await this.creditWallet(merchant.id, deliveryShare)
           } else {
             needEdenLivreur = true
           }
@@ -234,7 +234,7 @@ export default class CallbackController {
           edenLivreur = await this.createEdenLivreur()
         }
 
-        await this.creditWallet(edenLivreur.id, order.shipping_cost, `Frais livraison - Commande #${order.order_number}`)
+        await this.creditWallet(edenLivreur.id, order.shipping_cost)
         order.livreur_id = edenLivreur.id
         await order.save()
 
@@ -279,7 +279,7 @@ export default class CallbackController {
     return livreur
   }
 
-  private async creditAdminWallet(amount: number, description: string): Promise<void> {
+  private async creditAdminWallet(amount: number): Promise<void> {
     try {
       const adminUser = await User.query().where('role', 'superadmin').orWhere('role', 'admin').first()
       if (!adminUser) return
@@ -296,7 +296,7 @@ export default class CallbackController {
     }
   }
 
-  private async creditWallet(userId: string, amount: number, description: string): Promise<void> {
+  private async creditWallet(userId: string, amount: number): Promise<void> {
     try {
       let wallet = await Wallet.findBy('user_id', userId)
       if (!wallet) {
