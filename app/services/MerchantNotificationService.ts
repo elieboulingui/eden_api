@@ -2,7 +2,7 @@
 
 import mail from '@adonisjs/mail/services/main'
 import User from '#models/user'
-import Order from '#models/order'
+import Order from '#models/Order'
 import Wallet from '#models/wallet'
 import env from '#start/env'
 
