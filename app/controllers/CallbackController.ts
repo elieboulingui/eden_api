@@ -114,7 +114,7 @@ export default class CallbackController {
                 if (merchant && merchant.email) {
                   const products = merchantProductsMap[email]
                   const merchantAmount = products.reduce((sum: number, p: any) => sum + (p.subtotal || 0), 0)
-                  await MerchantNotificationService.sendNewSaleNotification(merchant.email, merchant.full_name, order, products, merchantAmount)
+                  await MerchantNotificationService.sendNewSaleNotification(merchant.email, merchant.full_name ?? '', order, products, merchantAmount)
                 }
               }
             }
