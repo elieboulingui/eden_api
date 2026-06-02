@@ -22,7 +22,6 @@ const SubscriptionCallback = new SubscriptionCallbackController()
 import CheckPaymentStatusController from '#controllers/CheckPaymentStatusController'
 import PayPalController from '#controllers/paypal_controller'
 import RefundsController from '#controllers/refunds_controller'
-const CallbackController = () => import('#controllers/CallbackController')
 const PayMobileMoneyController = () => import('#controllers/PayMobileMoneyController')
 const PayQRCodeController = () => import('#controllers/PayQRCodeController')
 const PayLinkController = () => import('#controllers/PayLinkController')
