@@ -98,7 +98,7 @@ export default class CallbackController {
                     if (!merchantProductsMap[email]) {
                       merchantProductsMap[email] = []
                     }
-                    merchantProductsMap[email].push({
+                    merchantProductsMap[email as string].push({
                       id: product.id,
                       name: product.name,
                       quantity: item.quantity,
