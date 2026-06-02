@@ -1,790 +1,317 @@
-// app/controllers/CallbackController.ts - VERSION CORRIGÉE
+// app/services/AdminNotificationService.ts - VERSION CORRIGÉE
 
-import type { HttpContext } from '@adonisjs/core/http'
-import Order from '#models/order'  // Correction: minuscule
-import OrderItem from '#models/order_item'  // Correction: minuscule
-import OrderTracking from '#models/order_tracking'
+import mail from '@adonisjs/mail/services/main'
 import User from '#models/user'
-import Product from '#models/product'  // Correction: minuscule
-import Wallet from '#models/wallet'
-import { DateTime } from 'luxon'
-import OrderEmailService from '../services/OrderEmailService.js'
-import AdminNotificationService from '../services/AdminNotificationService.js'
-import MerchantNotificationService from '../services/MerchantNotificationService.js'
-import crypto from 'node:crypto'
-
-export default class CallbackController {
-
-  private mapPaymentStatus(status: string): string {
-    console.log('\n🧠 ===== MAP PAYMENT STATUS =====')
-    console.log('📥 Status brut reçu:', status)
-
-    switch (status?.toUpperCase()) {
-      case 'SUCCESS':
-        console.log('✅ Status mappé → paid')
-        return 'paid'
-
-      case 'FAILED':
-      case 'CANCELLED':
-        console.log('❌ Status mappé → failed')
-        return 'failed'
-
-      case 'PENDING':
-        console.log('⏳ Status mappé → pending')
-        return 'pending'
-
-      default:
-        console.log('⚠️ Status inconnu → pending')
-        return 'pending'
-    }
-  }
-
-  async handle({ request, response }: HttpContext) {
-
-    console.log('\n')
-    console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀')
-    console.log('📞 CALLBACK MYPVIT REÇU')
-    console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀')
-
-    try {
-
-      const data = request.body()
-
-      console.log('\n📥 BODY COMPLET REÇU:')
-      console.log(JSON.stringify(data, null, 2))
-
-      const refId = data.merchantReferenceId
-        || data.merchant_reference_id
-        || data.reference_id
-        || data.referenceId
-        || data.reference
-        || ''
-
-      const txId = data.transactionId
-        || data.transaction_id
-        || data.id
-        || ''
-
-      const rawStatus = data.status || data.transactionStatus || 'UNKNOWN'
-
-      const status = this.mapPaymentStatus(rawStatus)
-
-      const operator = data.operator || data.operator_name || ''
-      const code = data.code || data.status_code || ''
-      const message = data.message || data.error_message || ''
-      const amount = data.amount || data.total_amount || 0
-
-      console.log('\n📊 ===== DONNÉES EXTRAITES =====')
-      console.log('🧾 refId:', refId)
-      console.log('💳 txId:', txId)
-      console.log('📌 rawStatus:', rawStatus)
-      console.log('📌 mappedStatus:', status)
-      console.log('📱 operator:', operator)
-      console.log('🔢 code:', code)
-      console.log('💬 message:', message)
-      console.log('💰 amount:', amount)
-
-      let order: Order | null = null
-
-      console.log('\n🔍 ===== RECHERCHE COMMANDE =====')
-
-      if (refId) {
-        console.log(`🔎 Recherche avec payment_reference_id = ${refId}`)
-
-        order = await Order.query()
-          .where('payment_reference_id', refId)
-          .first()
-
-        console.log('📦 Résultat recherche refId:', order ? order.id : 'Aucune commande')
-      }
-
-      if (!order && txId) {
-        console.log(`🔎 Recherche avec txId = ${txId}`)
-
-        order = await Order.query()
-          .where('payment_reference_id', txId)
-          .first()
-
-        console.log('📦 Résultat recherche txId:', order ? order.id : 'Aucune commande')
-      }
-
-      if (!order) {
-
-        console.log('🔍 Recherche dans OrderTracking...')
-
-        const searchTerm = refId || txId
-
-        if (searchTerm) {
-
-          const tracking = await OrderTracking.query()
-            .where('description', 'like', `%${searchTerm}%`)
-            .first()
-
-          console.log('📍 Tracking trouvé:', tracking ? tracking.id : 'Aucun')
-
-          if (tracking) {
-
-            order = await Order.find(tracking.order_id)
-
-            console.log('📦 Commande retrouvée via tracking:', order?.id)
-          }
-        }
-      }
-
-      if (order) {
-
-        console.log('\n✅ ===== COMMANDE TROUVÉE =====')
-        console.log('🆔 ID:', order.id)
-        console.log('🧾 Numéro:', order.order_number)
-        console.log('📌 Status actuel:', order.status)
-        console.log('💳 Payment status actuel:', order.payment_status)
-        console.log('💰 Total:', order.total)
-
-        if (order.payment_status === 'paid') {
-
-          console.log('\n⚠️ ===== COMMANDE DÉJÀ PAYÉE =====')
-          console.log('⛔ Skip du traitement')
-          console.log('📦 Order:', order.order_number)
-
-          return response.ok({
-            message: 'Déjà traité'
-          })
-        }
-
-        console.log('\n✏️ ===== MISE À JOUR COMMANDE =====')
-
-        order.payment_status = status
-        order.payment_transaction_id = txId || refId
-        order.payment_operator_simple = operator
-        order.payment_amount = amount
-
-        console.log('📌 Nouveau payment_status:', status)
-        console.log('💳 payment_transaction_id:', txId || refId)
-        console.log('📱 payment_operator_simple:', operator)
-        console.log('💰 payment_amount:', amount)
-
-        if (status === 'paid') {
-
-          console.log('\n💰 ===== PAIEMENT CONFIRMÉ =====')
-
-          order.status = 'paid'
-          order.payment_completed_at = DateTime.now()
-
-          await order.save()
-
-          console.log('✅ Commande sauvegardée')
-          console.log('📌 Nouveau status:', order.status)
-          console.log('🕒 payment_completed_at:', order.payment_completed_at)
-
-          console.log('\n📝 Création tracking PAID...')
-
-          await OrderTracking.create({
-            order_id: order.id,
-            status: 'paid',
-            description: `✅ Paiement confirmé ${amount} FCFA`,
-            tracked_at: DateTime.now(),
-          })
-
-          console.log('✅ Tracking créé')
-
-          console.log('\n💼 ===== LANCEMENT DISTRIBUTION =====')
-
-          const merchantEmails = await this.distributeMoney(order)
-
-          console.log('✅ Distribution terminée')
-          console.log('📧 Emails marchands récupérés:', merchantEmails)
-
-          // ==========================================
-          // 📧 ENVOI DE TOUS LES EMAILS
-          // ==========================================
-          console.log('\n📧 ===== ENVOI DE TOUS LES EMAILS =====')
-
-          try {
-            // 1️⃣ EMAIL CLIENT
-            console.log('\n1️⃣ Email de confirmation client...')
-            await OrderEmailService.sendOrderConfirmation(order.id)
-            console.log('✅ Email client envoyé avec succès')
-
-            // 2️⃣ EMAILS AUX MARCHANDS via MerchantNotificationService
-            console.log('\n2️⃣ Emails aux marchands...')
-            
-            if (merchantEmails && merchantEmails.length > 0) {
-              // Récupérer tous les items de la commande
-              const orderItems = await OrderItem.query().where('order_id', order.id)
-              
-              // Grouper les produits par marchand
-              const merchantProductsMap = new Map<string, any[]>()
-              
-              for (const item of orderItems) {
-                const product = await Product.find(item.product_id)
-                if (product && product.user_id) {
-                  const merchant = await User.findBy('id', product.user_id)
-                  if (merchant && merchant.email) {
-                    if (!merchantProductsMap.has(merchant.email)) {
-                      merchantProductsMap.set(merchant.email, [])
-                    }
-                    merchantProductsMap.get(merchant.email)!.push({
-                      id: product.id,
-                      name: product.name,
-                      quantity: item.quantity,
-                      price: item.price,
-                      subtotal: item.subtotal,
-                      image: product.image_url || null,
-                    })
-                  }
-                }
-              }
-
-              // Envoyer un email à chaque marchand via le service dédié
-              for (const [email, products] of merchantProductsMap.entries()) {
-                const merchant = await User.query()
-                  .where('email', email)
-                  .first()
-
-                if (merchant) {
-                  const merchantAmount = products.reduce(
-                    (sum: number, p: any) => sum + (p.subtotal || 0), 
-                    0
-                  )
-
-                  console.log(`\n📧 Envoi au marchand: ${merchant.full_name} (${email})`)
-                  console.log(`   Produits: ${products.length}, Montant: ${merchantAmount} FCFA`)
-                  
-                  // Utilisation du service MerchantNotificationService
-                  await MerchantNotificationService.sendNewSaleNotification(
-                    email,
-                    merchant.full_name,
-                    order,
-                    products,
-                    merchantAmount
-                  )
-                  
-                  console.log(`✅ Envoyé à ${email}`)
-                }
-              }
-
-              console.log('✅ Tous les emails marchands envoyés')
-
-            } else {
-              console.log('⚠️ Aucun marchand à notifier')
-            }
-
-            // 3️⃣ EMAILS AUX ADMINS via AdminNotificationService
-            console.log('\n3️⃣ Emails aux administrateurs...')
-            
-            // Utilisation du service AdminNotificationService
-            await AdminNotificationService.sendPaymentNotification(order, amount)
-            console.log('✅ Notifications admin envoyées')
-
-            console.log('\n✅ ===== TOUS LES EMAILS ONT ÉTÉ ENVOYÉS =====')
-
-          } catch (emailError: any) {
-            console.error('\n❌ ERREUR LORS DE L\'ENVOI DES EMAILS:')
-            console.error('Message:', emailError.message)
-            console.error('Stack:', emailError.stack)
-          }
-
-        } else if (status === 'failed') {
-
-          console.log('\n❌ ===== PAIEMENT ÉCHOUÉ =====')
-
-          order.status = 'payment_failed'
-          order.payment_error_message = `${code} - ${message}`
-
-          await order.save()
-
-          console.log('✅ Commande mise à jour en payment_failed')
-
-          await OrderTracking.create({
-            order_id: order.id,
-            status: 'payment_failed',
-            description: `❌ Paiement échoué`,
-            tracked_at: DateTime.now(),
-          })
-
-          console.log('✅ Tracking payment_failed créé')
-
-          // 🆕 NOTIFIER ADMINS DE L'ÉCHEC
-          console.log('\n📧 ===== NOTIFICATIONS ÉCHEC PAIEMENT =====')
-          try {
-            await AdminNotificationService.sendPaymentFailedNotification(
-              order,
-              `${code} - ${message}`
-            )
-            console.log('✅ Notifications d\'échec envoyées aux admins')
-          } catch (failedEmailError: any) {
-            console.error('❌ Erreur notification échec:', failedEmailError.message)
-          }
-
-        } else {
-
-          console.log('\n⏳ ===== PAIEMENT EN ATTENTE =====')
-
-          await OrderTracking.create({
-            order_id: order.id,
-            status: 'pending_payment',
-            description: `⏳ En attente`,
-            tracked_at: DateTime.now(),
-          })
-
-          console.log('✅ Tracking pending créé')
-        }
-
-      } else {
-
-        console.log('\n❌ ===== COMMANDE INTROUVABLE =====')
-        console.log('🧾 refId:', refId)
-        console.log('💳 txId:', txId)
-      }
-
-      console.log('\n✅ ===== CALLBACK TERMINÉ =====')
-
-      return response.ok({
-        responseCode: 200,
-        transactionId: txId || refId || 'unknown'
-      })
-
-    } catch (error: any) {
-
-      console.error('\n💥 ===== ERREUR CALLBACK =====')
-      console.error('❌ Message:', error.message)
-      console.error('📌 Stack:', error.stack)
-      console.error('📌 Error object:', error)
-
-      return response.ok({
-        responseCode: 200
-      })
-    }
-  }
-
-  // ============================================================
-  // 💼 DISTRIBUTION ARGENT
-  // ============================================================
-  private async distributeMoney(order: Order): Promise<string[]> {
-
-    console.log('\n')
-    console.log('💼💼💼💼💼💼💼💼💼💼💼💼💼💼💼💼')
-    console.log('💼 DISTRIBUTION FINANCIÈRE')
-    console.log('💼💼💼💼💼💼💼💼💼💼💼💼💼💼💼💼')
-
-    console.log('📦 Commande:', order.order_number)
-    console.log('💰 Total:', order.total)
-    console.log('📦 Sous-total:', order.subtotal)
-    console.log('🚚 Livraison:', order.shipping_cost)
-
-    const merchantEmails: string[] = []
-
-    console.log('\n📥 Récupération des OrderItems...')
-
-    const items = await OrderItem.query().where('order_id', order.id)
-
-    console.log(`📦 ${items.length} items trouvés`)
-
-    const merchantProducts = new Map<
-      string,
-      {
-        productId: string
-        productName: string
-        price: number
-        quantity: number
-        subtotal: number
-      }[]
-    >()
-
-    console.log('\n🔄 ===== TRAITEMENT ITEMS =====')
-
-    for (const item of items) {
-
-      console.log('\n📦 ITEM:')
-      console.log('🆔 item.id:', item.id)
-      console.log('📦 product_id:', item.product_id)
-      console.log('🔢 quantity:', item.quantity)
-      console.log('💰 subtotal:', item.subtotal)
-
-      const product = await Product.find(item.product_id)
-
-      if (!product) {
-        console.log('❌ Produit introuvable')
-        continue
-      }
-
-      console.log('✅ Produit trouvé:', product.name)
-      console.log('👤 user_id:', product.user_id)
-      console.log('📦 stock actuel:', product.stock)
-
-      if (!product.user_id) {
-        console.log('⚠️ Produit sans user_id')
-        continue
-      }
-
-      // 🆕 RÉCUPÉRER L'EMAIL DU MARCHAND
-      const merchant = await User.findBy('id', product.user_id)
-
-      if (merchant && merchant.email && !merchantEmails.includes(merchant.email)) {
-        console.log(`📧 Email marchand détecté: ${merchant.email}`)
-        merchantEmails.push(merchant.email)
-      }
-
-      if (!merchantProducts.has(product.user_id)) {
-
-        console.log(`🆕 Nouveau marchand détecté: ${product.user_id}`)
-
-        merchantProducts.set(product.user_id, [])
-      }
-
-      merchantProducts.get(product.user_id)!.push({
-        productId: product.id,
-        productName: product.name,
-        price: Number(item.price),
-        quantity: item.quantity,
-        subtotal: Number(item.subtotal)
-      })
-
-      console.log('✅ Produit ajouté au marchand')
-
-      // UPDATE STOCK
-      const oldStock = product.stock
-
-      product.stock = Math.max(0, product.stock - item.quantity)
-
-      console.log(`📦 Stock: ${oldStock} → ${product.stock}`)
-
-      if (product.stock === 0) {
-
-        console.log('⚠️ Produit en rupture → archivage')
-
-        product.isArchived = true
-      }
-
-      await product.save()
-
-      console.log('✅ Produit sauvegardé')
-    }
-
-    const merchantIds = Array.from(merchantProducts.keys())
-
-    console.log('\n🏪 ===== MARCHANDS =====')
-    console.log('📊 Nombre:', merchantIds.length)
-    console.log('🆔 IDs:', merchantIds)
-    console.log('📧 Emails:', merchantEmails)
-
-    const ADMIN_COMMISSION_RATE = 0.03
-
-    console.log('\n🏛️ ===== COMMISSION ADMIN =====')
-
-    const adminCommission = order.total * ADMIN_COMMISSION_RATE
-
-    console.log('📊 Taux:', ADMIN_COMMISSION_RATE)
-    console.log('💰 Commission calculée:', adminCommission)
-
-    await this.creditAdminWallet(
-      adminCommission,
-      `Commission 3% - Commande #${order.order_number}`
-    )
-
-    const totalAfterCommission = order.total - adminCommission
-
-    const commissionRatio = totalAfterCommission / order.total
-
-    console.log('\n📊 ===== CALCULS =====')
-    console.log('💰 Total après commission:', totalAfterCommission)
-    console.log('📈 Ratio:', commissionRatio)
-
-    console.log('\n📦 ===== DISTRIBUTION MARCHANDS =====')
-
-    for (const merchantId of merchantIds) {
-
-      console.log('\n👤 ===== MARCHAND =====')
-      console.log('🆔 merchantId:', merchantId)
-
-      const merchant = await User.findBy('id', merchantId)
-
-      if (!merchant) {
-        console.log('❌ Marchand introuvable')
-        continue
-      }
-
-      console.log('✅ Marchand trouvé:', merchant.full_name)
-      console.log('📧 Email:', merchant.email)
-
-      const products = merchantProducts.get(merchantId) || []
-
-      let merchantTotal = 0
-
-      for (const product of products) {
-
-        console.log('\n📦 Produit marchand:')
-        console.log('📛 Nom:', product.productName)
-        console.log('💰 subtotal:', product.subtotal)
-
-        merchantTotal += product.subtotal
-      }
-
-      console.log('💰 merchantTotal:', merchantTotal)
-
-      const merchantAmount = merchantTotal * commissionRatio
-
-      console.log('💵 merchantAmount:', merchantAmount)
-
-      await this.creditWallet(
-        merchant.id,
-        merchantAmount,
-        `Vente produits - Commande #${order.order_number}`
-      )
-    }
-
-    if (order.shipping_cost > 0) {
-
-      console.log('\n🚚 ===== LIVRAISON =====')
-      console.log('💰 shipping_cost:', order.shipping_cost)
-
-      let needEdenLivreur = false
-
-      for (const merchantId of merchantIds) {
-
-        const merchant = await User.findBy('id', merchantId)
-
-        if (merchant) {
-
-          console.log('\n👤 Merchant livraison:')
-          console.log('📛 Nom:', merchant.full_name)
-          console.log('🛵 has_livreur:', merchant.has_livreur)
-
-          if (merchant.has_livreur) {
-
-            const deliveryShare = order.shipping_cost / merchantIds.length
-
-            console.log('✅ Livreur perso')
-            console.log('💰 deliveryShare:', deliveryShare)
-
-            await this.creditWallet(
-              merchant.id,
-              deliveryShare,
-              `Frais livraison - Commande #${order.order_number}`
-            )
-
-          } else {
-
-            console.log('⚠️ Pas de livreur perso')
-
-            needEdenLivreur = true
-          }
-        }
-      }
-
-      if (needEdenLivreur) {
-
-        console.log('\n🔍 ===== RECHERCHE EDENLIVREUR =====')
-
-        let edenLivreur = await User.query()
-          .where('role', 'edenlivreur')
-          .where('is_verified', true)
-          .first()
-
-        if (!edenLivreur) {
-
-          console.log('⚠️ Aucun edenlivreur → création')
-
-          edenLivreur = await this.createEdenLivreur()
-
-        } else {
-
-          console.log('✅ Edenlivreur trouvé:')
-          console.log('👤', edenLivreur.full_name)
-          console.log('🆔', edenLivreur.id)
-        }
-
-        console.log('\n💸 Crédit livraison EdenLivreur')
-
-        await this.creditWallet(
-          edenLivreur.id,
-          order.shipping_cost,
-          `Frais livraison - Commande #${order.order_number}`
-        )
-
-        console.log('✅ Livraison créditée')
-
-        order.livreur_id = edenLivreur.id
-
-        await order.save()
-
-        console.log('✅ Commande mise à jour avec livreur')
-
-        await OrderTracking.create({
-          order_id: order.id,
-          status: 'paid',
-          description: `🛵 Livreur Eden assigné: ${edenLivreur.full_name}`,
-          tracked_at: DateTime.now(),
-        })
-
-        console.log('✅ Tracking livreur créé')
-      }
-    }
-
-    console.log('\n✅ ===== DISTRIBUTION TERMINÉE =====')
-    console.log('📧 Emails marchands retournés:', merchantEmails)
-
-    return merchantEmails
-  }
-
-  private async createEdenLivreur(): Promise<User> {
-
-    console.log('\n🆕 ===== CREATE EDENLIVREUR =====')
-
-    const livreurId = crypto.randomUUID()
-
-    const email = `edenlivreur_${Date.now()}@edenmarket.com`
-
-    const password = crypto.randomUUID()
-
-    console.log('🆔 livreurId:', livreurId)
-    console.log('📧 email:', email)
-
-    const livreur = await User.create({
-      id: livreurId,
-      full_name: `Livreur Eden ${Date.now().toString().slice(-6)}`,
-      email: email,
-      password: password,
-      role: 'edenlivreur',
-      is_verified: true,
-      is_available: true,
-      is_online: true,
-      verification_status: 'approved',
-      total_deliveries: 0,
-      total_earnings: 0,
-      rating: 0,
-      total_ratings: 0,
-      is_phone_verified: false,
-      is_email_verified: false,
-      certify_truth: true,
-      accept_escrow: true,
-    })
-
-    console.log('✅ Livreur créé')
-    console.log('👤 full_name:', livreur.full_name)
-    console.log('🆔 id:', livreur.id)
-
-    console.log('\n💼 Création wallet livreur...')
-
-    await Wallet.create({
-      user_id: livreur.id,
-      balance: 0,
-      currency: 'XAF',
-      status: 'active',
-    })
-
-    console.log('✅ Wallet créé')
-
-    return livreur
-  }
-
-  private async creditAdminWallet(
-    amount: number,
-    description: string
+import Order from '#models/order'
+import OrderItem from '#models/order_item'
+import env from '#start/env'
+
+export default class AdminNotificationService {
+
+  /**
+   * Envoie un email à tous les admins/superadmins pour notifier un paiement réussi
+   */
+  static async sendPaymentNotification(
+    order: Order,
+    amount: number
   ): Promise<void> {
-
     try {
+      console.log('\n📧 ===== SERVICE NOTIFICATION ADMIN =====')
+      console.log('📦 Commande #:', order.order_number)
+      console.log('💰 Montant:', amount, 'FCFA')
 
-      console.log('\n🏛️ ===== CREDIT ADMIN WALLET =====')
-      console.log('💰 amount:', amount)
-      console.log('📝 description:', description)
-
-      const adminUser = await User.query()
+      // Récupérer tous les admins et superadmins
+      const admins = await User.query()
         .where('role', 'superadmin')
         .orWhere('role', 'admin')
-        .first()
+        .whereNotNull('email')
+        .where('is_verified', true)
 
-      if (!adminUser) {
-
-        console.log('❌ Aucun admin trouvé')
-
+      if (admins.length === 0) {
+        console.log('⚠️ Aucun admin trouvé pour notification')
         return
       }
 
-      console.log('✅ Admin trouvé:', adminUser.full_name)
+      console.log(`📊 ${admins.length} admin(s) trouvé(s)`)
 
-      let wallet = await Wallet.findBy('user_id', adminUser.id)
+      // Récupérer les détails de la commande
+      const orderItems = await OrderItem.query()
+        .where('order_id', order.id)
 
-      if (!wallet) {
+      // Récupérer les informations du client
+      const customer = await User.findBy('id', order.user_id)
 
-        console.log('⚠️ Wallet admin inexistant')
+      // Calculer la commission admin (3%)
+      const adminCommission = amount * 0.03
 
-        wallet = await Wallet.create({
-          user_id: adminUser.id,
-          balance: 0,
-          currency: 'XAF',
-          status: 'active',
-        })
+      // Formater la date
+      const orderDate = order.createdAt 
+        ? order.createdAt.toFormat('dd/MM/yyyy à HH:mm')
+        : new Date().toLocaleDateString('fr-FR')
 
-        console.log('✅ Wallet admin créé')
+      // Grouper les produits par vendeur
+      const sellerProducts = new Map()
+      
+      for (const item of orderItems) {
+        // Import dynamique pour éviter l'erreur de module
+        const ProductModule = await import('#models/product')
+        const Product = ProductModule.default
+        const product = await Product.find(item.product_id)
+        
+        if (product) {
+          const seller = await User.findBy('id', product.user_id)
+          const sellerId = seller?.id || 'unknown'
+          
+          if (!sellerProducts.has(sellerId)) {
+            sellerProducts.set(sellerId, {
+              seller: seller ? {
+                id: seller.id,
+                name: seller.full_name,
+                email: seller.email,
+              } : { id: 'unknown', name: 'Inconnu', email: 'N/A' },
+              products: [],
+              total: 0
+            })
+          }
+          
+          sellerProducts.get(sellerId).products.push({
+            name: product.name,
+            quantity: item.quantity,
+            price: item.price,
+            subtotal: item.subtotal,
+          })
+          
+          sellerProducts.get(sellerId).total += item.subtotal
+        }
       }
 
-      const oldBalance = wallet.balance
+      // Envoyer l'email à chaque admin
+      for (const admin of admins) {
+        try {
+          console.log(`📧 Envoi à l'admin: ${admin.full_name} (${admin.email})`)
 
-      console.log('💰 Ancien solde:', oldBalance)
+          await mail.send((message) => {
+            message
+              .to(admin.email)
+              .subject(`💰 Paiement reçu - Commande #${order.order_number} - ${amount} FCFA`)
+              .htmlView('emails/admin_payment_notification', {
+                admin: {
+                  name: admin.full_name,
+                  email: admin.email,
+                },
+                order: {
+                  id: order.id,
+                  order_number: order.order_number,
+                  total: order.total,
+                  subtotal: order.subtotal,
+                  shipping_cost: order.shipping_cost,
+                  payment_method: order.payment_method,
+                  payment_transaction_id: order.payment_transaction_id,
+                },
+                customer: customer ? {
+                  name: customer.full_name,
+                  email: customer.email,
+                  phone: customer.phone || 'N/A',
+                } : null,
+                amount,
+                adminCommission,
+                commissionRate: '3%',
+                sellerProducts: Array.from(sellerProducts.values()),
+                orderDate,
+                totalSellers: sellerProducts.size,
+                appName: env.get('APP_NAME', 'EdenMarket'),
+                appUrl: env.get('APP_URL', 'https://edenmarket.com'),
+                adminDashboardUrl: `${env.get('APP_URL')}/admin/orders/${order.id}`,
+              })
+          })
 
-      wallet.balance += amount
+          console.log(`✅ Email envoyé à l'admin: ${admin.email}`)
 
-      console.log('💰 Nouveau solde:', wallet.balance)
+        } catch (error) {
+          console.error(`❌ Erreur envoi admin ${admin.email}:`, error)
+        }
+      }
 
-      await wallet.save()
+      console.log('✅ Service notification admin terminé')
 
-      console.log('✅ Wallet admin sauvegardé')
-
-    } catch (error: any) {
-
-      console.error('\n💥 ERREUR CREDIT ADMIN')
-      console.error(error)
+    } catch (error) {
+      console.error('❌ Erreur service notification admin:', error)
+      throw error
     }
   }
 
-  private async creditWallet(
-    userId: string,
-    amount: number,
-    description: string
+  /**
+   * Envoie un email aux admins pour notifier un paiement échoué
+   */
+  static async sendPaymentFailedNotification(
+    order: Order,
+    errorMessage: string
   ): Promise<void> {
-
     try {
+      console.log('\n📧 ===== NOTIFICATION ADMIN - PAIEMENT ÉCHOUÉ =====')
+      console.log('📦 Commande #:', order.order_number)
+      console.log('❌ Erreur:', errorMessage)
 
-      console.log('\n💳 ===== CREDIT WALLET =====')
-      console.log('👤 userId:', userId)
-      console.log('💰 amount:', amount)
-      console.log('📝 description:', description)
+      const admins = await User.query()
+        .where('role', 'superadmin')
+        .orWhere('role', 'admin')
+        .whereNotNull('email')
+        .where('is_verified', true)
 
-      let wallet = await Wallet.findBy('user_id', userId)
-
-      if (!wallet) {
-
-        console.log('⚠️ Wallet inexistant')
-
-        wallet = await Wallet.create({
-          user_id: userId,
-          balance: 0,
-          currency: 'XAF',
-          status: 'active',
-        })
-
-        console.log('✅ Nouveau wallet créé')
+      if (admins.length === 0) {
+        console.log('⚠️ Aucun admin trouvé pour notification')
+        return
       }
 
-      const oldBalance = wallet.balance
+      const customer = await User.findBy('id', order.user_id)
+      const orderDate = order.createdAt 
+        ? order.createdAt.toFormat('dd/MM/yyyy à HH:mm')
+        : new Date().toLocaleDateString('fr-FR')
 
-      console.log('💰 Ancien balance:', oldBalance)
+      for (const admin of admins) {
+        try {
+          await mail.send((message) => {
+            message
+              .to(admin.email)
+              .subject(`⚠️ Échec paiement - Commande #${order.order_number}`)
+              .htmlView('emails/admin_payment_failed', {
+                admin: {
+                  name: admin.full_name,
+                  email: admin.email,
+                },
+                order: {
+                  id: order.id,
+                  order_number: order.order_number,
+                  total: order.total,
+                },
+                customer: customer ? {
+                  name: customer.full_name,
+                  email: customer.email,
+                  phone: customer.phone || 'N/A',
+                } : null,
+                errorMessage,
+                orderDate,
+                appName: env.get('APP_NAME', 'EdenMarket'),
+                adminUrl: `${env.get('APP_URL')}/admin/orders/${order.id}`,
+              })
+          })
 
-      wallet.balance += amount
+          console.log(`✅ Notification échec envoyée à: ${admin.email}`)
 
-      console.log('💰 Nouvelle balance:', wallet.balance)
+        } catch (error) {
+          console.error(`❌ Erreur notification admin ${admin.email}:`, error)
+        }
+      }
 
-      await wallet.save()
+    } catch (error) {
+      console.error('❌ Erreur notification échec admin:', error)
+      throw error
+    }
+  }
 
-      console.log('✅ Wallet sauvegardé')
+  /**
+   * Envoie un email de notification de nouvelle inscription vendeur
+   */
+  static async sendNewSellerNotification(seller: User): Promise<void> {
+    try {
+      console.log('\n📧 ===== NOTIFICATION ADMIN - NOUVEAU VENDEUR =====')
+      console.log('👤 Vendeur:', seller.full_name)
+      console.log('📧 Email:', seller.email)
 
-    } catch (error: any) {
+      const admins = await User.query()
+        .where('role', 'superadmin')
+        .orWhere('role', 'admin')
+        .whereNotNull('email')
+        .where('is_verified', true)
 
-      console.error('\n💥 ERREUR CREDIT WALLET')
-      console.error('👤 userId:', userId)
-      console.error(error)
+      for (const admin of admins) {
+        try {
+          await mail.send((message) => {
+            message
+              .to(admin.email)
+              .subject(`🆕 Nouveau vendeur inscrit - ${seller.full_name}`)
+              .htmlView('emails/admin_new_seller', {
+                admin: {
+                  name: admin.full_name,
+                },
+                seller: {
+                  name: seller.full_name,
+                  email: seller.email,
+                  phone: seller.phone || 'N/A',
+                  registrationDate: seller.created_at 
+                    ? seller.created_at.toFormat('dd/MM/yyyy à HH:mm')
+                    : new Date().toLocaleDateString('fr-FR'),
+                },
+                appName: env.get('APP_NAME', 'EdenMarket'),
+                adminUrl: `${env.get('APP_URL')}/admin/sellers/${seller.id}`,
+              })
+          })
 
+          console.log(`✅ Notification envoyée à: ${admin.email}`)
+
+        } catch (error) {
+          console.error(`❌ Erreur notification admin ${admin.email}:`, error)
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur notification nouveau vendeur:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Envoie un rapport journalier des ventes aux admins
+   */
+  static async sendDailySalesReport(
+    date: string,
+    totalSales: number,
+    totalOrders: number,
+    totalCommission: number,
+    topSellers: any[]
+  ): Promise<void> {
+    try {
+      console.log('\n📧 ===== RAPPORT JOURNALIER ADMINS =====')
+      console.log('📅 Date:', date)
+      console.log('💰 Ventes totales:', totalSales, 'FCFA')
+      console.log('📦 Commandes:', totalOrders)
+      console.log('💸 Commissions:', totalCommission, 'FCFA')
+
+      const admins = await User.query()
+        .where('role', 'superadmin')
+        .orWhere('role', 'admin')
+        .whereNotNull('email')
+        .where('is_verified', true)
+
+      for (const admin of admins) {
+        try {
+          await mail.send((message) => {
+            message
+              .to(admin.email)
+              .subject(`📊 Rapport journalier - ${date}`)
+              .htmlView('emails/admin_daily_report', {
+                admin: {
+                  name: admin.full_name,
+                },
+                date,
+                totalSales,
+                totalOrders,
+                totalCommission,
+                topSellers,
+                appName: env.get('APP_NAME', 'EdenMarket'),
+                adminDashboardUrl: `${env.get('APP_URL')}/admin/dashboard`,
+              })
+          })
+
+          console.log(`✅ Rapport envoyé à: ${admin.email}`)
+
+        } catch (error) {
+          console.error(`❌ Erreur rapport admin ${admin.email}:`, error)
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur rapport journalier:', error)
       throw error
     }
   }
