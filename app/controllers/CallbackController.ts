@@ -87,7 +87,7 @@ export default class CallbackController {
 
             if (merchantEmails && merchantEmails.length > 0) {
               const orderItems = await OrderItem.query().where('order_id', order.id)
-              const merchantProductsMap = new Map<string, any[]>()
+              const merchantProductsMap = new Map<string, any>()
 
               for (const item of orderItems) {
                 const product = await Product.find(item.product_id)
@@ -97,13 +97,13 @@ export default class CallbackController {
                     if (!merchantProductsMap.has(merchant.email)) {
                       merchantProductsMap.set(merchant.email, [])
                     }
-                    merchantProductsMap.get(merchant.email)!.push({
+                    merchantProductsMap.get(merchant.email).push({
                       id: product.id,
                       name: product.name,
                       quantity: item.quantity,
                       price: item.price,
                       subtotal: item.subtotal,
-                    } as any)
+                    })
                   }
                 }
               }
