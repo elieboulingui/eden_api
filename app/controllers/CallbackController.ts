@@ -97,7 +97,7 @@ export default class CallbackController {
                     if (!merchantProductsMap.has(merchant.email)) {
                       merchantProductsMap.set(merchant.email, [])
                     }
-                    merchantProductsMap.get(merchant.email).push({
+                    merchantProductsMap.get(merchant.email!).push({
                       id: product.id,
                       name: product.name,
                       quantity: item.quantity,
