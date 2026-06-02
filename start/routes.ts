@@ -11,7 +11,6 @@ const CheckStatusController = () => import('#controllers/payments/check_status_c
 const PayLinkSubscriptionController = () => import('#controllers/PayLinkSubscriptionController')
 import SubscriptionQRController from '#controllers/SubscriptionQRController'
 const SubscriptionQR = new SubscriptionQRController()
-import CallbacksController from '#controllers/CallbacksController'
 const RetraitController = () => import('#controllers/retraitController')
 const ProductController = () => import('#controllers/product_controller')
 import RenduMoneyCallbackController from '#controllers/RenduMoneyCallbackController'
@@ -307,7 +306,6 @@ router.group(() => {
     router.get('give-change/history', [GiveChangeController, 'history']).as('merchant.give-change.history')
     router.get('give-change/stats', [GiveChangeController, 'stats']).as('merchant.give-change.stats')
     
-    // ✅ Zones de livraison (CORRIGÉ)
     router.get('/:userId/delivery-zones', [MerchantDashboardController, 'getDeliveryZones'])
     router.post('/:userId/delivery-zones', [MerchantDashboardController, 'upsertDeliveryZone'])
     router.put('/:userId/delivery-zones', [MerchantDashboardController, 'updateDeliveryZones'])
@@ -441,7 +439,25 @@ router.group(() => {
   router.get('/mypvit/balance', [MypvitController as any, 'getBalance']).as('mypvit.balance')
   router.post('/mypvit/check-balance', [MypvitController as any, 'checkBalance']).as('mypvit.check-balance')
   router.get('/mypvit/all-balances', [MypvitController as any, 'getAllBalances']).as('mypvit.all-balances')
-  router.post('/mypvit/callback', [CallbackController as any, 'handle']).as('mypvit.callback.orders')
+
+  // ============================================================
+  // CALLBACK MYPVIT
+  // ============================================================
+  
+  // Route callback principale
+  router.post('/mypvit/callback', async (ctx) => {
+    const { default: CallbackController } = await import('#controllers/CallbackController')
+    const controller = new CallbackController()
+    return controller.handle(ctx)
+  }).as('mypvit.callback.orders')
+
+  // Route callback alternative
+  router.post('/callbacks/mypvit', async (ctx) => {
+    const { default: CallbackController } = await import('#controllers/CallbackController')
+    const controller = new CallbackController()
+    return controller.handle(ctx)
+  }).as('callbacks.mypvit')
+
   router.post('/mypvit/callback/rendu-money', (ctx) => RenduMoneyCallback.handle(ctx)).as('mypvit.callback.rendu-money')
   router.post('/mypvit/callback/subscription', (ctx) => SubscriptionCallback.handle(ctx)).as('mypvit.callback.subscription')
   router.post('/mypvit/callback/subscription/test', (ctx) => SubscriptionCallback.test(ctx)).as('mypvit.callback.subscription.test')
@@ -505,14 +521,9 @@ router.group(() => {
   router.get('/paypal/cancel', [PayPalController, 'cancel']).as('paypal.cancel')
 
   // ----------------------------------------------------------
-  // VÉRIFICATION STATUT PAIEMENT (PROXY PVIT) ✅ NOUVEAU
+  // VÉRIFICATION STATUT PAIEMENT
   // ----------------------------------------------------------
-// ✅ Comme les autres routes !
-router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).as('payments.status.verify')
-
-  // ----------------------------------------------------------
-  // VÉRIFICATION STATUT PAIEMENT (EXISTANT)
-  // ----------------------------------------------------------
+  router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).as('payments.status.verify')
   router.get('/orders/:orderNumber/payment-status', [CheckPaymentStatusController, 'check']).as('check_payment_status.check_by_order')
   router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check']).as('check_payment_status.check_by_reference')
 
@@ -522,11 +533,6 @@ router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).
   router.get('/products/on-sale', [ProductController, 'onSale']).as('products.on-sale')
   router.get('/products/biggest-discounts', [ProductController, 'biggestDiscounts']).as('products.biggest-discounts')
   router.get('/products/black-friday', [ProductController, 'blackFriday']).as('products.black-friday')
-
-  // ----------------------------------------------------------
-  // CALLBACK MYPVIT
-  // ----------------------------------------------------------
-  router.post('/callbacks/mypvit', [CallbacksController, 'handle']).as('callbacks.mypvit')
 
   // ----------------------------------------------------------
   // PAIEMENT MOBILE MONEY
@@ -557,45 +563,30 @@ router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).
   router.get('/merchant/contract/:id/status', [DashboardViewController, 'getContractStatus']).as('merchant.contract.status')
 
   router.get('/checkout/:userId', [CheckoutController, 'getCheckoutData']).as('checkout.data')
- // GET  /api/merchant/:merchantId/delivery-zones
-  // Récupère toutes les zones de livraison d'un marchand
+
+  // Zones de livraison
   router.get('/merchant/:merchantId/delivery-zones', [MerchantDeliveryController, 'getDeliveryZones'])
-  
-  // GET  /api/merchant/:merchantId/delivery-fee?zone=Akanda
-  // Calcule les frais de livraison pour une zone spécifique
   router.get('/merchant/:merchantId/delivery-fee', [MerchantDeliveryController, 'getDeliveryFee'])
   
-// ----------------------------------------------------------
-// CONTRATS
-// ----------------------------------------------------------
-router.get('/client/:id', [ContractsController, 'getClientById']).as('client.show')
-router.get('/shops/user/:userId', [ContractsController, 'getShopByUser']).as('shops.user')
-router.post('/contracts/sign-and-send', [ContractsController, 'signAndSend']).as('contracts.sign-and-send')
+  // ----------------------------------------------------------
+  // CONTRATS
+  // ----------------------------------------------------------
+  router.get('/client/:id', [ContractsController, 'getClientById']).as('client.show')
+  router.get('/shops/user/:userId', [ContractsController, 'getShopByUser']).as('shops.user')
+  router.post('/contracts/sign-and-send', [ContractsController, 'signAndSend']).as('contracts.sign-and-send')
   router.get('/contract/by-name/:name', [ContractsController, 'getByName'])
   router.post('/cart/delivery-fees', [MerchantDeliveryController, 'calculateCartDeliveryFees'])
 
+  // ----------------------------------------------------------
+  // LIVREUR DASHBOARD
+  // ----------------------------------------------------------
   router.get('/livreur/dashboard/stats', [LivreurDashboardController, 'stats'])
+  router.get('/livreur/dashboard/deliveries', [LivreurDashboardController, 'deliveries'])
+  router.get('/livreur/dashboard/delivery/:id', [LivreurDashboardController, 'deliveryDetail'])
+  router.put('/livreur/dashboard/delivery/:id/status', [LivreurDashboardController, 'updateDeliveryStatus'])
+  router.put('/livreur/dashboard/online', [LivreurDashboardController, 'toggleOnline'])
+  router.put('/livreur/dashboard/location', [LivreurDashboardController, 'updateLocation'])
+  router.get('/livreur/dashboard/earnings', [LivreurDashboardController, 'earnings'])
+  router.put('/livreur/dashboard/profile', [LivreurDashboardController, 'updateProfile'])
 
-// Liste des livraisons (avec filtre ?status=pending|active|delivered)
-router.get('/livreur/dashboard/deliveries', [LivreurDashboardController, 'deliveries'])
-
-// Détail d'une livraison
-router.get('/livreur/dashboard/delivery/:id', [LivreurDashboardController, 'deliveryDetail'])
-
-// Mettre à jour le statut d'une livraison
-router.put('/livreur/dashboard/delivery/:id/status', [LivreurDashboardController, 'updateDeliveryStatus'])
-
-// Activer/désactiver le statut en ligne
-router.put('/livreur/dashboard/online', [LivreurDashboardController, 'toggleOnline'])
-
-// Mettre à jour la position GPS
-router.put('/livreur/dashboard/location', [LivreurDashboardController, 'updateLocation'])
-
-// Historique des gains (?period=day|week|month)
-router.get('/livreur/dashboard/earnings', [LivreurDashboardController, 'earnings'])
-
-// Mettre à jour le profil
-router.put('/livreur/dashboard/profile', [LivreurDashboardController, 'updateProfile'])
-  
-
-}).prefix('/api') 
+}).prefix('/api')
