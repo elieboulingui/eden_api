@@ -1,10 +1,9 @@
-// app/services/AdminNotificationService.ts
+// app/services/AdminNotificationService.ts - VERSION CORRIGÉE
 
 import mail from '@adonisjs/mail/services/main'
 import User from '#models/user'
 import Order from '#models/order'
 import OrderItem from '#models/order_item'
-import Product from '#models/product'
 import env from '#start/env'
 
 export default class AdminNotificationService {
@@ -38,7 +37,6 @@ export default class AdminNotificationService {
       // Récupérer les détails de la commande
       const orderItems = await OrderItem.query()
         .where('order_id', order.id)
-        .preload('product')
 
       // Récupérer les informations du client
       const customer = await User.findBy('id', order.user_id)
@@ -55,7 +53,11 @@ export default class AdminNotificationService {
       const sellerProducts = new Map()
       
       for (const item of orderItems) {
-        const product = item.product
+        // Import dynamique pour éviter l'erreur de module
+        const ProductModule = await import('#models/product')
+        const Product = ProductModule.default
+        const product = await Product.find(item.product_id)
+        
         if (product) {
           const seller = await User.findBy('id', product.user_id)
           const sellerId = seller?.id || 'unknown'
@@ -236,7 +238,9 @@ export default class AdminNotificationService {
                   name: seller.full_name,
                   email: seller.email,
                   phone: seller.phone || 'N/A',
-                  registrationDate: seller.createdAt?.toFormat('dd/MM/yyyy à HH:mm'),
+                  registrationDate: seller.created_at 
+                    ? seller.created_at.toFormat('dd/MM/yyyy à HH:mm')
+                    : new Date().toLocaleDateString('fr-FR'),
                 },
                 appName: env.get('APP_NAME', 'EdenMarket'),
                 adminUrl: `${env.get('APP_URL')}/admin/sellers/${seller.id}`,
