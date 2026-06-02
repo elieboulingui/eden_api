@@ -1,11 +1,11 @@
-// app/controllers/CallbackController.ts - VERSION FULL DEBUG LOGS + NOTIFICATIONS
+// app/controllers/CallbackController.ts
 
 import type { HttpContext } from '@adonisjs/core/http'
-import Order from '#models/Order'
-import OrderItem from '#models/OrderItem'
+import Order from '#models/order'
+import OrderItem from '#models/order_item'
 import OrderTracking from '#models/order_tracking'
 import User from '#models/user'
-import Product from '#models/Product'
+import Product from '#models/product'
 import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
 import OrderEmailService from '../services/OrderEmailService.js'
@@ -209,10 +209,7 @@ export default class CallbackController {
             console.log('\n2️⃣ Emails aux marchands...')
             
             if (merchantEmails && merchantEmails.length > 0) {
-              // Récupérer tous les items de la commande
               const orderItems = await OrderItem.query().where('order_id', order.id)
-              
-              // Grouper les produits par marchand
               const merchantProductsMap = new Map<string, any[]>()
               
               for (const item of orderItems) {
@@ -229,13 +226,11 @@ export default class CallbackController {
                       quantity: item.quantity,
                       price: item.price,
                       subtotal: item.subtotal,
-                      image: product.image_url || null,
                     })
                   }
                 }
               }
 
-              // Envoyer un email à chaque marchand via le service dédié
               for (const [email, products] of merchantProductsMap.entries()) {
                 const merchant = await User.query()
                   .where('email', email)
@@ -250,7 +245,6 @@ export default class CallbackController {
                   console.log(`\n📧 Envoi au marchand: ${merchant.full_name} (${email})`)
                   console.log(`   Produits: ${products.length}, Montant: ${merchantAmount} FCFA`)
                   
-                  // Utilisation du service MerchantNotificationService
                   await MerchantNotificationService.sendNewSaleNotification(
                     email,
                     merchant.full_name,
@@ -264,15 +258,12 @@ export default class CallbackController {
               }
 
               console.log('✅ Tous les emails marchands envoyés')
-
             } else {
               console.log('⚠️ Aucun marchand à notifier')
             }
 
             // 3️⃣ EMAILS AUX ADMINS via AdminNotificationService
             console.log('\n3️⃣ Emails aux administrateurs...')
-            
-            // Utilisation du service AdminNotificationService
             await AdminNotificationService.sendPaymentNotification(order, amount)
             console.log('✅ Notifications admin envoyées')
 
@@ -304,7 +295,6 @@ export default class CallbackController {
 
           console.log('✅ Tracking payment_failed créé')
 
-          // 🆕 NOTIFIER ADMINS DE L'ÉCHEC
           console.log('\n📧 ===== NOTIFICATIONS ÉCHEC PAIEMENT =====')
           try {
             await AdminNotificationService.sendPaymentFailedNotification(
@@ -417,7 +407,6 @@ export default class CallbackController {
         continue
       }
 
-      // 🆕 RÉCUPÉRER L'EMAIL DU MARCHAND
       const merchant = await User.findBy('id', product.user_id)
 
       if (merchant && merchant.email && !merchantEmails.includes(merchant.email)) {
@@ -426,9 +415,7 @@ export default class CallbackController {
       }
 
       if (!merchantProducts.has(product.user_id)) {
-
         console.log(`🆕 Nouveau marchand détecté: ${product.user_id}`)
-
         merchantProducts.set(product.user_id, [])
       }
 
@@ -444,20 +431,15 @@ export default class CallbackController {
 
       // UPDATE STOCK
       const oldStock = product.stock
-
       product.stock = Math.max(0, product.stock - item.quantity)
-
       console.log(`📦 Stock: ${oldStock} → ${product.stock}`)
 
       if (product.stock === 0) {
-
         console.log('⚠️ Produit en rupture → archivage')
-
         product.isArchived = true
       }
 
       await product.save()
-
       console.log('✅ Produit sauvegardé')
     }
 
@@ -471,9 +453,7 @@ export default class CallbackController {
     const ADMIN_COMMISSION_RATE = 0.03
 
     console.log('\n🏛️ ===== COMMISSION ADMIN =====')
-
     const adminCommission = order.total * ADMIN_COMMISSION_RATE
-
     console.log('📊 Taux:', ADMIN_COMMISSION_RATE)
     console.log('💰 Commission calculée:', adminCommission)
 
@@ -483,7 +463,6 @@ export default class CallbackController {
     )
 
     const totalAfterCommission = order.total - adminCommission
-
     const commissionRatio = totalAfterCommission / order.total
 
     console.log('\n📊 ===== CALCULS =====')
@@ -508,22 +487,17 @@ export default class CallbackController {
       console.log('📧 Email:', merchant.email)
 
       const products = merchantProducts.get(merchantId) || []
-
       let merchantTotal = 0
 
       for (const product of products) {
-
         console.log('\n📦 Produit marchand:')
         console.log('📛 Nom:', product.productName)
         console.log('💰 subtotal:', product.subtotal)
-
         merchantTotal += product.subtotal
       }
 
       console.log('💰 merchantTotal:', merchantTotal)
-
       const merchantAmount = merchantTotal * commissionRatio
-
       console.log('💵 merchantAmount:', merchantAmount)
 
       await this.creditWallet(
@@ -553,7 +527,6 @@ export default class CallbackController {
           if (merchant.has_livreur) {
 
             const deliveryShare = order.shipping_cost / merchantIds.length
-
             console.log('✅ Livreur perso')
             console.log('💰 deliveryShare:', deliveryShare)
 
@@ -564,9 +537,7 @@ export default class CallbackController {
             )
 
           } else {
-
             console.log('⚠️ Pas de livreur perso')
-
             needEdenLivreur = true
           }
         }
@@ -582,13 +553,9 @@ export default class CallbackController {
           .first()
 
         if (!edenLivreur) {
-
           console.log('⚠️ Aucun edenlivreur → création')
-
           edenLivreur = await this.createEdenLivreur()
-
         } else {
-
           console.log('✅ Edenlivreur trouvé:')
           console.log('👤', edenLivreur.full_name)
           console.log('🆔', edenLivreur.id)
@@ -605,9 +572,7 @@ export default class CallbackController {
         console.log('✅ Livraison créditée')
 
         order.livreur_id = edenLivreur.id
-
         await order.save()
-
         console.log('✅ Commande mise à jour avec livreur')
 
         await OrderTracking.create({
@@ -632,9 +597,7 @@ export default class CallbackController {
     console.log('\n🆕 ===== CREATE EDENLIVREUR =====')
 
     const livreurId = crypto.randomUUID()
-
     const email = `edenlivreur_${Date.now()}@edenmarket.com`
-
     const password = crypto.randomUUID()
 
     console.log('🆔 livreurId:', livreurId)
@@ -695,9 +658,7 @@ export default class CallbackController {
         .first()
 
       if (!adminUser) {
-
         console.log('❌ Aucun admin trouvé')
-
         return
       }
 
@@ -706,33 +667,24 @@ export default class CallbackController {
       let wallet = await Wallet.findBy('user_id', adminUser.id)
 
       if (!wallet) {
-
         console.log('⚠️ Wallet admin inexistant')
-
         wallet = await Wallet.create({
           user_id: adminUser.id,
           balance: 0,
           currency: 'XAF',
           status: 'active',
         })
-
         console.log('✅ Wallet admin créé')
       }
 
       const oldBalance = wallet.balance
-
       console.log('💰 Ancien solde:', oldBalance)
-
       wallet.balance += amount
-
       console.log('💰 Nouveau solde:', wallet.balance)
-
       await wallet.save()
-
       console.log('✅ Wallet admin sauvegardé')
 
     } catch (error: any) {
-
       console.error('\n💥 ERREUR CREDIT ADMIN')
       console.error(error)
     }
@@ -754,37 +706,27 @@ export default class CallbackController {
       let wallet = await Wallet.findBy('user_id', userId)
 
       if (!wallet) {
-
         console.log('⚠️ Wallet inexistant')
-
         wallet = await Wallet.create({
           user_id: userId,
           balance: 0,
           currency: 'XAF',
           status: 'active',
         })
-
         console.log('✅ Nouveau wallet créé')
       }
 
       const oldBalance = wallet.balance
-
       console.log('💰 Ancien balance:', oldBalance)
-
       wallet.balance += amount
-
       console.log('💰 Nouvelle balance:', wallet.balance)
-
       await wallet.save()
-
       console.log('✅ Wallet sauvegardé')
 
     } catch (error: any) {
-
       console.error('\n💥 ERREUR CREDIT WALLET')
       console.error('👤 userId:', userId)
       console.error(error)
-
       throw error
     }
   }
