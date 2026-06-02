@@ -97,6 +97,7 @@ export default class CallbackController {
                     if (!merchantProductsMap.has(merchant.email)) {
                       merchantProductsMap.set(merchant.email, [])
                     }
+                    // ✅ LIGNE 115 CORRIGÉE
                     merchantProductsMap.get(merchant.email)!.push({
                       id: product.id,
                       name: product.name,
@@ -279,6 +280,7 @@ export default class CallbackController {
     return livreur
   }
 
+  // ✅ LIGNE 282 - Supprimer 'description' du paramètre
   private async creditAdminWallet(amount: number): Promise<void> {
     try {
       const adminUser = await User.query().where('role', 'superadmin').orWhere('role', 'admin').first()
@@ -296,6 +298,7 @@ export default class CallbackController {
     }
   }
 
+  // ✅ LIGNE 299 - Supprimer 'description' du paramètre
   private async creditWallet(userId: string, amount: number): Promise<void> {
     try {
       let wallet = await Wallet.findBy('user_id', userId)
