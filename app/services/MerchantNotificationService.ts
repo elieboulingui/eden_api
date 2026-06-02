@@ -1,4 +1,4 @@
-// app/services/MerchantNotificationService.ts - VERSION CORRIGÉE
+// app/services/MerchantNotificationService.ts
 
 import mail from '@adonisjs/mail/services/main'
 import User from '#models/user'
@@ -8,9 +8,6 @@ import env from '#start/env'
 
 export default class MerchantNotificationService {
 
-  /**
-   * Envoie un email au marchand pour lui notifier une nouvelle vente
-   */
   static async sendNewSaleNotification(
     merchantEmail: string,
     merchantName: string,
@@ -26,22 +23,18 @@ export default class MerchantNotificationService {
       console.log('💰 Montant vendeur:', merchantAmount, 'FCFA')
       console.log('📦 Nombre de produits:', products.length)
 
-      // Récupérer les informations du client
       const customer = await User.findBy('id', order.user_id)
 
-      // Récupérer le wallet du marchand
       const merchant = await User.query()
         .where('email', merchantEmail)
         .first()
       
       const wallet = merchant ? await Wallet.findBy('user_id', merchant.id) : null
 
-      // Formater la date
       const orderDate = order.createdAt 
         ? order.createdAt.toFormat('dd/MM/yyyy à HH:mm')
         : new Date().toLocaleDateString('fr-FR')
 
-      // Calculer le résumé de la commande
       const totalProducts = products.reduce((sum, p) => sum + p.quantity, 0)
 
       await mail.send((message) => {
@@ -63,214 +56,4 @@ export default class MerchantNotificationService {
             customer: customer ? {
               name: customer.full_name,
               email: customer.email,
-              phone: customer.phone || 'N/A',
-            } : {
-              name: 'Client',
-              email: 'N/A',
-              phone: 'N/A',
-            },
-            products,
-            merchantAmount,
-            totalProducts,
-            orderDate,
-            wallet: wallet ? {
-              balance: wallet.balance,
-              currency: wallet.currency,
-            } : null,
-            appName: env.get('APP_NAME', 'EdenMarket'),
-            appUrl: env.get('APP_URL', 'https://edenmarket.com'),
-            sellerDashboardUrl: `${env.get('APP_URL')}/seller/orders/${order.id}`,
-            sellerProductsUrl: `${env.get('APP_URL')}/seller/products`,
-          })
-      })
-
-      console.log(`✅ Email notification envoyé au marchand: ${merchantEmail}`)
-
-    } catch (error) {
-      console.error('❌ Erreur envoi email marchand:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Envoie un email au marchand pour lui notifier que son produit est en rupture de stock
-   */
-  static async sendLowStockNotification(
-    merchantEmail: string,
-    merchantName: string,
-    product: any
-  ): Promise<void> {
-    try {
-      console.log('\n📧 ===== NOTIFICATION MARCHAND - STOCK BAS =====')
-      console.log('📧 Email:', merchantEmail)
-      console.log('👤 Marchand:', merchantName)
-      console.log('📦 Produit:', product.name)
-      console.log('📊 Stock restant:', product.stock)
-
-      await mail.send((message) => {
-        message
-          .to(merchantEmail)
-          .subject(`⚠️ Stock faible - ${product.name}`)
-          .htmlView('emails/merchant_low_stock', {
-            merchant: {
-              name: merchantName,
-              email: merchantEmail,
-            },
-            product: {
-              id: product.id,
-              name: product.name,
-              stock: product.stock,
-              price: product.price,
-              image: product.image_url,
-            },
-            appName: env.get('APP_NAME', 'EdenMarket'),
-            editProductUrl: `${env.get('APP_URL')}/seller/products/${product.id}/edit`,
-          })
-      })
-
-      console.log(`✅ Notification stock faible envoyée à: ${merchantEmail}`)
-
-    } catch (error) {
-      console.error('❌ Erreur notification stock:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Envoie un email au marchand pour lui notifier un nouveau paiement crédité
-   */
-  static async sendWalletCreditNotification(
-    merchantEmail: string,
-    merchantName: string,
-    amount: number,
-    description: string,
-    newBalance: number
-  ): Promise<void> {
-    try {
-      console.log('\n📧 ===== NOTIFICATION MARCHAND - CRÉDIT WALLET =====')
-      console.log('📧 Email:', merchantEmail)
-      console.log('👤 Marchand:', merchantName)
-      console.log('💰 Montant crédité:', amount, 'FCFA')
-      console.log('📝 Description:', description)
-      console.log('💼 Nouveau solde:', newBalance, 'FCFA')
-
-      const creditDate = new Date().toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-
-      await mail.send((message) => {
-        message
-          .to(merchantEmail)
-          .subject(`💰 Crédit de ${amount} FCFA sur votre portefeuille`)
-          .htmlView('emails/merchant_wallet_credit', {
-            merchant: {
-              name: merchantName,
-              email: merchantEmail,
-            },
-            amount,
-            description,
-            newBalance,
-            creditDate,
-            appName: env.get('APP_NAME', 'EdenMarket'),
-            walletUrl: `${env.get('APP_URL')}/seller/wallet`,
-          })
-      })
-
-      console.log(`✅ Notification crédit wallet envoyée à: ${merchantEmail}`)
-
-    } catch (error) {
-      console.error('❌ Erreur notification crédit wallet:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Envoie un rapport mensuel des ventes au marchand
-   */
-  static async sendMonthlySalesReport(
-    merchantEmail: string,
-    merchantName: string,
-    month: string,
-    year: number,
-    totalSales: number,
-    totalOrders: number,
-    topProducts: any[],
-    monthlyEarnings: number
-  ): Promise<void> {
-    try {
-      console.log('\n📧 ===== RAPPORT MENSUEL MARCHAND =====')
-      console.log('📧 Email:', merchantEmail)
-      console.log('👤 Marchand:', merchantName)
-      console.log('📅 Période:', `${month} ${year}`)
-      console.log('💰 Ventes:', totalSales, 'FCFA')
-      console.log('📦 Commandes:', totalOrders)
-
-      await mail.send((message) => {
-        message
-          .to(merchantEmail)
-          .subject(`📊 Rapport mensuel - ${month} ${year}`)
-          .htmlView('emails/merchant_monthly_report', {
-            merchant: {
-              name: merchantName,
-              email: merchantEmail,
-            },
-            month,
-            year,
-            totalSales,
-            totalOrders,
-            topProducts,
-            monthlyEarnings,
-            appName: env.get('APP_NAME', 'EdenMarket'),
-            dashboardUrl: `${env.get('APP_URL')}/seller/dashboard`,
-          })
-      })
-
-      console.log(`✅ Rapport mensuel envoyé à: ${merchantEmail}`)
-
-    } catch (error) {
-      console.error('❌ Erreur rapport mensuel:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Envoie un email de bienvenue au nouveau marchand
-   */
-  static async sendWelcomeNotification(
-    merchantEmail: string,
-    merchantName: string
-  ): Promise<void> {
-    try {
-      console.log('\n📧 ===== EMAIL BIENVENUE MARCHAND =====')
-      console.log('📧 Email:', merchantEmail)
-      console.log('👤 Marchand:', merchantName)
-
-      await mail.send((message) => {
-        message
-          .to(merchantEmail)
-          .subject(`🎉 Bienvenue sur ${env.get('APP_NAME', 'EdenMarket')} !`)
-          .htmlView('emails/merchant_welcome', {
-            merchant: {
-              name: merchantName,
-              email: merchantEmail,
-            },
-            appName: env.get('APP_NAME', 'EdenMarket'),
-            appUrl: env.get('APP_URL', 'https://edenmarket.com'),
-            sellerDashboardUrl: `${env.get('APP_URL')}/seller/dashboard`,
-            addProductUrl: `${env.get('APP_URL')}/seller/products/create`,
-            helpUrl: `${env.get('APP_URL')}/help/sellers`,
-          })
-      })
-
-      console.log(`✅ Email de bienvenue envoyé à: ${merchantEmail}`)
-
-    } catch (error) {
-      console.error('❌ Erreur email bienvenue:', error)
-      throw error
-    }
-  }
-}
+              phone:
