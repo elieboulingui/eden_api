@@ -1,11 +1,11 @@
 // app/controllers/CallbackController.ts
 
 import type { HttpContext } from '@adonisjs/core/http'
-import Order from '#models/order'
-import OrderItem from '#models/order_item'
+import Order from '#models/Order'
+import OrderItem from '#models/OrderItem'
 import OrderTracking from '#models/order_tracking'
 import User from '#models/user'
-import Product from '#models/product'
+import Product from '#models/Product'
 import Wallet from '#models/wallet'
 import { DateTime } from 'luxon'
 import OrderEmailService from '../services/OrderEmailService.js'
