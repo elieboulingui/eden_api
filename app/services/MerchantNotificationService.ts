@@ -1,9 +1,7 @@
 // app/services/MerchantNotificationService.ts
 
 import mail from '@adonisjs/mail/services/main'
-import User from '#models/user'
 import Order from '#models/Order'
-import Wallet from '#models/wallet'
 import env from '#start/env'
 
 export default class MerchantNotificationService {
@@ -22,7 +20,6 @@ export default class MerchantNotificationService {
       console.log('📦 Commande #:', order.order_number)
       console.log('💰 Montant vendeur:', merchantAmount, 'FCFA')
 
-      // ✅ CORRIGÉ : created_at au lieu de createdAt
       const orderDate = order.created_at 
         ? order.created_at.toFormat('dd/MM/yyyy à HH:mm')
         : new Date().toLocaleDateString('fr-FR')
