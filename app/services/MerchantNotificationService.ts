@@ -1,10 +1,8 @@
-// app/services/MerchantNotificationService.ts
+// app/services/MerchantNotificationService.ts - VERSION CORRIGÉE
 
 import mail from '@adonisjs/mail/services/main'
 import User from '#models/user'
 import Order from '#models/order'
-import OrderItem from '#models/order_item'
-import Product from '#models/product'
 import Wallet from '#models/wallet'
 import env from '#start/env'
 
@@ -32,7 +30,11 @@ export default class MerchantNotificationService {
       const customer = await User.findBy('id', order.user_id)
 
       // Récupérer le wallet du marchand
-      const wallet = await Wallet.findBy('user_id', (await User.findBy('email', merchantEmail))?.id)
+      const merchant = await User.query()
+        .where('email', merchantEmail)
+        .first()
+      
+      const wallet = merchant ? await Wallet.findBy('user_id', merchant.id) : null
 
       // Formater la date
       const orderDate = order.createdAt 
