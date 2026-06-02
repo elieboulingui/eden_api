@@ -104,7 +104,7 @@ export default class CallbackController {
                       quantity: item.quantity,
                       price: item.price,
                       subtotal: item.subtotal,
-                    })
+                    } as any)
                   }
                 }
               }
