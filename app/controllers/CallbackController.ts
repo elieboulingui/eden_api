@@ -87,23 +87,27 @@ export default class CallbackController {
 
             if (merchantEmails && merchantEmails.length > 0) {
               const orderItems = await OrderItem.query().where('order_id', order.id)
-              const merchantProductsMap = new Map<string, any>()
+              const merchantProductsMap = new Map<string, any[]>()
 
               for (const item of orderItems) {
                 const product = await Product.find(item.product_id)
                 if (product && product.user_id) {
                   const merchant = await User.findBy('id', product.user_id)
-                  if (merchant && merchant.email) {
-                    if (!merchantProductsMap.has(merchant.email)) {
-                      merchantProductsMap.set(merchant.email, [])
+                  if (merchant) {
+                    const email: string = merchant.email
+                    if (!merchantProductsMap.has(email)) {
+                      merchantProductsMap.set(email, [])
                     }
-                    merchantProductsMap.get(merchant.email as string)!.push({
-                      id: product.id,
-                      name: product.name,
-                      quantity: item.quantity,
-                      price: item.price,
-                      subtotal: item.subtotal,
-                    } as any)
+                    const arr = merchantProductsMap.get(email)
+                    if (arr) {
+                      arr.push({
+                        id: product.id,
+                        name: product.name,
+                        quantity: item.quantity,
+                        price: item.price,
+                        subtotal: item.subtotal,
+                      })
+                    }
                   }
                 }
               }
