@@ -3,8 +3,6 @@
 import mail from '@adonisjs/mail/services/main'
 import User from '#models/user'
 import Order from '#models/Order'
-import OrderItem from '#models/OrderItem'
-import Product from '#models/Product'
 import env from '#start/env'
 
 export default class AdminNotificationService {
@@ -31,11 +29,9 @@ export default class AdminNotificationService {
 
       console.log(`📊 ${admins.length} admin(s) trouvé(s)`)
 
-      const orderItems = await OrderItem.query().where('order_id', order.id)
       const customer = await User.findBy('id', order.user_id)
       const adminCommission = amount * 0.03
 
-      // ✅ CORRIGÉ : created_at au lieu de createdAt
       const orderDate = order.created_at 
         ? order.created_at.toFormat('dd/MM/yyyy à HH:mm')
         : new Date().toLocaleDateString('fr-FR')
@@ -100,8 +96,6 @@ export default class AdminNotificationService {
       }
 
       const customer = await User.findBy('id', order.user_id)
-      
-      // ✅ CORRIGÉ : created_at au lieu de createdAt
       const orderDate = order.created_at 
         ? order.created_at.toFormat('dd/MM/yyyy à HH:mm')
         : new Date().toLocaleDateString('fr-FR')
