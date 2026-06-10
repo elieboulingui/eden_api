@@ -208,6 +208,10 @@ router.group(() => {
   // ----------------------------------------------------------
   router.get('/users', [UsersController, 'index']).as('users.index')
   router.get('/users/:id', [UsersController, 'show']).as('users.show')
+    router.get('/users/:id/contract-info', [UsersController, 'getContractInfo']).as('users.contract-info')
+  router.get('/users/:id/merchant-info', [UsersController, 'getMerchantInfo']).as('users.merchant-info')
+  router.get('/users/:id/contract-status', [UsersController, 'getContractStatus']).as('users.contract-status')
+  router.patch('/users/:id/contract-signature', [UsersController, 'updateContractSignature']).as('users.contract-signature')
 
   // ----------------------------------------------------------
   // PANIER
