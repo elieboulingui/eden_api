@@ -44,6 +44,7 @@ export default class UsersController {
    */
   async show({ params, response }: HttpContext) {
     try {
+      // ✅ Plus de filtre par rôle - retourne n'importe quel utilisateur
       const client = await User.query()
         .where('id', params.id)
         .first()
