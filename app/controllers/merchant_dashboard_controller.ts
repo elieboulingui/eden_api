@@ -28,13 +28,14 @@ export default class MerchantDashboardController {
    */
   async getMerchantServices({ params, request, response }: HttpContext) {
     try {
-      const { userId } = params
+      const { merchantId, userId } = params
+      const id = merchantId || userId
 
-      if (!userId) {
+      if (!id) {
         return response.badRequest({ success: false, message: "ID utilisateur manquant" })
       }
 
-      const user = await User.findBy('id', userId)
+      const user = await User.findBy('id', id)
 
       if (!user) {
         return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
@@ -99,6 +100,7 @@ export default class MerchantDashboardController {
           total_revenue: Number.parseFloat(totalRevenue?.$extras?.total) || 0,
           today_subscribers: Number.parseInt(todaySubscribers?.$extras?.total) || 0,
           features: service.features ? JSON.parse(service.features) : null,
+          settings: service.settings ? JSON.parse(service.settings) : null,
         }
       }))
 
@@ -126,17 +128,18 @@ export default class MerchantDashboardController {
   }
 
   /**
-   * Crée un nouveau service d'abonnement
+   * Récupère les détails d'un service spécifique
    */
-  async createService({ params, request, response }: HttpContext) {
+  async getMerchantServiceDetail({ params, response }: HttpContext) {
     try {
-      const { userId } = params
+      const { merchantId, userId, serviceId } = params
+      const id = merchantId || userId
 
-      if (!userId) {
-        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+      if (!id || !serviceId) {
+        return response.badRequest({ success: false, message: "Paramètres manquants" })
       }
 
-      const user = await User.findBy('id', userId)
+      const user = await User.findBy('id', id)
 
       if (!user) {
         return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
@@ -146,6 +149,123 @@ export default class MerchantDashboardController {
         return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
       }
 
+      const service = await Service.query()
+        .where('id', serviceId)
+        .where('merchant_id', user.id)
+        .preload('merchant', (query) => {
+          query.select('id', 'full_name', 'shop_name', 'avatar')
+        })
+        .first()
+
+      if (!service) {
+        return response.notFound({ success: false, message: 'Service non trouvé' })
+      }
+
+      // Statistiques détaillées
+      const activeSubscribers = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'active')
+        .count('* as total')
+        .first()
+
+      const totalRevenue = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'active')
+        .sum('price_paid as total')
+        .first()
+
+      const todaySubscribers = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'active')
+        .whereRaw('DATE(subscription_date) = CURDATE()')
+        .count('* as total')
+        .first()
+
+      const expiredSubscribers = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'expired')
+        .count('* as total')
+        .first()
+
+      const cancelledSubscribers = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'cancelled')
+        .count('* as total')
+        .first()
+
+      // Récupérer les 5 derniers abonnés
+      const recentSubscribers = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'active')
+        .preload('client', (query) => {
+          query.select('id', 'full_name', 'email', 'avatar')
+        })
+        .orderBy('created_at', 'desc')
+        .limit(5)
+
+      return response.ok({
+        success: true,
+        data: {
+          ...service.toJSON(),
+          merchant_name: service.merchant?.full_name || null,
+          merchant_shop_name: service.merchant?.shop_name || null,
+          merchant_avatar: service.merchant?.avatar || null,
+          features: service.features ? JSON.parse(service.features) : null,
+          settings: service.settings ? JSON.parse(service.settings) : null,
+          stats: {
+            active_subscribers: Number.parseInt(activeSubscribers?.$extras?.total) || 0,
+            total_revenue: Number.parseFloat(totalRevenue?.$extras?.total) || 0,
+            today_subscribers: Number.parseInt(todaySubscribers?.$extras?.total) || 0,
+            expired_subscribers: Number.parseInt(expiredSubscribers?.$extras?.total) || 0,
+            cancelled_subscribers: Number.parseInt(cancelledSubscribers?.$extras?.total) || 0,
+          },
+          recent_subscribers: recentSubscribers.map(sub => ({
+            id: sub.id,
+            client_id: sub.client_id,
+            client_name: sub.client?.full_name || null,
+            client_email: sub.client?.email || null,
+            client_avatar: sub.client?.avatar || null,
+            subscription_date: sub.subscription_date,
+            valid_until: sub.valid_until,
+            price_paid: sub.price_paid,
+            status: sub.status,
+          }))
+        }
+      })
+
+    } catch (error: any) {
+      console.error('Erreur getMerchantServiceDetail:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la récupération des détails du service',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Crée un nouveau service d'abonnement
+   */
+  async createService({ params, request, response }: HttpContext) {
+    try {
+      const { merchantId, userId } = params
+      const id = merchantId || userId
+
+      if (!id) {
+        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+      }
+
+      const user = await User.findBy('id', id)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+      }
+
+      // Vérifier si le marchand peut créer des services
       if (!user.can_create_services) {
         return response.forbidden({ 
           success: false, 
@@ -153,6 +273,7 @@ export default class MerchantDashboardController {
         })
       }
 
+      // Vérifier la limite de services
       const existingServicesCount = await Service.query()
         .where('merchant_id', user.id)
         .where('is_active', true)
@@ -187,6 +308,7 @@ export default class MerchantDashboardController {
         'settings'
       ])
 
+      // Validation
       if (!data.name) {
         return response.badRequest({ success: false, message: 'Le nom du service est requis' })
       }
@@ -195,6 +317,7 @@ export default class MerchantDashboardController {
         return response.badRequest({ success: false, message: 'Le prix est requis et doit être supérieur à 0' })
       }
 
+      // Vérifier les doublons
       const existingService = await Service.query()
         .where('name', data.name)
         .where('merchant_id', user.id)
@@ -208,6 +331,7 @@ export default class MerchantDashboardController {
         })
       }
 
+      // Créer le service
       const service = new Service()
       service.id = crypto.randomUUID()
       service.merchant_id = user.id
@@ -235,6 +359,7 @@ export default class MerchantDashboardController {
 
       await service.save()
 
+      // Mettre à jour le compte utilisateur
       user.active_subscriptions_count = (user.active_subscriptions_count || 0) + 1
       await user.save()
 
@@ -270,13 +395,14 @@ export default class MerchantDashboardController {
    */
   async updateService({ params, request, response }: HttpContext) {
     try {
-      const { userId, serviceId } = params
+      const { merchantId, userId, serviceId } = params
+      const id = merchantId || userId
 
-      if (!userId || !serviceId) {
+      if (!id || !serviceId) {
         return response.badRequest({ success: false, message: "Paramètres manquants" })
       }
 
-      const user = await User.findBy('id', userId)
+      const user = await User.findBy('id', id)
 
       if (!user) {
         return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
@@ -315,6 +441,7 @@ export default class MerchantDashboardController {
         'is_active'
       ])
 
+      // Mise à jour des champs
       if (data.name) service.name = data.name.trim()
       if (data.description !== undefined) service.description = data.description
       if (data.price !== undefined) service.price = Number(data.price)
@@ -367,13 +494,14 @@ export default class MerchantDashboardController {
    */
   async deleteService({ params, response }: HttpContext) {
     try {
-      const { userId, serviceId } = params
+      const { merchantId, userId, serviceId } = params
+      const id = merchantId || userId
 
-      if (!userId || !serviceId) {
+      if (!id || !serviceId) {
         return response.badRequest({ success: false, message: "Paramètres manquants" })
       }
 
-      const user = await User.findBy('id', userId)
+      const user = await User.findBy('id', id)
 
       if (!user) {
         return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
@@ -392,6 +520,7 @@ export default class MerchantDashboardController {
         return response.notFound({ success: false, message: 'Service non trouvé' })
       }
 
+      // Vérifier si des abonnements actifs existent
       const activeSubscriptions = await DailySubscription.query()
         .where('service_id', service.id)
         .where('status', 'active')
@@ -408,9 +537,11 @@ export default class MerchantDashboardController {
         })
       }
 
+      // Désactiver le service
       service.is_active = false
       await service.save()
 
+      // Mettre à jour le compte utilisateur
       user.active_subscriptions_count = Math.max(0, (user.active_subscriptions_count || 0) - 1)
       await user.save()
 
@@ -440,14 +571,14 @@ export default class MerchantDashboardController {
    */
   async toggleServiceStatus({ params, request, response }: HttpContext) {
     try {
-      const { userId, serviceId } = params
-      const { is_active } = request.only(['is_active'])
+      const { merchantId, userId, serviceId } = params
+      const id = merchantId || userId
 
-      if (!userId || !serviceId) {
+      if (!id || !serviceId) {
         return response.badRequest({ success: false, message: "Paramètres manquants" })
       }
 
-      const user = await User.findBy('id', userId)
+      const user = await User.findBy('id', id)
 
       if (!user) {
         return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
@@ -466,6 +597,9 @@ export default class MerchantDashboardController {
         return response.notFound({ success: false, message: 'Service non trouvé' })
       }
 
+      const { is_active } = request.only(['is_active'])
+
+      // Si on désactive, vérifier les abonnements actifs
       if (is_active === false || is_active === 'false') {
         const activeSubscriptions = await DailySubscription.query()
           .where('service_id', service.id)
@@ -512,13 +646,14 @@ export default class MerchantDashboardController {
    */
   async getServiceSubscribers({ params, request, response }: HttpContext) {
     try {
-      const { userId, serviceId } = params
+      const { merchantId, userId, serviceId } = params
+      const id = merchantId || userId
 
-      if (!userId || !serviceId) {
+      if (!id || !serviceId) {
         return response.badRequest({ success: false, message: "Paramètres manquants" })
       }
 
-      const user = await User.findBy('id', userId)
+      const user = await User.findBy('id', id)
 
       if (!user) {
         return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
@@ -575,6 +710,7 @@ export default class MerchantDashboardController {
         created_at: sub.created_at
       }))
 
+      // Statistiques
       const stats = {
         total: await DailySubscription.query()
           .where('service_id', service.id)
@@ -619,6 +755,155 @@ export default class MerchantDashboardController {
       return response.internalServerError({
         success: false,
         message: 'Erreur lors de la récupération des abonnés',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Récupère les statistiques d'un service
+   */
+  async getServiceStats({ params, response }: HttpContext) {
+    try {
+      const { merchantId, userId, serviceId } = params
+      const id = merchantId || userId
+
+      if (!id || !serviceId) {
+        return response.badRequest({ success: false, message: "Paramètres manquants" })
+      }
+
+      const user = await User.findBy('id', id)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+      }
+
+      const service = await Service.query()
+        .where('id', serviceId)
+        .where('merchant_id', user.id)
+        .first()
+
+      if (!service) {
+        return response.notFound({ success: false, message: 'Service non trouvé' })
+      }
+
+      // Statistiques globales
+      const totalSubscriptions = await DailySubscription.query()
+        .where('service_id', service.id)
+        .count('* as total')
+        .first()
+
+      const activeSubscriptions = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'active')
+        .count('* as total')
+        .first()
+
+      const expiredSubscriptions = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'expired')
+        .count('* as total')
+        .first()
+
+      const cancelledSubscriptions = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'cancelled')
+        .count('* as total')
+        .first()
+
+      // Revenus
+      const totalRevenue = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'active')
+        .sum('price_paid as total')
+        .first()
+
+      const todayRevenue = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'active')
+        .whereRaw('DATE(subscription_date) = CURDATE()')
+        .sum('price_paid as total')
+        .first()
+
+      const thisMonthRevenue = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'active')
+        .whereRaw('MONTH(subscription_date) = MONTH(CURDATE())')
+        .whereRaw('YEAR(subscription_date) = YEAR(CURDATE())')
+        .sum('price_paid as total')
+        .first()
+
+      // Statistiques par type d'abonnement
+      const subscriptionsByType = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'active')
+        .select('subscription_type')
+        .count('* as total')
+        .groupBy('subscription_type')
+
+      // Statistiques par mois (12 derniers mois)
+      const monthlyStats = []
+      for (let i = 0; i < 12; i++) {
+        const month = DateTime.now().minus({ months: i })
+        const monthStart = month.startOf('month')
+        const monthEnd = month.endOf('month')
+
+        const count = await DailySubscription.query()
+          .where('service_id', service.id)
+          .where('status', 'active')
+          .where('subscription_date', '>=', monthStart.toSQL())
+          .where('subscription_date', '<=', monthEnd.toSQL())
+          .count('* as total')
+          .first()
+
+        const revenue = await DailySubscription.query()
+          .where('service_id', service.id)
+          .where('status', 'active')
+          .where('subscription_date', '>=', monthStart.toSQL())
+          .where('subscription_date', '<=', monthEnd.toSQL())
+          .sum('price_paid as total')
+          .first()
+
+        monthlyStats.unshift({
+          month: month.toFormat('MMM yyyy'),
+          year: month.year,
+          month_number: month.month,
+          count: Number.parseInt(count?.$extras?.total) || 0,
+          revenue: Number.parseFloat(revenue?.$extras?.total) || 0
+        })
+      }
+
+      return response.ok({
+        success: true,
+        data: {
+          service_id: service.id,
+          service_name: service.name,
+          stats: {
+            total_subscriptions: Number.parseInt(totalSubscriptions?.$extras?.total) || 0,
+            active_subscriptions: Number.parseInt(activeSubscriptions?.$extras?.total) || 0,
+            expired_subscriptions: Number.parseInt(expiredSubscriptions?.$extras?.total) || 0,
+            cancelled_subscriptions: Number.parseInt(cancelledSubscriptions?.$extras?.total) || 0,
+            total_revenue: Number.parseFloat(totalRevenue?.$extras?.total) || 0,
+            today_revenue: Number.parseFloat(todayRevenue?.$extras?.total) || 0,
+            this_month_revenue: Number.parseFloat(thisMonthRevenue?.$extras?.total) || 0,
+          },
+          subscriptions_by_type: subscriptionsByType.map(s => ({
+            type: s.subscription_type,
+            count: Number.parseInt(s.$extras.total) || 0
+          })),
+          monthly_stats: monthlyStats
+        }
+      })
+
+    } catch (error: any) {
+      console.error('Erreur getServiceStats:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la récupération des statistiques du service',
         error: error.message
       })
     }
