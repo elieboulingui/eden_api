@@ -10,6 +10,8 @@ import crypto from 'node:crypto'
 import Product from './Product.js'
 import Review from './review.js'
 import Wallet from './wallet.js'
+import Service from './Service.js'
+import DailySubscription from './DailySubscription.js'
 
 const AuthFinder = withAuthFinder(hash, {
   uids: ['email'],
@@ -32,7 +34,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare password: string
 
   @column()
-  declare role: 'superadmin' | 'admin' | 'client' | 'marchant' | 'merchant' | 'livreur' |  'edenlivreur'
+  declare role: 'superadmin' | 'admin' | 'client' | 'marchant' | 'merchant' | 'livreur' | 'edenlivreur'
 
   @column()
   declare avatar: string | null
@@ -57,7 +59,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare birth_date: DateTime | null
 
   @column({ columnName: 'has_livreur' })
-declare has_livreur: boolean
+  declare has_livreur: boolean
 
   @column({ columnName: 'id_number' })
   declare id_number: string | null
@@ -268,8 +270,8 @@ declare has_livreur: boolean
   // VALIDATION ET ENGAGEMENT
   // ============================================================
 
-  @column({ 
-    columnName: 'delivery_zones', 
+  @column({
+    columnName: 'delivery_zones',
     consume: (value) => {
       if (typeof value === 'string') return JSON.parse(value)
       if (value && typeof value === 'object') return value
@@ -341,6 +343,25 @@ declare has_livreur: boolean
   declare wallet: HasOne<typeof Wallet>
 
   // ============================================================
+  // RELATIONS D'ABONNEMENT
+  // ============================================================
+
+  @hasMany(() => Service, {
+    foreignKey: 'merchant_id',
+  })
+  declare services: HasMany<typeof Service>
+
+  @hasMany(() => DailySubscription, {
+    foreignKey: 'client_id',
+  })
+  declare daily_subscriptions: HasMany<typeof DailySubscription>
+
+  @hasMany(() => DailySubscription, {
+    foreignKey: 'merchant_id',
+  })
+  declare merchant_daily_subscriptions: HasMany<typeof DailySubscription>
+
+  // ============================================================
   // ACCESS TOKENS
   // ============================================================
 
@@ -377,8 +398,7 @@ declare has_livreur: boolean
     user.total_earnings = user.total_earnings ?? 0
     user.rating = user.rating ?? 0
     user.total_ratings = user.total_ratings ?? 0
-    user.has_livreur = user.has_livreur ?? false  // 🆕 Ajout
-
+    user.has_livreur = user.has_livreur ?? false
   }
 
   // ============================================================
@@ -425,8 +445,8 @@ declare has_livreur: boolean
         this.phone &&
         this.email &&
         this.vehicle_type &&
-        (this.vehicle_type === 'pied' || this.vehicle_type === 'velo' || 
-         (this.license_number && this.license_document_url))
+        (this.vehicle_type === 'pied' || this.vehicle_type === 'velo' ||
+          (this.license_number && this.license_document_url))
       )
     }
 
@@ -523,7 +543,7 @@ declare has_livreur: boolean
 
   get deliveryZonesList(): { zone: string; fee: number }[] {
     if (!this.delivery_zones || typeof this.delivery_zones !== 'object') return []
-    
+
     return Object.entries(this.delivery_zones)
       .map(([zone, fee]) => ({
         zone: zone.charAt(0).toUpperCase() + zone.slice(1),
@@ -637,7 +657,10 @@ declare has_livreur: boolean
     )
   }
 
-  // 🆕 Méthodes spécifiques livreur
+  // ============================================================
+  // MÉTHODES SPÉCIFIQUES LIVREUR
+  // ============================================================
+
   async updateLocation(lat: number, lng: number): Promise<void> {
     this.current_latitude = lat
     this.current_longitude = lng
@@ -668,5 +691,250 @@ declare has_livreur: boolean
     this.total_ratings += 1
     this.rating = (totalRating + newRating) / this.total_ratings
     await this.save()
+  }
+
+  // ============================================================
+  // MÉTHODES D'ABONNEMENT QUOTIDIEN
+  // ============================================================
+
+  /**
+   * S'abonner à un service pour aujourd'hui
+   */
+  async subscribeToServiceForToday(serviceId: string, paymentMethod?: string): Promise<DailySubscription> {
+    // Vérifier si déjà abonné aujourd'hui
+    const today = DateTime.now().startOf('day')
+    const existing = await DailySubscription.query()
+      .where('client_id', this.id)
+      .where('service_id', serviceId)
+      .where('status', 'active')
+      .where('subscription_date', '>=', today.toSQL())
+      .first()
+
+    if (existing) {
+      throw new Error('Vous êtes déjà abonné à ce service pour aujourd\'hui')
+    }
+
+    const service = await Service.findOrFail(serviceId)
+    if (!service.is_active) {
+      throw new Error('Ce service n\'est pas disponible')
+    }
+
+    const subscription = new DailySubscription()
+    subscription.id = crypto.randomUUID()
+    subscription.client_id = this.id
+    subscription.service_id = serviceId
+    subscription.merchant_id = service.merchant_id
+    subscription.status = 'active'
+    subscription.subscription_date = DateTime.now().startOf('day')
+    subscription.valid_until = DateTime.now().endOf('day')
+    subscription.price_paid = service.price
+    subscription.currency = service.currency || 'XAF'
+    subscription.payment_method = paymentMethod || null
+    subscription.auto_renew = false
+
+    await subscription.save()
+    return subscription
+  }
+
+  /**
+   * Récupérer les abonnements d'aujourd'hui pour un client
+   */
+  async getTodaySubscriptions(): Promise<DailySubscription[]> {
+    const today = DateTime.now().startOf('day')
+    return await DailySubscription.query()
+      .where('client_id', this.id)
+      .where('status', 'active')
+      .where('subscription_date', '>=', today.toSQL())
+      .preload('service')
+      .preload('merchant')
+      .exec()
+  }
+
+  /**
+   * Vérifier si le client a un abonnement actif pour un service aujourd'hui
+   */
+  async hasActiveSubscriptionForToday(serviceId: string): Promise<boolean> {
+    const today = DateTime.now().startOf('day')
+    const subscription = await DailySubscription.query()
+      .where('client_id', this.id)
+      .where('service_id', serviceId)
+      .where('status', 'active')
+      .where('subscription_date', '>=', today.toSQL())
+      .first()
+    
+    return !!subscription
+  }
+
+  /**
+   * Récupérer tous les abonnements actifs d'un client
+   */
+  async getActiveSubscriptions(): Promise<DailySubscription[]> {
+    return await DailySubscription.query()
+      .where('client_id', this.id)
+      .where('status', 'active')
+      .where('valid_until', '>', DateTime.now().toSQL())
+      .preload('service')
+      .preload('merchant')
+      .orderBy('subscription_date', 'desc')
+      .exec()
+  }
+
+  /**
+   * Récupérer les abonnés d'aujourd'hui pour un marchand
+   */
+  async getTodaysSubscribers(): Promise<DailySubscription[]> {
+    if (!this.isMerchant) {
+      throw new Error('Seuls les marchands peuvent voir leurs abonnés')
+    }
+
+    const today = DateTime.now().startOf('day')
+    return await DailySubscription.query()
+      .where('merchant_id', this.id)
+      .where('status', 'active')
+      .where('subscription_date', '>=', today.toSQL())
+      .preload('client')
+      .preload('service')
+      .exec()
+  }
+
+  /**
+   * Récupérer les statistiques d'abonnement du jour pour un marchand
+   */
+  async getSubscriptionStatsForToday(): Promise<{
+    total: number
+    revenue: number
+    services: { serviceName: string; count: number; revenue: number }[]
+  }> {
+    if (!this.isMerchant) {
+      throw new Error('Seuls les marchands peuvent voir leurs statistiques')
+    }
+
+    const today = DateTime.now().startOf('day')
+    
+    const subscriptions = await DailySubscription.query()
+      .where('merchant_id', this.id)
+      .where('status', 'active')
+      .where('subscription_date', '>=', today.toSQL())
+      .preload('service')
+      .exec()
+
+    const total = subscriptions.length
+    const revenue = subscriptions.reduce((sum, sub) => sum + sub.price_paid, 0)
+
+    // Regrouper par service
+    const servicesMap = new Map()
+    subscriptions.forEach(sub => {
+      const serviceName = sub.service.name
+      if (!servicesMap.has(serviceName)) {
+        servicesMap.set(serviceName, { count: 0, revenue: 0 })
+      }
+      const data = servicesMap.get(serviceName)
+      data.count++
+      data.revenue += sub.price_paid
+    })
+
+    const services = Array.from(servicesMap.entries()).map(([serviceName, data]) => ({
+      serviceName,
+      count: data.count,
+      revenue: data.revenue
+    }))
+
+    return { total, revenue, services }
+  }
+
+  /**
+   * Récupérer le nombre total d'abonnements actifs d'un client
+   */
+  async getTotalActiveSubscriptions(): Promise<number> {
+    const result = await DailySubscription.query()
+      .where('client_id', this.id)
+      .where('status', 'active')
+      .where('valid_until', '>', DateTime.now().toSQL())
+      .count('* as total')
+      .first()
+    
+    return Number.parseInt(result?.$extras?.total) || 0
+  }
+
+  /**
+   * Annuler un abonnement spécifique
+   */
+  async cancelSubscription(subscriptionId: string): Promise<void> {
+    const subscription = await DailySubscription.query()
+      .where('id', subscriptionId)
+      .where('client_id', this.id)
+      .first()
+
+    if (!subscription) {
+      throw new Error('Abonnement non trouvé')
+    }
+
+    subscription.status = 'cancelled'
+    subscription.cancelled_at = DateTime.now()
+    await subscription.save()
+  }
+
+  /**
+   * Vérifier si un client est abonné à au moins un service aujourd'hui
+   */
+  async hasAnyActiveSubscriptionToday(): Promise<boolean> {
+    const today = DateTime.now().startOf('day')
+    const result = await DailySubscription.query()
+      .where('client_id', this.id)
+      .where('status', 'active')
+      .where('subscription_date', '>=', today.toSQL())
+      .count('* as total')
+      .first()
+    
+    return Number.parseInt(result?.$extras?.total) || 0 > 0
+  }
+
+  /**
+   * Récupérer tous les services auxquels un client est abonné aujourd'hui
+   */
+  async getTodaySubscribedServices(): Promise<Service[]> {
+    const subscriptions = await this.getTodaySubscriptions()
+    return subscriptions.map(sub => sub.service)
+  }
+
+  /**
+   * Récupérer les abonnements d'un client par période
+   */
+  async getSubscriptionsByDateRange(startDate: DateTime, endDate: DateTime): Promise<DailySubscription[]> {
+    return await DailySubscription.query()
+      .where('client_id', this.id)
+      .where('status', 'active')
+      .where('subscription_date', '>=', startDate.toSQL())
+      .where('subscription_date', '<=', endDate.toSQL())
+      .preload('service')
+      .preload('merchant')
+      .orderBy('subscription_date', 'desc')
+      .exec()
+  }
+
+  /**
+   * Récupérer le montant total dépensé en abonnements par un client
+   */
+  async getTotalSpentOnSubscriptions(): Promise<number> {
+    const result = await DailySubscription.query()
+      .where('client_id', this.id)
+      .where('status', 'active')
+      .sum('price_paid as total')
+      .first()
+    
+    return Number.parseFloat(result?.$extras?.total) || 0
+  }
+
+  /**
+   * Récupérer les abonnements expirés d'un client
+   */
+  async getExpiredSubscriptions(): Promise<DailySubscription[]> {
+    return await DailySubscription.query()
+      .where('client_id', this.id)
+      .where('status', 'expired')
+      .preload('service')
+      .preload('merchant')
+      .orderBy('valid_until', 'desc')
+      .exec()
   }
 }
