@@ -208,7 +208,7 @@ router.group(() => {
   // ----------------------------------------------------------
   router.get('/users', [UsersController, 'index']).as('users.index')
   router.get('/users/:id', [UsersController, 'show']).as('users.show')
-    router.get('/users/:id/contract-info', [UsersController, 'getContractInfo']).as('users.contract-info')
+  router.get('/users/:id/contract-info', [UsersController, 'getContractInfo']).as('users.contract-info')
   router.get('/users/:id/merchant-info', [UsersController, 'getMerchantInfo']).as('users.merchant-info')
   router.get('/users/:id/contract-status', [UsersController, 'getContractStatus']).as('users.contract-status')
   router.patch('/users/:id/contract-signature', [UsersController, 'updateContractSignature']).as('users.contract-signature')
@@ -320,7 +320,50 @@ router.group(() => {
   router.get('/merchant/dashboard/withdrawal-stats', [MerchantDashboardController, 'getWithdrawalStats']).as('merchant.dashboard.withdrawal-stats')
 
   // ----------------------------------------------------------
-  // MARCHAND (MERCHANT)
+  // 🆕 SERVICES D'ABONNEMENT (MARCHAND)
+  // ----------------------------------------------------------
+  
+  // Routes avec merchantId
+  router.group(() => {
+    // Liste des services du marchand
+    router.get('/', [MerchantDashboardController, 'getMerchantServices'])
+    
+    // Créer un nouveau service
+    router.post('/', [MerchantDashboardController, 'createService'])
+    
+    // Récupérer les détails d'un service spécifique
+    router.get('/:serviceId', [MerchantDashboardController, 'getMerchantServiceDetail'])
+    
+    // Modifier un service existant
+    router.put('/:serviceId', [MerchantDashboardController, 'updateService'])
+    
+    // Supprimer (désactiver) un service
+    router.delete('/:serviceId', [MerchantDashboardController, 'deleteService'])
+    
+    // Activer/désactiver un service
+    router.patch('/:serviceId/toggle', [MerchantDashboardController, 'toggleServiceStatus'])
+    
+    // Récupérer les abonnés d'un service spécifique
+    router.get('/:serviceId/subscribers', [MerchantDashboardController, 'getServiceSubscribers'])
+    
+    // Statistiques d'un service
+    router.get('/:serviceId/stats', [MerchantDashboardController, 'getServiceStats'])
+  }).prefix('/api/merchants/:merchantId/services')
+
+  // Routes avec userId (alternative pour compatibilité)
+  router.group(() => {
+    router.get('/services', [MerchantDashboardController, 'getMerchantServices'])
+    router.post('/services', [MerchantDashboardController, 'createService'])
+    router.get('/services/:serviceId', [MerchantDashboardController, 'getMerchantServiceDetail'])
+    router.put('/services/:serviceId', [MerchantDashboardController, 'updateService'])
+    router.delete('/services/:serviceId', [MerchantDashboardController, 'deleteService'])
+    router.patch('/services/:serviceId/toggle', [MerchantDashboardController, 'toggleServiceStatus'])
+    router.get('/services/:serviceId/subscribers', [MerchantDashboardController, 'getServiceSubscribers'])
+    router.get('/services/:serviceId/stats', [MerchantDashboardController, 'getServiceStats'])
+  }).prefix('/api/merchant/:userId')
+
+  // ----------------------------------------------------------
+  // MARCHAND (MERCHANT) - ROUTES EXISTANTES
   // ----------------------------------------------------------
   router.get('/merchant/withdrawals/:userId', [MerchantDashboardController, 'getWithdrawalHistory']).as('merchant.withdrawals')
   router.get('/merchant/wallet/:userId', [MerchantDashboardController, 'getWallet']).as('merchant.wallet')
@@ -447,14 +490,12 @@ router.group(() => {
   // CALLBACK MYPVIT
   // ============================================================
   
-  // Route callback principale
   router.post('/mypvit/callback', async (ctx) => {
     const { default: CallbackController } = await import('#controllers/CallbackController')
     const controller = new CallbackController()
     return controller.handle(ctx)
   }).as('mypvit.callback.orders')
 
-  // Route callback alternative
   router.post('/callbacks/mypvit', async (ctx) => {
     const { default: CallbackController } = await import('#controllers/CallbackController')
     const controller = new CallbackController()
