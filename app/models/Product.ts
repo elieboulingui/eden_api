@@ -1,3 +1,4 @@
+// app/models/Product.ts
 import { DateTime } from 'luxon'
 import { BaseModel, column, beforeCreate, beforeSave, belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
@@ -11,7 +12,7 @@ export default class Product extends BaseModel {
   static table = 'products'
 
   @column({ isPrimary: true })
-  declare id: string 
+  declare id: string
 
   @column()
   declare name: string
@@ -130,6 +131,28 @@ export default class Product extends BaseModel {
   declare imageUrl5: string | null
 
   // ============================================================
+  // 🎬 COLONNES VIDÉO
+  // ============================================================
+
+  @column({ columnName: 'video_url' })
+  declare videoUrl: string | null
+
+  @column({ columnName: 'demo_video_url' })
+  declare demoVideoUrl: string | null
+
+  @column({ columnName: 'video_360_url' })
+  declare video360Url: string | null
+
+  @column({ columnName: 'video_thumbnail_url' })
+  declare videoThumbnailUrl: string | null
+
+  @column({ columnName: 'video_duration' })
+  declare videoDuration: number | null
+
+  @column({ columnName: 'video_subtitles_url' })
+  declare videoSubtitlesUrl: string | null
+
+  // ============================================================
   // VARIANTES ET SPÉCIFICATIONS
   // ============================================================
 
@@ -168,9 +191,6 @@ export default class Product extends BaseModel {
 
   @column()
   declare tags: string | null
-
-  @column({ columnName: 'video_url' })
-  declare videoUrl: string | null
 
   @column({ columnName: 'delivery_time' })
   declare deliveryTime: string | null
@@ -297,6 +317,139 @@ export default class Product extends BaseModel {
   }
 
   // ============================================================
+  // GETTERS - VIDÉO
+  // ============================================================
+
+  get hasVideo(): boolean {
+    return !!(this.videoUrl || this.demoVideoUrl || this.video360Url)
+  }
+
+  get hasMainVideo(): boolean {
+    return !!this.videoUrl
+  }
+
+  get hasDemoVideo(): boolean {
+    return !!this.demoVideoUrl
+  }
+
+  get hasVideo360(): boolean {
+    return !!this.video360Url
+  }
+
+  get mainVideoUrl(): string | null {
+    return this.videoUrl || this.demoVideoUrl || null
+  }
+
+  get videoUrls(): { url: string; type: 'main' | 'demo' | '360'; label: string }[] {
+    const videos: { url: string; type: 'main' | 'demo' | '360'; label: string }[] = []
+    if (this.videoUrl) videos.push({ url: this.videoUrl, type: 'main', label: 'Vidéo principale' })
+    if (this.demoVideoUrl) videos.push({ url: this.demoVideoUrl, type: 'demo', label: 'Vidéo de démonstration' })
+    if (this.video360Url) videos.push({ url: this.video360Url, type: '360', label: 'Vidéo 360°' })
+    return videos
+  }
+
+  get videoThumbnail(): string | null {
+    if (this.videoThumbnailUrl) return this.videoThumbnailUrl
+    if (this.image_url) return this.image_url
+    return null
+  }
+
+  get videoEmbedUrl(): string | null {
+    if (!this.videoUrl) return null
+    
+    // YouTube
+    const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+    const youtubeMatch = this.videoUrl.match(youtubeRegex)
+    if (youtubeMatch) {
+      return `https://www.youtube.com/embed/${youtubeMatch[1]}`
+    }
+    
+    // Vimeo
+    const vimeoRegex = /vimeo\.com\/(\d+)/
+    const vimeoMatch = this.videoUrl.match(vimeoRegex)
+    if (vimeoMatch) {
+      return `https://player.vimeo.com/video/${vimeoMatch[1]}`
+    }
+    
+    // Facebook Video
+    const facebookRegex = /facebook\.com\/.*\/videos\/(\d+)/
+    const facebookMatch = this.videoUrl.match(facebookRegex)
+    if (facebookMatch) {
+      return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(this.videoUrl)}`
+    }
+    
+    // Dailymotion
+    const dailymotionRegex = /dailymotion\.com\/video\/([a-zA-Z0-9]+)/
+    const dailymotionMatch = this.videoUrl.match(dailymotionRegex)
+    if (dailymotionMatch) {
+      return `https://www.dailymotion.com/embed/video/${dailymotionMatch[1]}`
+    }
+    
+    // Si c'est déjà une URL d'embed
+    if (this.videoUrl.includes('embed') || this.videoUrl.includes('player')) {
+      return this.videoUrl
+    }
+    
+    return this.videoUrl
+  }
+
+  get videoEmbedUrlDemo(): string | null {
+    if (!this.demoVideoUrl) return null
+    
+    // YouTube
+    const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+    const youtubeMatch = this.demoVideoUrl.match(youtubeRegex)
+    if (youtubeMatch) {
+      return `https://www.youtube.com/embed/${youtubeMatch[1]}`
+    }
+    
+    // Vimeo
+    const vimeoRegex = /vimeo\.com\/(\d+)/
+    const vimeoMatch = this.demoVideoUrl.match(vimeoRegex)
+    if (vimeoMatch) {
+      return `https://player.vimeo.com/video/${vimeoMatch[1]}`
+    }
+    
+    return this.demoVideoUrl
+  }
+
+  get videoDurationFormatted(): string | null {
+    if (!this.videoDuration) return null
+    const minutes = Math.floor(this.videoDuration / 60)
+    const seconds = this.videoDuration % 60
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+
+  get videoPlatform(): 'youtube' | 'vimeo' | 'facebook' | 'dailymotion' | 'other' | null {
+    if (!this.videoUrl) return null
+    
+    if (this.videoUrl.includes('youtube.com') || this.videoUrl.includes('youtu.be')) {
+      return 'youtube'
+    }
+    if (this.videoUrl.includes('vimeo.com')) {
+      return 'vimeo'
+    }
+    if (this.videoUrl.includes('facebook.com')) {
+      return 'facebook'
+    }
+    if (this.videoUrl.includes('dailymotion.com')) {
+      return 'dailymotion'
+    }
+    return 'other'
+  }
+
+  get videoPlatformIcon(): string {
+    const icons = {
+      youtube: '▶️',
+      vimeo: '🎬',
+      facebook: '📱',
+      dailymotion: '🎥',
+      other: '📹'
+    }
+    return icons[this.videoPlatform || 'other'] || '📹'
+  }
+
+  // ============================================================
   // GETTERS - BOOST
   // ============================================================
 
@@ -361,217 +514,57 @@ export default class Product extends BaseModel {
   }
 
   // ============================================================
-  // MÉTHODES - GESTION DES IMAGES MULTIPLES
+  // MÉTHODES - VIDÉO
   // ============================================================
 
-  /**
-   * Ajoute une image au produit
-   * @param imageUrl URL de l'image à ajouter
-   * @returns la position de l'image ajoutée (1-5) ou null si plein
-   */
-  async addImage(imageUrl: string): Promise<number | null> {
-    if (!imageUrl) return null
-    
-    if (!this.image_url) {
-      this.image_url = imageUrl
-      await this.save()
-      return 1
-    }
-    if (!this.imageUrl2) {
-      this.imageUrl2 = imageUrl
-      await this.save()
-      return 2
-    }
-    if (!this.imageUrl3) {
-      this.imageUrl3 = imageUrl
-      await this.save()
-      return 3
-    }
-    if (!this.imageUrl4) {
-      this.imageUrl4 = imageUrl
-      await this.save()
-      return 4
-    }
-    if (!this.imageUrl5) {
-      this.imageUrl5 = imageUrl
-      await this.save()
-      return 5
-    }
-    return null // Plus de place (max 5 images)
-  }
-
-  /**
-   * Ajoute plusieurs images en une fois
-   * @param imageUrls Liste des URLs d'images
-   * @returns Nombre d'images ajoutées
-   */
-  async addMultipleImages(imageUrls: string[]): Promise<number> {
-    let added = 0
-    for (const url of imageUrls) {
-      const result = await this.addImage(url)
-      if (result) added++
-    }
-    return added
-  }
-
-  /**
-   * Supprime une image du produit par sa position (1-5)
-   * @param position Position de l'image (1 = image principale)
-   */
-  async removeImage(position: number): Promise<boolean> {
-    switch (position) {
-      case 1:
-        this.image_url = null
-        break
-      case 2:
-        this.imageUrl2 = null
-        break
-      case 3:
-        this.imageUrl3 = null
-        break
-      case 4:
-        this.imageUrl4 = null
-        break
-      case 5:
-        this.imageUrl5 = null
-        break
-      default:
-        return false
-    }
-    
-    await this.save()
-    await this.reorderImages()
-    return true
-  }
-
-  /**
-   * Supprime une image spécifique par son URL
-   * @param imageUrl URL de l'image à supprimer
-   */
-  async removeImageByUrl(imageUrl: string): Promise<boolean> {
-    if (this.image_url === imageUrl) {
-      this.image_url = null
-      await this.save()
-      await this.reorderImages()
-      return true
-    }
-    if (this.imageUrl2 === imageUrl) {
-      this.imageUrl2 = null
-      await this.save()
-      await this.reorderImages()
-      return true
-    }
-    if (this.imageUrl3 === imageUrl) {
-      this.imageUrl3 = null
-      await this.save()
-      await this.reorderImages()
-      return true
-    }
-    if (this.imageUrl4 === imageUrl) {
-      this.imageUrl4 = null
-      await this.save()
-      await this.reorderImages()
-      return true
-    }
-    if (this.imageUrl5 === imageUrl) {
-      this.imageUrl5 = null
-      await this.save()
-      await this.reorderImages()
-      return true
-    }
-    return false
-  }
-
-  /**
-   * Réordonne les images pour combler les trous
-   */
-  async reorderImages(): Promise<void> {
-    const images = this.allImages
-    
-    // Réinitialiser toutes les positions
-    this.image_url = null
-    this.imageUrl2 = null
-    this.imageUrl3 = null
-    this.imageUrl4 = null
-    this.imageUrl5 = null
-    
-    // Replacer les images dans l'ordre
-    if (images.length > 0) this.image_url = images[0]
-    if (images.length > 1) this.imageUrl2 = images[1]
-    if (images.length > 2) this.imageUrl3 = images[2]
-    if (images.length > 3) this.imageUrl4 = images[3]
-    if (images.length > 4) this.imageUrl5 = images[4]
-    
+  async setVideoUrl(url: string | null): Promise<void> {
+    this.videoUrl = url
     await this.save()
   }
 
-  /**
-   * Échange deux images
-   * @param pos1 Position 1 (1-5)
-   * @param pos2 Position 2 (1-5)
-   */
-  async swapImages(pos1: number, pos2: number): Promise<boolean> {
-    const images = this.allImages
-    if (pos1 < 1 || pos1 > 5 || pos2 < 1 || pos2 > 5) return false
-    if (pos1 > images.length || pos2 > images.length) return false
-    
-    const temp = images[pos1 - 1]
-    images[pos1 - 1] = images[pos2 - 1]
-    images[pos2 - 1] = temp
-    
-    await this.setImagesFromArray(images)
-    return true
-  }
-
-  /**
-   * Définit toutes les images à partir d'un tableau
-   * @param images Tableau d'URLs (max 5)
-   */
-  async setImagesFromArray(images: string[]): Promise<void> {
-    // Limiter à 5 images
-    const limited = images.slice(0, 5)
-    
-    this.image_url = limited[0] || null
-    this.imageUrl2 = limited[1] || null
-    this.imageUrl3 = limited[2] || null
-    this.imageUrl4 = limited[3] || null
-    this.imageUrl5 = limited[4] || null
-    
+  async setDemoVideoUrl(url: string | null): Promise<void> {
+    this.demoVideoUrl = url
     await this.save()
   }
 
-  /**
-   * Met à jour l'image principale
-   * @param imageUrl Nouvelle URL de l'image principale
-   */
-  async setMainImage(imageUrl: string): Promise<boolean> {
-    if (!imageUrl) return false
-    
-    // Vérifier si cette image existe déjà dans le produit
-    const existingIndex = this.allImages.findIndex(img => img === imageUrl)
-    
-    if (existingIndex === -1) {
-      // L'image n'existe pas, l'ajouter en première position
-      const currentImages = this.allImages
-      currentImages.unshift(imageUrl)
-      await this.setImagesFromArray(currentImages)
-    } else if (existingIndex > 0) {
-      // L'image existe mais n'est pas en première position, l'échanger
-      await this.swapImages(1, existingIndex + 1)
-    }
-    
-    return true
+  async setVideo360Url(url: string | null): Promise<void> {
+    this.video360Url = url
+    await this.save()
   }
 
-  /**
-   * Vide toutes les images du produit
-   */
-  async clearAllImages(): Promise<void> {
-    this.image_url = null
-    this.imageUrl2 = null
-    this.imageUrl3 = null
-    this.imageUrl4 = null
-    this.imageUrl5 = null
+  async setVideoThumbnail(url: string | null): Promise<void> {
+    this.videoThumbnailUrl = url
+    await this.save()
+  }
+
+  async setVideoDuration(seconds: number | null): Promise<void> {
+    this.videoDuration = seconds
+    await this.save()
+  }
+
+  async setVideoSubtitles(url: string | null): Promise<void> {
+    this.videoSubtitlesUrl = url
+    await this.save()
+  }
+
+  async clearAllVideos(): Promise<void> {
+    this.videoUrl = null
+    this.demoVideoUrl = null
+    this.video360Url = null
+    this.videoThumbnailUrl = null
+    this.videoDuration = null
+    this.videoSubtitlesUrl = null
+    await this.save()
+  }
+
+  async removeVideo(videoType: 'main' | 'demo' | '360'): Promise<void> {
+    if (videoType === 'main') {
+      this.videoUrl = null
+    } else if (videoType === 'demo') {
+      this.demoVideoUrl = null
+    } else if (videoType === '360') {
+      this.video360Url = null
+    }
     await this.save()
   }
 
@@ -712,46 +705,26 @@ export default class Product extends BaseModel {
   }
 
   // ============================================================
-  // MÉTHODES STATIQUES - RECHERCHE PAR IMAGES
+  // MÉTHODES STATIQUES - VIDÉO
   // ============================================================
 
-  /**
-   * Trouve les produits qui ont une image
-   */
-  static async getProductsWithImages(limit: number = 50): Promise<Product[]> {
+  static async getProductsWithVideo(limit: number = 20): Promise<Product[]> {
     return Product.query()
-      .whereNotNull('image_url')
+      .whereNotNull('video_url')
       .where('is_archived', false)
       .where('status', 'active')
+      .preload('user')
+      .orderBy('created_at', 'desc')
       .limit(limit)
   }
 
-  /**
-   * Trouve les produits qui ont des images multiples
-   */
-  static async getProductsWithMultipleImages(limit: number = 50): Promise<Product[]> {
+  static async getProductsWithDemoVideo(limit: number = 20): Promise<Product[]> {
     return Product.query()
-      .whereNotNull('image_url')
-      .whereNotNull('image_url_2')
-      .orWhereNotNull('image_url_3')
-      .orWhereNotNull('image_url_4')
-      .orWhereNotNull('image_url_5')
+      .whereNotNull('demo_video_url')
       .where('is_archived', false)
       .where('status', 'active')
+      .preload('user')
+      .orderBy('created_at', 'desc')
       .limit(limit)
-  }
-
-  /**
-   * Compte le nombre total d'images dans la base
-   */
-  static async getTotalImagesCount(): Promise<number> {
-    const products = await Product.query()
-      .where('is_archived', false)
-      .where('status', 'active')
-      .select('image_url', 'image_url_2', 'image_url_3', 'image_url_4', 'image_url_5')
-    
-    return products.reduce((total, product) => {
-      return total + product.allImages.length
-    }, 0)
   }
 }
