@@ -1,3 +1,4 @@
+// app/controllers/merchant_dashboard_controller.ts
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user' 
 import Product from '#models/Product'
@@ -13,10 +14,619 @@ import { DateTime } from 'luxon'
 import crypto from 'node:crypto'
 import axios from 'axios'
 import Withdrawal from '#models/Withdrawal'
+import Service from '#models/Service'
+import DailySubscription from '#models/DailySubscription'
 
 export default class MerchantDashboardController {
 
-  // ============= WALLET ============= 
+  // ============================================================
+  // 🆕 GESTION DES SERVICES D'ABONNEMENT
+  // ============================================================
+
+  /**
+   * Récupère tous les services du marchand
+   */
+  async getMerchantServices({ params, request, response }: HttpContext) {
+    try {
+      const { userId } = params
+
+      if (!userId) {
+        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+      }
+
+      const page = request.input('page', 1)
+      const limit = request.input('limit', 20)
+      const search = request.input('search', '')
+      const status = request.input('status', 'all')
+
+      let query = Service.query()
+        .where('merchant_id', user.id)
+        .preload('merchant', (query) => {
+          query.select('id', 'full_name', 'shop_name', 'avatar')
+        })
+        .orderBy('created_at', 'desc')
+
+      if (search) {
+        query = query.where((builder) => {
+          builder
+            .where('name', 'ILIKE', `%${search}%`)
+            .orWhere('description', 'ILIKE', `%${search}%`)
+        })
+      }
+
+      if (status !== 'all') {
+        query = query.where('is_active', status === 'active')
+      }
+
+      const services = await query.paginate(page, limit)
+
+      const servicesWithStats = await Promise.all(services.all().map(async (service) => {
+        const activeSubscribers = await DailySubscription.query()
+          .where('service_id', service.id)
+          .where('status', 'active')
+          .count('* as total')
+          .first()
+
+        const totalRevenue = await DailySubscription.query()
+          .where('service_id', service.id)
+          .where('status', 'active')
+          .sum('price_paid as total')
+          .first()
+
+        const todaySubscribers = await DailySubscription.query()
+          .where('service_id', service.id)
+          .where('status', 'active')
+          .whereRaw('DATE(subscription_date) = CURDATE()')
+          .count('* as total')
+          .first()
+
+        return {
+          ...service.toJSON(),
+          merchant_name: service.merchant?.full_name || null,
+          merchant_shop_name: service.merchant?.shop_name || null,
+          merchant_avatar: service.merchant?.avatar || null,
+          active_subscribers: Number.parseInt(activeSubscribers?.$extras?.total) || 0,
+          total_revenue: Number.parseFloat(totalRevenue?.$extras?.total) || 0,
+          today_subscribers: Number.parseInt(todaySubscribers?.$extras?.total) || 0,
+          features: service.features ? JSON.parse(service.features) : null,
+        }
+      }))
+
+      return response.ok({
+        success: true,
+        data: servicesWithStats,
+        pagination: {
+          page: services.currentPage,
+          perPage: services.perPage,
+          total: services.total,
+          lastPage: services.lastPage,
+          hasMorePages: services.hasMorePages
+        },
+        count: services.total
+      })
+
+    } catch (error: any) {
+      console.error('Erreur getMerchantServices:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la récupération des services',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Crée un nouveau service d'abonnement
+   */
+  async createService({ params, request, response }: HttpContext) {
+    try {
+      const { userId } = params
+
+      if (!userId) {
+        return response.badRequest({ success: false, message: "ID utilisateur manquant" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+      }
+
+      if (!user.can_create_services) {
+        return response.forbidden({ 
+          success: false, 
+          message: 'Vous n\'avez pas l\'autorisation de créer des services. Veuillez souscrire à un plan d\'abonnement.' 
+        })
+      }
+
+      const existingServicesCount = await Service.query()
+        .where('merchant_id', user.id)
+        .where('is_active', true)
+        .count('* as total')
+        .first()
+
+      const currentCount = Number.parseInt(existingServicesCount?.$extras?.total) || 0
+      
+      if (currentCount >= user.max_services) {
+        return response.forbidden({
+          success: false,
+          message: `Vous avez atteint la limite de ${user.max_services} services. Passez à un plan supérieur pour créer plus de services.`
+        })
+      }
+
+      const data = request.only([
+        'name',
+        'description',
+        'price',
+        'currency',
+        'category',
+        'subscription_type',
+        'duration_days',
+        'trial_days',
+        'has_trial',
+        'max_subscribers',
+        'is_unlimited',
+        'max_uses_per_day',
+        'image_url',
+        'cover_image_url',
+        'features',
+        'settings'
+      ])
+
+      if (!data.name) {
+        return response.badRequest({ success: false, message: 'Le nom du service est requis' })
+      }
+
+      if (!data.price || data.price <= 0) {
+        return response.badRequest({ success: false, message: 'Le prix est requis et doit être supérieur à 0' })
+      }
+
+      const existingService = await Service.query()
+        .where('name', data.name)
+        .where('merchant_id', user.id)
+        .first()
+
+      if (existingService) {
+        return response.conflict({
+          success: false,
+          message: 'Un service avec le même nom existe déjà',
+          data: { existing_service_id: existingService.id }
+        })
+      }
+
+      const service = new Service()
+      service.id = crypto.randomUUID()
+      service.merchant_id = user.id
+      service.name = data.name.trim()
+      service.description = data.description || null
+      service.price = Number(data.price)
+      service.currency = data.currency || 'XAF'
+      service.category = data.category || null
+      service.is_active = true
+      service.subscription_type = data.subscription_type || 'daily'
+      service.duration_days = data.duration_days || null
+      service.trial_days = data.trial_days || 0
+      service.has_trial = data.has_trial || false
+      service.max_subscribers = data.max_subscribers || null
+      service.is_unlimited = data.is_unlimited !== undefined ? data.is_unlimited : true
+      service.max_uses_per_day = data.max_uses_per_day || null
+      service.image_url = data.image_url || null
+      service.cover_image_url = data.cover_image_url || null
+      service.features = data.features ? JSON.stringify(data.features) : null
+      service.settings = data.settings ? JSON.stringify(data.settings) : null
+      service.total_subscribers = 0
+      service.total_revenue = 0
+      service.average_rating = 0
+      service.total_reviews = 0
+
+      await service.save()
+
+      user.active_subscriptions_count = (user.active_subscriptions_count || 0) + 1
+      await user.save()
+
+      await service.load('merchant', (query) => {
+        query.select('id', 'full_name', 'shop_name', 'avatar')
+      })
+
+      return response.created({
+        success: true,
+        message: `Service "${service.name}" créé avec succès`,
+        data: {
+          ...service.toJSON(),
+          merchant_name: service.merchant?.full_name || null,
+          merchant_shop_name: service.merchant?.shop_name || null,
+          merchant_avatar: service.merchant?.avatar || null,
+          features: service.features ? JSON.parse(service.features) : null,
+          settings: service.settings ? JSON.parse(service.settings) : null,
+        }
+      })
+
+    } catch (error: any) {
+      console.error('Erreur createService:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la création du service',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Met à jour un service existant
+   */
+  async updateService({ params, request, response }: HttpContext) {
+    try {
+      const { userId, serviceId } = params
+
+      if (!userId || !serviceId) {
+        return response.badRequest({ success: false, message: "Paramètres manquants" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+      }
+
+      const service = await Service.query()
+        .where('id', serviceId)
+        .where('merchant_id', user.id)
+        .first()
+
+      if (!service) {
+        return response.notFound({ success: false, message: 'Service non trouvé' })
+      }
+
+      const data = request.only([
+        'name',
+        'description',
+        'price',
+        'currency',
+        'category',
+        'subscription_type',
+        'duration_days',
+        'trial_days',
+        'has_trial',
+        'max_subscribers',
+        'is_unlimited',
+        'max_uses_per_day',
+        'image_url',
+        'cover_image_url',
+        'features',
+        'settings',
+        'is_active'
+      ])
+
+      if (data.name) service.name = data.name.trim()
+      if (data.description !== undefined) service.description = data.description
+      if (data.price !== undefined) service.price = Number(data.price)
+      if (data.currency) service.currency = data.currency
+      if (data.category !== undefined) service.category = data.category
+      if (data.subscription_type) service.subscription_type = data.subscription_type
+      if (data.duration_days !== undefined) service.duration_days = data.duration_days
+      if (data.trial_days !== undefined) service.trial_days = data.trial_days
+      if (data.has_trial !== undefined) service.has_trial = data.has_trial
+      if (data.max_subscribers !== undefined) service.max_subscribers = data.max_subscribers
+      if (data.is_unlimited !== undefined) service.is_unlimited = data.is_unlimited
+      if (data.max_uses_per_day !== undefined) service.max_uses_per_day = data.max_uses_per_day
+      if (data.image_url !== undefined) service.image_url = data.image_url
+      if (data.cover_image_url !== undefined) service.cover_image_url = data.cover_image_url
+      if (data.is_active !== undefined) service.is_active = data.is_active
+      if (data.features !== undefined) service.features = data.features ? JSON.stringify(data.features) : null
+      if (data.settings !== undefined) service.settings = data.settings ? JSON.stringify(data.settings) : null
+
+      await service.save()
+
+      await service.load('merchant', (query) => {
+        query.select('id', 'full_name', 'shop_name', 'avatar')
+      })
+
+      return response.ok({
+        success: true,
+        message: `Service "${service.name}" mis à jour avec succès`,
+        data: {
+          ...service.toJSON(),
+          merchant_name: service.merchant?.full_name || null,
+          merchant_shop_name: service.merchant?.shop_name || null,
+          merchant_avatar: service.merchant?.avatar || null,
+          features: service.features ? JSON.parse(service.features) : null,
+          settings: service.settings ? JSON.parse(service.settings) : null,
+        }
+      })
+
+    } catch (error: any) {
+      console.error('Erreur updateService:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la mise à jour du service',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Supprime (désactive) un service
+   */
+  async deleteService({ params, response }: HttpContext) {
+    try {
+      const { userId, serviceId } = params
+
+      if (!userId || !serviceId) {
+        return response.badRequest({ success: false, message: "Paramètres manquants" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+      }
+
+      const service = await Service.query()
+        .where('id', serviceId)
+        .where('merchant_id', user.id)
+        .first()
+
+      if (!service) {
+        return response.notFound({ success: false, message: 'Service non trouvé' })
+      }
+
+      const activeSubscriptions = await DailySubscription.query()
+        .where('service_id', service.id)
+        .where('status', 'active')
+        .count('* as total')
+        .first()
+
+      const activeCount = Number.parseInt(activeSubscriptions?.$extras?.total) || 0
+
+      if (activeCount > 0) {
+        return response.conflict({
+          success: false,
+          message: `Impossible de supprimer ce service car ${activeCount} abonné(s) y sont encore actifs. Veuillez d'abord résilier les abonnements.`,
+          data: { active_subscribers: activeCount }
+        })
+      }
+
+      service.is_active = false
+      await service.save()
+
+      user.active_subscriptions_count = Math.max(0, (user.active_subscriptions_count || 0) - 1)
+      await user.save()
+
+      return response.ok({
+        success: true,
+        message: `Service "${service.name}" désactivé avec succès`,
+        data: {
+          id: service.id,
+          name: service.name,
+          is_active: service.is_active,
+          deleted_at: DateTime.now().toISO()
+        }
+      })
+
+    } catch (error: any) {
+      console.error('Erreur deleteService:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la suppression du service',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Active ou désactive un service
+   */
+  async toggleServiceStatus({ params, request, response }: HttpContext) {
+    try {
+      const { userId, serviceId } = params
+      const { is_active } = request.only(['is_active'])
+
+      if (!userId || !serviceId) {
+        return response.badRequest({ success: false, message: "Paramètres manquants" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+      }
+
+      const service = await Service.query()
+        .where('id', serviceId)
+        .where('merchant_id', user.id)
+        .first()
+
+      if (!service) {
+        return response.notFound({ success: false, message: 'Service non trouvé' })
+      }
+
+      if (is_active === false || is_active === 'false') {
+        const activeSubscriptions = await DailySubscription.query()
+          .where('service_id', service.id)
+          .where('status', 'active')
+          .count('* as total')
+          .first()
+
+        const activeCount = Number.parseInt(activeSubscriptions?.$extras?.total) || 0
+
+        if (activeCount > 0) {
+          return response.conflict({
+            success: false,
+            message: `Impossible de désactiver ce service car ${activeCount} abonné(s) y sont encore actifs.`,
+            data: { active_subscribers: activeCount }
+          })
+        }
+      }
+
+      service.is_active = is_active === true || is_active === 'true'
+      await service.save()
+
+      return response.ok({
+        success: true,
+        message: `Service "${service.name}" ${service.is_active ? 'activé' : 'désactivé'} avec succès`,
+        data: {
+          id: service.id,
+          name: service.name,
+          is_active: service.is_active
+        }
+      })
+
+    } catch (error: any) {
+      console.error('Erreur toggleServiceStatus:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors du changement de statut du service',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Récupère les abonnés d'un service spécifique
+   */
+  async getServiceSubscribers({ params, request, response }: HttpContext) {
+    try {
+      const { userId, serviceId } = params
+
+      if (!userId || !serviceId) {
+        return response.badRequest({ success: false, message: "Paramètres manquants" })
+      }
+
+      const user = await User.findBy('id', userId)
+
+      if (!user) {
+        return response.notFound({ success: false, message: 'Utilisateur non trouvé' })
+      }
+
+      if (user.role !== 'marchant' && user.role !== 'merchant') {
+        return response.forbidden({ success: false, message: 'Accès réservé aux marchands' })
+      }
+
+      const service = await Service.query()
+        .where('id', serviceId)
+        .where('merchant_id', user.id)
+        .first()
+
+      if (!service) {
+        return response.notFound({ success: false, message: 'Service non trouvé' })
+      }
+
+      const page = request.input('page', 1)
+      const limit = request.input('limit', 20)
+      const status = request.input('status', 'active')
+
+      let query = DailySubscription.query()
+        .where('service_id', service.id)
+        .preload('client', (query) => {
+          query.select('id', 'full_name', 'email', 'avatar', 'phone')
+        })
+        .orderBy('subscription_date', 'desc')
+
+      if (status !== 'all') {
+        query = query.where('status', status)
+      }
+
+      const subscriptions = await query.paginate(page, limit)
+
+      const data = subscriptions.all().map((sub) => ({
+        id: sub.id,
+        client_id: sub.client_id,
+        client_name: sub.client?.full_name || null,
+        client_email: sub.client?.email || null,
+        client_avatar: sub.client?.avatar || null,
+        client_phone: sub.client?.phone || null,
+        subscription_date: sub.subscription_date,
+        valid_until: sub.valid_until,
+        price_paid: sub.price_paid,
+        currency: sub.currency,
+        status: sub.status,
+        auto_renew: sub.auto_renew,
+        daysRemaining: sub.daysRemaining,
+        hoursRemaining: sub.hoursRemaining,
+        isActive: sub.isActive,
+        isExpired: sub.isExpired,
+        payment_method: sub.payment_method,
+        created_at: sub.created_at
+      }))
+
+      const stats = {
+        total: await DailySubscription.query()
+          .where('service_id', service.id)
+          .count('* as total')
+          .then(r => Number.parseInt(r[0].$extras.total) || 0),
+        active: await DailySubscription.query()
+          .where('service_id', service.id)
+          .where('status', 'active')
+          .count('* as total')
+          .then(r => Number.parseInt(r[0].$extras.total) || 0),
+        expired: await DailySubscription.query()
+          .where('service_id', service.id)
+          .where('status', 'expired')
+          .count('* as total')
+          .then(r => Number.parseInt(r[0].$extras.total) || 0),
+        cancelled: await DailySubscription.query()
+          .where('service_id', service.id)
+          .where('status', 'cancelled')
+          .count('* as total')
+          .then(r => Number.parseInt(r[0].$extras.total) || 0),
+        total_revenue: await DailySubscription.query()
+          .where('service_id', service.id)
+          .where('status', 'active')
+          .sum('price_paid as total')
+          .then(r => Number.parseFloat(r[0].$extras.total) || 0)
+      }
+
+      return response.ok({
+        success: true,
+        data: data,
+        stats: stats,
+        pagination: {
+          page: subscriptions.currentPage,
+          perPage: subscriptions.perPage,
+          total: subscriptions.total,
+          lastPage: subscriptions.lastPage
+        }
+      })
+
+    } catch (error: any) {
+      console.error('Erreur getServiceSubscribers:', error)
+      return response.internalServerError({
+        success: false,
+        message: 'Erreur lors de la récupération des abonnés',
+        error: error.message
+      })
+    }
+  }
+
+  // ============================================================
+  // 🛒 GESTION DES PRODUITS ARCHIVÉS
+  // ============================================================
 
   async getArchivedProducts({ params, request, response }: HttpContext) {
     try {
@@ -279,6 +889,10 @@ export default class MerchantDashboardController {
     }
   }
 
+  // ============================================================
+  // 💳 GESTION DU WALLET
+  // ============================================================
+
   async getWallet({ params, response }: HttpContext) {
     try {
       const { userId } = params
@@ -329,8 +943,6 @@ export default class MerchantDashboardController {
       })
     }
   }
-
-  // ============= GIVE CHANGE (RETRAIT MARCHAND) =============
 
   async giveChange({ request, response }: HttpContext) {
     try {
@@ -759,7 +1371,9 @@ export default class MerchantDashboardController {
     }
   }
 
-  // ============= COMMANDES MARCHAND =============
+  // ============================================================
+  // 📦 GESTION DES COMMANDES
+  // ============================================================
 
   async getMerchantOrders({ params, response }: HttpContext) {
     try {
@@ -1099,7 +1713,9 @@ export default class MerchantDashboardController {
     }
   }
 
-  // ============= DASHBOARD =============
+  // ============================================================
+  // 📊 DASHBOARD
+  // ============================================================
 
   async dashboard(ctx: HttpContext) {
     const { params, response } = ctx
@@ -1243,6 +1859,10 @@ export default class MerchantDashboardController {
     })
   }
 
+  // ============================================================
+  // 📦 GESTION DES PRODUITS
+  // ============================================================
+
   async getProducts({ params, request, response }: HttpContext) {
     try {
       const { userId } = params
@@ -1337,7 +1957,6 @@ export default class MerchantDashboardController {
     try {
       const { userId } = params
 
-      // ✅ Récupération avec color et size
       const { 
         name, description, price, stock, category_name, 
         image_url, image_url_2, image_url_3, image_url_4, image_url_5,
@@ -1388,7 +2007,6 @@ export default class MerchantDashboardController {
         categoryId = category.id
       }
 
-      // ✅ Création du produit avec color et size
       const productData: any = {
         name: name.trim(),
         description: description || '',
@@ -1504,7 +2122,6 @@ export default class MerchantDashboardController {
     try {
       const { userId, productId } = params
 
-      // ✅ Récupération avec color et size
       const { 
         name, description, price, stock, category_name,
         image_url, image_url_2, image_url_3, image_url_4, image_url_5,
@@ -1553,7 +2170,6 @@ export default class MerchantDashboardController {
         }
       }
 
-      // Mise à jour des champs de base
       if (name) product.name = name
       if (description !== undefined) product.description = description
       if (price) {
@@ -1562,15 +2178,11 @@ export default class MerchantDashboardController {
       }
       if (stock !== undefined) product.stock = parseInt(stock)
       if (categoryId) product.category_id = categoryId
-
-      // ✅ Mise à jour des 5 images
       if (image_url !== undefined) product.image_url = image_url?.trim() || null
       if (image_url_2 !== undefined) product.imageUrl2 = image_url_2?.trim() || null
       if (image_url_3 !== undefined) product.imageUrl3 = image_url_3?.trim() || null
       if (image_url_4 !== undefined) product.imageUrl4 = image_url_4?.trim() || null
       if (image_url_5 !== undefined) product.imageUrl5 = image_url_5?.trim() || null
-
-      // ✅ Mise à jour color et size
       if (color !== undefined) product.color = color || null
       if (size !== undefined) product.size = size || null
 
@@ -1758,6 +2370,10 @@ export default class MerchantDashboardController {
     }
   }
 
+  // ============================================================
+  // 📁 GESTION DES CATÉGORIES
+  // ============================================================
+
   async getCategories({ params, response }: HttpContext) {
     try {
       const { userId } = params
@@ -1940,6 +2556,10 @@ export default class MerchantDashboardController {
       })
     }
   }
+
+  // ============================================================
+  // 🎫 GESTION DES COUPONS
+  // ============================================================
 
   async getCoupons({ params, response }: HttpContext) {
     try {
