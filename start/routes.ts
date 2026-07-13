@@ -430,7 +430,7 @@ router.group(() => {
     router.get('/merchants/:id/details', [MerchantsController, 'adminShow']).as('admin.merchants.show')
     router.delete('/merchants/:id', [MerchantsController, 'all']).as('admin.merchants.destroy')
     
-    // ✅ ROUTES ADMIN NOTIFICATIONS
+    // ✅ AdminNotificationController
     router.get('/notifications/emails', [AdminNotificationController, 'getAdminEmails']).as('admin.notifications.emails')
     router.get('/notifications/emails-only', [AdminNotificationController, 'getAdminEmailsOnly']).as('admin.notifications.emails-only')
     router.post('/notifications/send', [AdminNotificationController, 'sendNotificationToAdmins']).as('admin.notifications.send')
