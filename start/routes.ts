@@ -51,6 +51,7 @@ const OrderTrackingController = () => import('#controllers/order_trackings_contr
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
 const CouponsController = () => import('#controllers/coupons_controller')
 const GiveChangeController = () => import('#controllers/give_change_controller')
+const AdminNotificationController = () => import('#controllers/admin_notification_controller')
 
 // ============================================================
 // ROUTES WEB (PAGES)
@@ -428,6 +429,13 @@ router.group(() => {
     router.post('/merchants/:id/reject', [MerchantsController, 'rejectMerchant']).as('admin.merchants.reject')
     router.get('/merchants/:id/details', [MerchantsController, 'adminShow']).as('admin.merchants.show')
     router.delete('/merchants/:id', [MerchantsController, 'all']).as('admin.merchants.destroy')
+    
+    // ✅ ROUTES ADMIN NOTIFICATIONS
+    router.get('/notifications/emails', [AdminNotificationController, 'getAdminEmails']).as('admin.notifications.emails')
+    router.get('/notifications/emails-only', [AdminNotificationController, 'getAdminEmailsOnly']).as('admin.notifications.emails-only')
+    router.post('/notifications/send', [AdminNotificationController, 'sendNotificationToAdmins']).as('admin.notifications.send')
+    router.get('/notifications/:adminId', [AdminNotificationController, 'getAdminNotifications']).as('admin.notifications.show')
+    router.post('/notifications/check-email', [AdminNotificationController, 'checkAdminEmail']).as('admin.notifications.check-email')
   }).prefix('/admin')
 
   // ----------------------------------------------------------
