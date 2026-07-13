@@ -51,7 +51,6 @@ const OrderTrackingController = () => import('#controllers/order_trackings_contr
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
 const CouponsController = () => import('#controllers/coupons_controller')
 const GiveChangeController = () => import('#controllers/give_change_controller')
-const AdminNotificationController = () => import('#controllers/admin_notification_controller') // ✅ Ajouté
 
 // ============================================================
 // ROUTES WEB (PAGES)
@@ -402,27 +401,17 @@ router.group(() => {
   router.post('/orders/pay/link', [PayLinkController as any, 'pay']).as('orders.pay.link')
 
   // ============================================================
-  // 🆕 ABONNEMENTS (SUBSCRIPTIONS) - NOMS UNIQUES
+  // ABONNEMENTS (SUBSCRIPTIONS)
   // ============================================================
 
   router.get('/subscriptions/plans', (ctx) => Subscription.getPlans(ctx)).as('subscriptions.plans')
   router.get('/subscriptions/active/:userId', (ctx) => Subscription.getActiveSubscription(ctx)).as('subscriptions.active')
   router.get('/subscriptions/history/:userId', (ctx) => Subscription.getHistory(ctx)).as('subscriptions.history')
   router.get('/subscriptions/stats/:userId', (ctx) => Subscription.getStats(ctx)).as('subscriptions.stats')
-
-  // Souscrire (Mobile Money)
   router.post('/subscriptions/subscribe', (ctx) => Subscription.subscribe(ctx)).as('subscriptions.subscribe')
-
-  // ✅ Souscrire par QR Code
   router.post('/subscriptions/pay/qr', (ctx) => SubscriptionQR.pay(ctx)).as('subscriptions.pay.qr')
-
-  // ✅ Souscrire par Lien
   router.post('/subscriptions/pay/link', [PayLinkSubscriptionController as any, 'paySubscription']).as('subscriptions.pay.link')
-
-  // ✅ Vérifier statut paiement abonnement (UN SEUL nom)
   router.get('/subscriptions/:id/payment-status', (ctx) => Subscription.checkPaymentStatus(ctx)).as('subscriptions.payment-status')
-
-  // Gestion des produits boostés
   router.post('/subscriptions/:id/add-product', (ctx) => Subscription.addProductToBoost(ctx)).as('subscriptions.add-product')
   router.post('/subscriptions/:id/remove-product', (ctx) => Subscription.removeProductFromBoost(ctx)).as('subscriptions.remove-product')
   router.post('/subscriptions/:id/cancel', (ctx) => Subscription.cancel(ctx)).as('subscriptions.cancel')
@@ -464,7 +453,7 @@ router.group(() => {
   router.get('/paypal/cancel', [PayPalController, 'cancel']).as('paypal.cancel')
 
   // ----------------------------------------------------------
-  // VÉRIFICATION STATUT PAIEMENT
+  // STATUT PAIEMENT
   // ----------------------------------------------------------
   router.get('/orders/:orderNumber/payment-status', [CheckPaymentStatusController, 'check']).as('check_payment_status.check_by_order')
   router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check']).as('check_payment_status.check_by_reference')
@@ -490,30 +479,5 @@ router.group(() => {
   // RETRAIT
   // ----------------------------------------------------------
   router.post('/retrait', [RetraitController, 'retrait']).as('retrait.process')
-
-  // ----------------------------------------------------------
-  // ✅ ADMIN NOTIFICATIONS - CORRIGÉ
-  // ----------------------------------------------------------
-  router.group(() => {
-    router.get('/notifications', async (ctx) => {
-      const controller = await import('#controllers/admin_notification_controller')
-      return controller.default.getNotifications(ctx)
-    }).as('admin.notifications.index')
-    
-    router.post('/notifications', async (ctx) => {
-      const controller = await import('#controllers/admin_notification_controller')
-      return controller.default.createNotification(ctx)
-    }).as('admin.notifications.store')
-    
-    router.put('/notifications/:id', async (ctx) => {
-      const controller = await import('#controllers/admin_notification_controller')
-      return controller.default.updateNotification(ctx)
-    }).as('admin.notifications.update')
-    
-    router.delete('/notifications/:id', async (ctx) => {
-      const controller = await import('#controllers/admin_notification_controller')
-      return controller.default.deleteNotification(ctx)
-    }).as('admin.notifications.destroy')
-  }).prefix('/admin')
 
 }).prefix('/api')
