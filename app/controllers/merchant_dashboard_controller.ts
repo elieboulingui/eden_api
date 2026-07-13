@@ -52,7 +52,7 @@ export default class MerchantDashboardController {
 
       let query = Service.query()
         .where('merchant_id', user.id)
-        .preload('merchant', (query) => {
+        .preload('merchant', (query: any) => {
           query.select('id', 'full_name', 'shop_name', 'avatar')
         })
         .orderBy('created_at', 'desc')
@@ -152,7 +152,7 @@ export default class MerchantDashboardController {
       const service = await Service.query()
         .where('id', serviceId)
         .where('merchant_id', user.id)
-        .preload('merchant', (query) => {
+        .preload('merchant', (query: any) => {
           query.select('id', 'full_name', 'shop_name', 'avatar')
         })
         .first()
@@ -197,7 +197,7 @@ export default class MerchantDashboardController {
       const recentSubscribers = await DailySubscription.query()
         .where('service_id', service.id)
         .where('status', 'active')
-        .preload('client', (query) => {
+        .preload('client', (query: any) => {
           query.select('id', 'full_name', 'email', 'avatar')
         })
         .orderBy('created_at', 'desc')
@@ -363,7 +363,7 @@ export default class MerchantDashboardController {
       user.active_subscriptions_count = (user.active_subscriptions_count || 0) + 1
       await user.save()
 
-      await service.load('merchant', (query) => {
+      await service.load('merchant', (query: any) => {
         query.select('id', 'full_name', 'shop_name', 'avatar')
       })
 
@@ -462,7 +462,7 @@ export default class MerchantDashboardController {
 
       await service.save()
 
-      await service.load('merchant', (query) => {
+      await service.load('merchant', (query: any) => {
         query.select('id', 'full_name', 'shop_name', 'avatar')
       })
 
@@ -678,7 +678,7 @@ export default class MerchantDashboardController {
 
       let query = DailySubscription.query()
         .where('service_id', service.id)
-        .preload('client', (query) => {
+        .preload('client', (query: any) => {
           query.select('id', 'full_name', 'email', 'avatar', 'phone')
         })
         .orderBy('subscription_date', 'desc')
@@ -837,13 +837,13 @@ export default class MerchantDashboardController {
         .sum('price_paid as total')
         .first()
 
-      // Statistiques par type d'abonnement
-      const subscriptionsByType = await DailySubscription.query()
+      // Statistiques par date d'abonnement (corrigé)
+      const subscriptionsByDate = await DailySubscription.query()
         .where('service_id', service.id)
         .where('status', 'active')
-        .select('subscription_type')
+        .select('subscription_date')
         .count('* as total')
-        .groupBy('subscription_type')
+        .groupBy('subscription_date')
 
       // Statistiques par mois (12 derniers mois)
       const monthlyStats = []
@@ -891,8 +891,8 @@ export default class MerchantDashboardController {
             today_revenue: Number.parseFloat(todayRevenue?.$extras?.total) || 0,
             this_month_revenue: Number.parseFloat(thisMonthRevenue?.$extras?.total) || 0,
           },
-          subscriptions_by_type: subscriptionsByType.map(s => ({
-            type: s.subscription_type,
+          subscriptions_by_date: subscriptionsByDate.map(s => ({
+            date: s.subscription_date,
             count: Number.parseInt(s.$extras.total) || 0
           })),
           monthly_stats: monthlyStats
@@ -1705,9 +1705,9 @@ export default class MerchantDashboardController {
 
       const orderItems = await OrderItem.query()
         .whereIn('product_id', productIds)
-        .preload('order', (orderQuery) => {
+        .preload('order', (orderQuery: any) => {
           orderQuery
-            .preload('user', (userQuery) => {
+            .preload('user', (userQuery: any) => {
               userQuery.select('id', 'full_name', 'email')
             })
             .orderBy('created_at', 'desc')
@@ -1872,10 +1872,10 @@ export default class MerchantDashboardController {
 
       const orderItems = await OrderItem.query()
         .whereIn('product_id', productIds)
-        .preload('order', (orderQuery) => {
+        .preload('order', (orderQuery: any) => {
           orderQuery
             .where('status', 'pending')
-            .preload('user', (userQuery) => {
+            .preload('user', (userQuery: any) => {
               userQuery.select('id', 'full_name', 'email')
             })
         })
@@ -1946,10 +1946,10 @@ export default class MerchantDashboardController {
 
       const order = await Order.query()
         .where('id', orderId)
-        .preload('user', (userQuery) => {
+        .preload('user', (userQuery: any) => {
           userQuery.select('id', 'full_name', 'email', 'phone')
         })
-        .preload('items', (itemsQuery) => {
+        .preload('items', (itemsQuery: any) => {
           itemsQuery.preload('product')
         })
         .first()
@@ -3022,7 +3022,7 @@ export default class MerchantDashboardController {
       const orders = await Order.query()
         .where('merchant_id', user.id)
         .where('status', 'pending')
-        .preload('user', (query) => {
+        .preload('user', (query: any) => {
           query.select('id', 'full_name', 'email')
         })
         .orderBy('created_at', 'desc')
