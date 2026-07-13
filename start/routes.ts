@@ -3,14 +3,10 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 
 // Controllers imports
-import LivreurDashboardController from '#controllers/LivreurDashboardController'
-import ContractsController from '#controllers/ContractsController'
-const MerchantDeliveryController = () => import('#controllers/MerchantDeliveryController')
-const CheckoutController = () => import('#controllers/checkout_controller')
-const CheckStatusController = () => import('#controllers/payments/check_status_controller')
 const PayLinkSubscriptionController = () => import('#controllers/PayLinkSubscriptionController')
 import SubscriptionQRController from '#controllers/SubscriptionQRController'
 const SubscriptionQR = new SubscriptionQRController()
+import CallbacksController from '#controllers/CallbacksController'
 const RetraitController = () => import('#controllers/retraitController')
 const ProductController = () => import('#controllers/product_controller')
 import RenduMoneyCallbackController from '#controllers/RenduMoneyCallbackController'
@@ -22,6 +18,7 @@ const SubscriptionCallback = new SubscriptionCallbackController()
 import CheckPaymentStatusController from '#controllers/CheckPaymentStatusController'
 import PayPalController from '#controllers/paypal_controller'
 import RefundsController from '#controllers/refunds_controller'
+const CallbackController = () => import('#controllers/CallbackController')
 const PayMobileMoneyController = () => import('#controllers/PayMobileMoneyController')
 const PayQRCodeController = () => import('#controllers/PayQRCodeController')
 const PayLinkController = () => import('#controllers/PayLinkController')
@@ -54,8 +51,6 @@ const OrderTrackingController = () => import('#controllers/order_trackings_contr
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
 const CouponsController = () => import('#controllers/coupons_controller')
 const GiveChangeController = () => import('#controllers/give_change_controller')
-const HotelsController = () => import('#controllers/hotels_controller')
-const RoomsController = () => import('#controllers/rooms_controller')
 
 // ============================================================
 // ROUTES WEB (PAGES)
@@ -143,26 +138,13 @@ router.group(() => {
     router.delete('/:id', [KYCsController, 'destroy']).as('kyc.destroy')
   }).prefix('/kyc')
 
-  // ============================================================
+  // ----------------------------------------------------------
   // BLOG
-  // ============================================================
+  // ----------------------------------------------------------
   router.get('/blog/posts', [BlogController, 'index']).as('blog.index')
   router.get('/blog/posts/featured', [BlogController, 'featured']).as('blog.featured')
   router.get('/blog/posts/:slug', [BlogController, 'show']).as('blog.show')
   router.post('/blog/posts/submit', [BlogController, 'publicStore']).as('blog.submit')
-  router.get('/blog/posts/:postId/comments', [BlogController, 'getComments']).as('blog.comments.public')
-  router.post('/blog/posts/:postId/comments', [BlogController, 'storeComment']).as('blog.comments.store')
-
-  router.group(() => {
-    router.get('/:userId/posts', [BlogController, 'merchantPosts']).as('blog.merchant.posts')
-    router.get('/:userId/stats', [BlogController, 'merchantStats']).as('blog.merchant.stats')
-    router.post('/:userId/posts', [BlogController, 'merchantStore']).as('blog.merchant.store')
-    router.get('/:userId/posts/:id', [BlogController, 'merchantShow']).as('blog.merchant.show')
-    router.put('/:userId/posts/:id', [BlogController, 'merchantUpdate']).as('blog.merchant.update')
-    router.delete('/:userId/posts/:id', [BlogController, 'merchantDestroy']).as('blog.merchant.destroy')
-    router.patch('/:userId/posts/:id/toggle-status', [BlogController, 'merchantToggleStatus']).as('blog.merchant.toggle-status')
-    router.delete('/comments/:commentId', [BlogController, 'deleteComment']).as('blog.merchant.comments.delete')
-  }).prefix('/blog/merchant')
 
   router.group(() => {
     router.get('/posts', [BlogController, 'adminIndex']).as('admin.posts.index')
@@ -208,10 +190,6 @@ router.group(() => {
   // ----------------------------------------------------------
   router.get('/users', [UsersController, 'index']).as('users.index')
   router.get('/users/:id', [UsersController, 'show']).as('users.show')
-  router.get('/users/:id/contract-info', [UsersController, 'getContractInfo']).as('users.contract-info')
-  router.get('/users/:id/merchant-info', [UsersController, 'getMerchantInfo']).as('users.merchant-info')
-  router.get('/users/:id/contract-status', [UsersController, 'getContractStatus']).as('users.contract-status')
-  router.patch('/users/:id/contract-signature', [UsersController, 'updateContractSignature']).as('users.contract-signature')
 
   // ----------------------------------------------------------
   // PANIER
@@ -301,69 +279,19 @@ router.group(() => {
   router.delete('/push-subscriptions/:id', [PushSubscriptionsController, 'destroy']).as('push.destroy')
 
   // ----------------------------------------------------------
-  // GIVE-CHANGE (RETRAITS) + ZONES DE LIVRAISON
+  // GIVE-CHANGE (RETRAITS)
   // ----------------------------------------------------------
   router.post('/merchant/give-change', [GiveChangeController, 'giveChange']).as('merchant.give-change')
   router.group(() => {
     router.get('give-change/:reference/status', [GiveChangeController, 'checkStatus']).as('merchant.give-change.status')
     router.get('give-change/history', [GiveChangeController, 'history']).as('merchant.give-change.history')
     router.get('give-change/stats', [GiveChangeController, 'stats']).as('merchant.give-change.stats')
-    
-    router.get('/:userId/delivery-zones', [MerchantDashboardController, 'getDeliveryZones'])
-    router.post('/:userId/delivery-zones', [MerchantDashboardController, 'upsertDeliveryZone'])
-    router.put('/:userId/delivery-zones', [MerchantDashboardController, 'updateDeliveryZones'])
-    router.delete('/:userId/delivery-zones', [MerchantDashboardController, 'removeDeliveryZone'])
-    router.get('/:userId/delivery-fee', [MerchantDashboardController, 'calculateDeliveryFee'])
-    
     router.post('give-change/:id/cancel', [GiveChangeController, 'cancel']).as('merchant.give-change.cancel')
   }).prefix('/merchant')
   router.get('/merchant/dashboard/withdrawal-stats', [MerchantDashboardController, 'getWithdrawalStats']).as('merchant.dashboard.withdrawal-stats')
 
   // ----------------------------------------------------------
-  // 🆕 SERVICES D'ABONNEMENT (MARCHAND)
-  // ----------------------------------------------------------
-  
-  // Routes avec merchantId
-  router.group(() => {
-    // Liste des services du marchand
-    router.get('/', [MerchantDashboardController, 'getMerchantServices'])
-    
-    // Créer un nouveau service
-    router.post('/', [MerchantDashboardController, 'createService'])
-    
-    // Récupérer les détails d'un service spécifique
-    router.get('/:serviceId', [MerchantDashboardController, 'getMerchantServiceDetail'])
-    
-    // Modifier un service existant
-    router.put('/:serviceId', [MerchantDashboardController, 'updateService'])
-    
-    // Supprimer (désactiver) un service
-    router.delete('/:serviceId', [MerchantDashboardController, 'deleteService'])
-    
-    // Activer/désactiver un service
-    router.patch('/:serviceId/toggle', [MerchantDashboardController, 'toggleServiceStatus'])
-    
-    // Récupérer les abonnés d'un service spécifique
-    router.get('/:serviceId/subscribers', [MerchantDashboardController, 'getServiceSubscribers'])
-    
-    // Statistiques d'un service
-    router.get('/:serviceId/stats', [MerchantDashboardController, 'getServiceStats'])
-  }).prefix('/api/merchants/:merchantId/services')
-
-  // Routes avec userId (alternative pour compatibilité)
-  router.group(() => {
-    router.get('/services', [MerchantDashboardController, 'getMerchantServices'])
-    router.post('/services', [MerchantDashboardController, 'createService'])
-    router.get('/services/:serviceId', [MerchantDashboardController, 'getMerchantServiceDetail'])
-    router.put('/services/:serviceId', [MerchantDashboardController, 'updateService'])
-    router.delete('/services/:serviceId', [MerchantDashboardController, 'deleteService'])
-    router.patch('/services/:serviceId/toggle', [MerchantDashboardController, 'toggleServiceStatus'])
-    router.get('/services/:serviceId/subscribers', [MerchantDashboardController, 'getServiceSubscribers'])
-    router.get('/services/:serviceId/stats', [MerchantDashboardController, 'getServiceStats'])
-  }).prefix('/api/merchant/:userId')
-
-  // ----------------------------------------------------------
-  // MARCHAND (MERCHANT) - ROUTES EXISTANTES
+  // MARCHAND (MERCHANT)
   // ----------------------------------------------------------
   router.get('/merchant/withdrawals/:userId', [MerchantDashboardController, 'getWithdrawalHistory']).as('merchant.withdrawals')
   router.get('/merchant/wallet/:userId', [MerchantDashboardController, 'getWallet']).as('merchant.wallet')
@@ -428,31 +356,6 @@ router.group(() => {
   router.patch('/reviews/:id/reject', [ReviewsController, 'reject']).as('reviews.reject')
 
   // ----------------------------------------------------------
-  // HÔTELS (HOTELS)
-  // ----------------------------------------------------------
-  router.group(() => {
-    router.get('/search/location', [HotelsController, 'searchByLocation']).as('hotels.search.location')
-    router.get('/city/:city', [HotelsController, 'getByCity']).as('hotels.city')
-    router.get('/', [HotelsController, 'index']).as('hotels.index')
-    router.post('/', [HotelsController, 'store']).as('hotels.store')
-    router.get('/:id', [HotelsController, 'show']).as('hotels.show')
-    router.put('/:id', [HotelsController, 'update']).as('hotels.update')
-    router.delete('/:id', [HotelsController, 'destroy']).as('hotels.destroy')
-    router.get('/:id/rooms', [HotelsController, 'getRooms']).as('hotels.rooms')
-  }).prefix('/hotels')
-
-  // ----------------------------------------------------------
-  // CHAMBRES (ROOMS)
-  // ----------------------------------------------------------
-  router.group(() => {
-    router.get('/', [RoomsController, 'index']).as('rooms.index')
-    router.post('/', [RoomsController, 'store']).as('rooms.store')
-    router.get('/:id', [RoomsController, 'show']).as('rooms.show')
-    router.put('/:id', [RoomsController, 'update']).as('rooms.update')
-    router.delete('/:id', [RoomsController, 'destroy']).as('rooms.destroy')
-  }).prefix('/rooms')
-
-  // ----------------------------------------------------------
   // SHOP
   // ----------------------------------------------------------
   router.get('/shop', [ShopController, 'apiIndex']).as('api.shop.index')
@@ -485,23 +388,7 @@ router.group(() => {
   router.get('/mypvit/balance', [MypvitController as any, 'getBalance']).as('mypvit.balance')
   router.post('/mypvit/check-balance', [MypvitController as any, 'checkBalance']).as('mypvit.check-balance')
   router.get('/mypvit/all-balances', [MypvitController as any, 'getAllBalances']).as('mypvit.all-balances')
-
-  // ============================================================
-  // CALLBACK MYPVIT
-  // ============================================================
-  
-  router.post('/mypvit/callback', async (ctx) => {
-    const { default: CallbackController } = await import('#controllers/CallbackController')
-    const controller = new CallbackController()
-    return controller.handle(ctx)
-  }).as('mypvit.callback.orders')
-
-  router.post('/callbacks/mypvit', async (ctx) => {
-    const { default: CallbackController } = await import('#controllers/CallbackController')
-    const controller = new CallbackController()
-    return controller.handle(ctx)
-  }).as('callbacks.mypvit')
-
+  router.post('/mypvit/callback', [CallbackController as any, 'handle']).as('mypvit.callback.orders')
   router.post('/mypvit/callback/rendu-money', (ctx) => RenduMoneyCallback.handle(ctx)).as('mypvit.callback.rendu-money')
   router.post('/mypvit/callback/subscription', (ctx) => SubscriptionCallback.handle(ctx)).as('mypvit.callback.subscription')
   router.post('/mypvit/callback/subscription/test', (ctx) => SubscriptionCallback.test(ctx)).as('mypvit.callback.subscription.test')
@@ -514,16 +401,27 @@ router.group(() => {
   router.post('/orders/pay/link', [PayLinkController as any, 'pay']).as('orders.pay.link')
 
   // ============================================================
-  // ABONNEMENTS (SUBSCRIPTIONS)
+  // 🆕 ABONNEMENTS (SUBSCRIPTIONS) - NOMS UNIQUES
   // ============================================================
+
   router.get('/subscriptions/plans', (ctx) => Subscription.getPlans(ctx)).as('subscriptions.plans')
   router.get('/subscriptions/active/:userId', (ctx) => Subscription.getActiveSubscription(ctx)).as('subscriptions.active')
   router.get('/subscriptions/history/:userId', (ctx) => Subscription.getHistory(ctx)).as('subscriptions.history')
   router.get('/subscriptions/stats/:userId', (ctx) => Subscription.getStats(ctx)).as('subscriptions.stats')
+
+  // Souscrire (Mobile Money)
   router.post('/subscriptions/subscribe', (ctx) => Subscription.subscribe(ctx)).as('subscriptions.subscribe')
+
+  // ✅ Souscrire par QR Code
   router.post('/subscriptions/pay/qr', (ctx) => SubscriptionQR.pay(ctx)).as('subscriptions.pay.qr')
+
+  // ✅ Souscrire par Lien
   router.post('/subscriptions/pay/link', [PayLinkSubscriptionController as any, 'paySubscription']).as('subscriptions.pay.link')
+
+  // ✅ Vérifier statut paiement abonnement (UN SEUL nom)
   router.get('/subscriptions/:id/payment-status', (ctx) => Subscription.checkPaymentStatus(ctx)).as('subscriptions.payment-status')
+
+  // Gestion des produits boostés
   router.post('/subscriptions/:id/add-product', (ctx) => Subscription.addProductToBoost(ctx)).as('subscriptions.add-product')
   router.post('/subscriptions/:id/remove-product', (ctx) => Subscription.removeProductFromBoost(ctx)).as('subscriptions.remove-product')
   router.post('/subscriptions/:id/cancel', (ctx) => Subscription.cancel(ctx)).as('subscriptions.cancel')
@@ -567,7 +465,6 @@ router.group(() => {
   // ----------------------------------------------------------
   // VÉRIFICATION STATUT PAIEMENT
   // ----------------------------------------------------------
-  router.get('/payments/status/verify', [CheckStatusController as any, 'verify']).as('payments.status.verify')
   router.get('/orders/:orderNumber/payment-status', [CheckPaymentStatusController, 'check']).as('check_payment_status.check_by_order')
   router.post('/orders/check-payment-status', [CheckPaymentStatusController, 'check']).as('check_payment_status.check_by_reference')
 
@@ -579,6 +476,11 @@ router.group(() => {
   router.get('/products/black-friday', [ProductController, 'blackFriday']).as('products.black-friday')
 
   // ----------------------------------------------------------
+  // CALLBACK MYPVIT
+  // ----------------------------------------------------------
+  router.post('/callbacks/mypvit', [CallbacksController, 'handle']).as('callbacks.mypvit')
+
+  // ----------------------------------------------------------
   // PAIEMENT MOBILE MONEY
   // ----------------------------------------------------------
   router.post('/mobile-moneys/pay', [PayMobileMoneyController, 'pay']).as('mobile-money.pay')
@@ -587,50 +489,5 @@ router.group(() => {
   // RETRAIT
   // ----------------------------------------------------------
   router.post('/retrait', [RetraitController, 'retrait']).as('retrait.process')
-
-  // ----------------------------------------------------------
-  // PROMOTIONS
-  // ----------------------------------------------------------
-  router.get('/promotions', [PromotionsController, 'index']).as('promotions.index')
-  router.get('/promotions/:id', [PromotionsController, 'show']).as('promotions.show')
-  router.get('/promotions/banners', [PromotionsController, 'banners']).as('promotions.banners')
-  router.get('/promotions/flash-sales', [PromotionsController, 'flashSales']).as('promotions.flash-sales')
-  router.post('/promotions', [PromotionsController, 'store']).as('promotions.store')
-  router.put('/promotions/:id', [PromotionsController, 'update']).as('promotions.update')
-  router.delete('/promotions/:id', [PromotionsController, 'destroy']).as('promotions.destroy')
-
-  // ----------------------------------------------------------
-  // CONTRATS MARCHANDS
-  // ----------------------------------------------------------
-  router.get('/merchant/contract/:id/sign', [DashboardViewController, 'signContract']).as('merchant.contract.sign')
-  router.post('/merchant/contract/:id/send', [DashboardViewController, 'sendContractEmail']).as('merchant.contract.send')
-  router.get('/merchant/contract/:id/status', [DashboardViewController, 'getContractStatus']).as('merchant.contract.status')
-
-  router.get('/checkout/:userId', [CheckoutController, 'getCheckoutData']).as('checkout.data')
-
-  // Zones de livraison
-  router.get('/merchant/:merchantId/delivery-zones', [MerchantDeliveryController, 'getDeliveryZones'])
-  router.get('/merchant/:merchantId/delivery-fee', [MerchantDeliveryController, 'getDeliveryFee'])
-  
-  // ----------------------------------------------------------
-  // CONTRATS
-  // ----------------------------------------------------------
-  router.get('/client/:id', [ContractsController, 'getClientById']).as('client.show')
-  router.get('/shops/user/:userId', [ContractsController, 'getShopByUser']).as('shops.user')
-  router.post('/contracts/sign-and-send', [ContractsController, 'signAndSend']).as('contracts.sign-and-send')
-  router.get('/contract/by-name/:name', [ContractsController, 'getByName'])
-  router.post('/cart/delivery-fees', [MerchantDeliveryController, 'calculateCartDeliveryFees'])
-
-  // ----------------------------------------------------------
-  // LIVREUR DASHBOARD
-  // ----------------------------------------------------------
-  router.get('/livreur/dashboard/stats', [LivreurDashboardController, 'stats'])
-  router.get('/livreur/dashboard/deliveries', [LivreurDashboardController, 'deliveries'])
-  router.get('/livreur/dashboard/delivery/:id', [LivreurDashboardController, 'deliveryDetail'])
-  router.put('/livreur/dashboard/delivery/:id/status', [LivreurDashboardController, 'updateDeliveryStatus'])
-  router.put('/livreur/dashboard/online', [LivreurDashboardController, 'toggleOnline'])
-  router.put('/livreur/dashboard/location', [LivreurDashboardController, 'updateLocation'])
-  router.get('/livreur/dashboard/earnings', [LivreurDashboardController, 'earnings'])
-  router.put('/livreur/dashboard/profile', [LivreurDashboardController, 'updateProfile'])
 
 }).prefix('/api')
