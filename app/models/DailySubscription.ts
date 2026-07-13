@@ -4,7 +4,6 @@ import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import User from '#models/user'
 import Service from '#models/Service'
-import crypto from 'node:crypto'
 
 export default class DailySubscription extends BaseModel {
   @column({ isPrimary: true })
