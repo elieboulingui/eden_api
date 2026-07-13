@@ -51,6 +51,7 @@ const OrderTrackingController = () => import('#controllers/order_trackings_contr
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
 const CouponsController = () => import('#controllers/coupons_controller')
 const GiveChangeController = () => import('#controllers/give_change_controller')
+const AdminNotificationController = () => import('#controllers/admin_notification_controller') // ✅ Ajouté
 
 // ============================================================
 // ROUTES WEB (PAGES)
@@ -489,5 +490,30 @@ router.group(() => {
   // RETRAIT
   // ----------------------------------------------------------
   router.post('/retrait', [RetraitController, 'retrait']).as('retrait.process')
+
+  // ----------------------------------------------------------
+  // ✅ ADMIN NOTIFICATIONS - CORRIGÉ
+  // ----------------------------------------------------------
+  router.group(() => {
+    router.get('/notifications', async (ctx) => {
+      const controller = await import('#controllers/admin_notification_controller')
+      return controller.default.getNotifications(ctx)
+    }).as('admin.notifications.index')
+    
+    router.post('/notifications', async (ctx) => {
+      const controller = await import('#controllers/admin_notification_controller')
+      return controller.default.createNotification(ctx)
+    }).as('admin.notifications.store')
+    
+    router.put('/notifications/:id', async (ctx) => {
+      const controller = await import('#controllers/admin_notification_controller')
+      return controller.default.updateNotification(ctx)
+    }).as('admin.notifications.update')
+    
+    router.delete('/notifications/:id', async (ctx) => {
+      const controller = await import('#controllers/admin_notification_controller')
+      return controller.default.deleteNotification(ctx)
+    }).as('admin.notifications.destroy')
+  }).prefix('/admin')
 
 }).prefix('/api')
