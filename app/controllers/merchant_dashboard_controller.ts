@@ -707,7 +707,7 @@ export default class MerchantDashboardController {
         isActive: sub.isActive,
         isExpired: sub.isExpired,
         payment_method: sub.payment_method,
-        created_at: sub.created_at
+       created_at: sub.createdAt
       }))
 
       // Statistiques
