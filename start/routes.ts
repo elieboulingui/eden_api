@@ -51,6 +51,7 @@ const OrderTrackingController = () => import('#controllers/order_trackings_contr
 const MerchantDashboardController = () => import('#controllers/merchant_dashboard_controller')
 const CouponsController = () => import('#controllers/coupons_controller')
 const GiveChangeController = () => import('#controllers/give_change_controller')
+// ✅ FIX: passage en lazy-import (comme les autres contrôleurs qui utilisent la syntaxe tuple)
 const AdminNotificationController = () => import('#controllers/admin_notification_controller')
 
 // ============================================================
@@ -429,13 +430,13 @@ router.group(() => {
     router.post('/merchants/:id/reject', [MerchantsController, 'rejectMerchant']).as('admin.merchants.reject')
     router.get('/merchants/:id/details', [MerchantsController, 'adminShow']).as('admin.merchants.show')
     router.delete('/merchants/:id', [MerchantsController, 'all']).as('admin.merchants.destroy')
-    
-    // ✅ AdminNotificationController
-    router.get('/notifications/emails', [AdminNotificationController, 'getAdminEmails']).as('admin.notifications.emails')
-    router.get('/notifications/emails-only', [AdminNotificationController, 'getAdminEmailsOnly']).as('admin.notifications.emails-only')
-    router.post('/notifications/send', [AdminNotificationController, 'sendNotificationToAdmins']).as('admin.notifications.send')
-    router.get('/notifications/:adminId', [AdminNotificationController, 'getAdminNotifications']).as('admin.notifications.show')
-    router.post('/notifications/check-email', [AdminNotificationController, 'checkAdminEmail']).as('admin.notifications.check-email')
+
+    // ✅ AdminNotificationController (lazy-import + cast pour compatibilité TS avec le tuple router)
+    router.get('/notifications/emails', [AdminNotificationController as any, 'getAdminEmails']).as('admin.notifications.emails')
+    router.get('/notifications/emails-only', [AdminNotificationController as any, 'getAdminEmailsOnly']).as('admin.notifications.emails-only')
+    router.post('/notifications/send', [AdminNotificationController as any, 'sendNotificationToAdmins']).as('admin.notifications.send')
+    router.get('/notifications/:adminId', [AdminNotificationController as any, 'getAdminNotifications']).as('admin.notifications.show')
+    router.post('/notifications/check-email', [AdminNotificationController as any, 'checkAdminEmail']).as('admin.notifications.check-email')
   }).prefix('/admin')
 
   // ----------------------------------------------------------
