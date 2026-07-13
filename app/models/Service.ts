@@ -1,43 +1,93 @@
-// app/models/Service.ts - Ajoutez
-import DailySubscription from './DailySubscription.js'
+// app/models/Service.ts
+import { DateTime } from 'luxon'
+import { BaseModel, column, belongsTo, hasMany } from '@adonisjs/lucid/orm'
+import type { BelongsTo, HasMany } from '@adonisjs/lucid/orm'
+import User from '#models/user'
+import DailySubscription from '#models/DailySubscription'
 
-@hasMany(() => DailySubscription, {
-  foreignKey: 'service_id',
-})
-declare daily_subscriptions: HasMany<typeof DailySubscription>
+export default class Service extends BaseModel {
+  @column({ isPrimary: true })
+  declare id: string
 
-// Méthodes pour le service
-async getTodaySubscribers(): Promise<number> {
-  const today = DateTime.now().toFormat('yyyy-MM-dd')
-  const result = await DailySubscription.query()
-    .where('service_id', this.id)
-    .where('status', 'active')
-    .whereRaw('DATE(subscription_date) = ?', [today])
-    .count('* as total')
-    .first()
-  
-  return Number.parseInt(result?.$extras?.total) || 0
-}
+  @column()
+  declare merchant_id: string
 
-async getActiveSubscriptionsCount(): Promise<number> {
-  const result = await DailySubscription.query()
-    .where('service_id', this.id)
-    .where('status', 'active')
-    .where('valid_until', '>', DateTime.now().toSQL())
-    .count('* as total')
-    .first()
-  
-  return Number.parseInt(result?.$extras?.total) || 0
-}
+  @column()
+  declare name: string
 
-async getTodayRevenue(): Promise<number> {
-  const today = DateTime.now().toFormat('yyyy-MM-dd')
-  const result = await DailySubscription.query()
-    .where('service_id', this.id)
-    .where('status', 'active')
-    .whereRaw('DATE(subscription_date) = ?', [today])
-    .sum('price_paid as total')
-    .first()
-  
-  return Number.parseFloat(result?.$extras?.total) || 0
+  @column()
+  declare description: string | null
+
+  @column()
+  declare price: number
+
+  @column()
+  declare currency: string
+
+  @column()
+  declare category: string | null
+
+  @column()
+  declare is_active: boolean
+
+  @column()
+  declare subscription_type: string
+
+  @column()
+  declare duration_days: number | null
+
+  @column()
+  declare trial_days: number
+
+  @column()
+  declare has_trial: boolean
+
+  @column()
+  declare max_subscribers: number | null
+
+  @column()
+  declare is_unlimited: boolean
+
+  @column()
+  declare max_uses_per_day: number | null
+
+  @column()
+  declare image_url: string | null
+
+  @column()
+  declare cover_image_url: string | null
+
+  @column()
+  declare features: string | null
+
+  @column()
+  declare settings: string | null
+
+  @column()
+  declare total_subscribers: number
+
+  @column()
+  declare total_revenue: number
+
+  @column()
+  declare average_rating: number
+
+  @column()
+  declare total_reviews: number
+
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+
+  @belongsTo(() => User, {
+    foreignKey: 'merchant_id',
+  })
+  declare merchant: BelongsTo<typeof User>
+
+  @hasMany(() => DailySubscription, {
+    foreignKey: 'service_id',
+  })
+  declare subscriptions: HasMany<typeof DailySubscription>
 }
