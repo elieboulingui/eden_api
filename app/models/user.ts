@@ -51,6 +51,16 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column()
   declare neighborhood: string | null
 
+  // Dans la classe User, ajoutez ces colonnes :
+@column()
+declare can_create_services: boolean
+
+@column()
+declare max_services: number
+
+@column()
+declare active_subscriptions_count: number
+
   // ============================================================
   // ÉTAPE 1 : INFORMATIONS PERSONNELLES (MARCHAND & LIVREUR)
   // ============================================================
