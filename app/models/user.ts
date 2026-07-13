@@ -51,15 +51,15 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column()
   declare neighborhood: string | null
 
-  // Dans la classe User, ajoutez ces colonnes :
-@column()
-declare can_create_services: boolean
+  // Colonnes pour les services d'abonnement
+  @column()
+  declare can_create_services: boolean
 
-@column()
-declare max_services: number
+  @column()
+  declare max_services: number
 
-@column()
-declare active_subscriptions_count: number
+  @column()
+  declare active_subscriptions_count: number
 
   // ============================================================
   // ÉTAPE 1 : INFORMATIONS PERSONNELLES (MARCHAND & LIVREUR)
@@ -282,7 +282,7 @@ declare active_subscriptions_count: number
 
   @column({
     columnName: 'delivery_zones',
-    consume: (value) => {
+    consume: (value: any) => {
       if (typeof value === 'string') return JSON.parse(value)
       if (value && typeof value === 'object') return value
       return {}
@@ -409,6 +409,9 @@ declare active_subscriptions_count: number
     user.rating = user.rating ?? 0
     user.total_ratings = user.total_ratings ?? 0
     user.has_livreur = user.has_livreur ?? false
+    user.can_create_services = user.can_create_services ?? false
+    user.max_services = user.max_services ?? 0
+    user.active_subscriptions_count = user.active_subscriptions_count ?? 0
   }
 
   // ============================================================
@@ -524,7 +527,7 @@ declare active_subscriptions_count: number
   }
 
   get vendorTypeLabel(): string | null {
-    const labels = {
+    const labels: Record<string, string> = {
       'boutique_physique': 'Boutique physique',
       'vendeur_ligne': 'Vendeur en ligne',
       'particulier': 'Particulier',
@@ -533,7 +536,7 @@ declare active_subscriptions_count: number
   }
 
   get vehicleTypeLabel(): string | null {
-    const labels = {
+    const labels: Record<string, string> = {
       'moto': '🏍️ Moto',
       'voiture': '🚗 Voiture',
       'velo': '🚲 Vélo',
@@ -543,7 +546,7 @@ declare active_subscriptions_count: number
   }
 
   get verificationStatusLabel(): string {
-    const labels = {
+    const labels: Record<string, string> = {
       'pending': 'En attente',
       'approved': 'Approuvé',
       'rejected': 'Rejeté',
@@ -711,13 +714,12 @@ declare active_subscriptions_count: number
    * S'abonner à un service pour aujourd'hui
    */
   async subscribeToServiceForToday(serviceId: string, paymentMethod?: string): Promise<DailySubscription> {
-    // Vérifier si déjà abonné aujourd'hui
     const today = DateTime.now().startOf('day')
     const existing = await DailySubscription.query()
       .where('client_id', this.id)
       .where('service_id', serviceId)
       .where('status', 'active')
-      .where('subscription_date', '>=', today.toSQL())
+      .where('subscription_date', '>=', today.toSQL()!)
       .first()
 
     if (existing) {
@@ -733,7 +735,6 @@ declare active_subscriptions_count: number
     subscription.id = crypto.randomUUID()
     subscription.client_id = this.id
     subscription.service_id = serviceId
-    subscription.merchant_id = service.merchant_id
     subscription.status = 'active'
     subscription.subscription_date = DateTime.now().startOf('day')
     subscription.valid_until = DateTime.now().endOf('day')
@@ -754,9 +755,8 @@ declare active_subscriptions_count: number
     return await DailySubscription.query()
       .where('client_id', this.id)
       .where('status', 'active')
-      .where('subscription_date', '>=', today.toSQL())
+      .where('subscription_date', '>=', today.toSQL()!)
       .preload('service')
-      .preload('merchant')
       .exec()
   }
 
@@ -769,7 +769,7 @@ declare active_subscriptions_count: number
       .where('client_id', this.id)
       .where('service_id', serviceId)
       .where('status', 'active')
-      .where('subscription_date', '>=', today.toSQL())
+      .where('subscription_date', '>=', today.toSQL()!)
       .first()
     
     return !!subscription
@@ -782,9 +782,8 @@ declare active_subscriptions_count: number
     return await DailySubscription.query()
       .where('client_id', this.id)
       .where('status', 'active')
-      .where('valid_until', '>', DateTime.now().toSQL())
+      .where('valid_until', '>', DateTime.now().toSQL()!)
       .preload('service')
-      .preload('merchant')
       .orderBy('subscription_date', 'desc')
       .exec()
   }
@@ -801,7 +800,7 @@ declare active_subscriptions_count: number
     return await DailySubscription.query()
       .where('merchant_id', this.id)
       .where('status', 'active')
-      .where('subscription_date', '>=', today.toSQL())
+      .where('subscription_date', '>=', today.toSQL()!)
       .preload('client')
       .preload('service')
       .exec()
@@ -824,21 +823,20 @@ declare active_subscriptions_count: number
     const subscriptions = await DailySubscription.query()
       .where('merchant_id', this.id)
       .where('status', 'active')
-      .where('subscription_date', '>=', today.toSQL())
+      .where('subscription_date', '>=', today.toSQL()!)
       .preload('service')
       .exec()
 
     const total = subscriptions.length
     const revenue = subscriptions.reduce((sum, sub) => sum + sub.price_paid, 0)
 
-    // Regrouper par service
-    const servicesMap = new Map()
+    const servicesMap = new Map<string, { count: number; revenue: number }>()
     subscriptions.forEach(sub => {
-      const serviceName = sub.service.name
+      const serviceName = sub.service?.name || 'Service inconnu'
       if (!servicesMap.has(serviceName)) {
         servicesMap.set(serviceName, { count: 0, revenue: 0 })
       }
-      const data = servicesMap.get(serviceName)
+      const data = servicesMap.get(serviceName)!
       data.count++
       data.revenue += sub.price_paid
     })
@@ -859,7 +857,7 @@ declare active_subscriptions_count: number
     const result = await DailySubscription.query()
       .where('client_id', this.id)
       .where('status', 'active')
-      .where('valid_until', '>', DateTime.now().toSQL())
+      .where('valid_until', '>', DateTime.now().toSQL()!)
       .count('* as total')
       .first()
     
@@ -880,7 +878,6 @@ declare active_subscriptions_count: number
     }
 
     subscription.status = 'cancelled'
-    subscription.cancelled_at = DateTime.now()
     await subscription.save()
   }
 
@@ -892,11 +889,11 @@ declare active_subscriptions_count: number
     const result = await DailySubscription.query()
       .where('client_id', this.id)
       .where('status', 'active')
-      .where('subscription_date', '>=', today.toSQL())
+      .where('subscription_date', '>=', today.toSQL()!)
       .count('* as total')
       .first()
     
-    return Number.parseInt(result?.$extras?.total) || 0 > 0
+    return (Number.parseInt(result?.$extras?.total) || 0) > 0
   }
 
   /**
@@ -904,7 +901,7 @@ declare active_subscriptions_count: number
    */
   async getTodaySubscribedServices(): Promise<Service[]> {
     const subscriptions = await this.getTodaySubscriptions()
-    return subscriptions.map(sub => sub.service)
+    return subscriptions.map(sub => sub.service).filter(Boolean) as Service[]
   }
 
   /**
@@ -914,10 +911,9 @@ declare active_subscriptions_count: number
     return await DailySubscription.query()
       .where('client_id', this.id)
       .where('status', 'active')
-      .where('subscription_date', '>=', startDate.toSQL())
-      .where('subscription_date', '<=', endDate.toSQL())
+      .where('subscription_date', '>=', startDate.toSQL()!)
+      .where('subscription_date', '<=', endDate.toSQL()!)
       .preload('service')
-      .preload('merchant')
       .orderBy('subscription_date', 'desc')
       .exec()
   }
@@ -943,7 +939,6 @@ declare active_subscriptions_count: number
       .where('client_id', this.id)
       .where('status', 'expired')
       .preload('service')
-      .preload('merchant')
       .orderBy('valid_until', 'desc')
       .exec()
   }
