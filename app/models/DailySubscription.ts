@@ -18,10 +18,10 @@ export default class DailySubscription extends BaseModel {
   @column()
   declare merchant_id: string
 
-  @column()
+  @column.dateTime()
   declare subscription_date: DateTime
 
-  @column()
+  @column.dateTime()
   declare valid_until: DateTime
 
   @column()
@@ -37,7 +37,7 @@ export default class DailySubscription extends BaseModel {
   declare auto_renew: boolean
 
   @column()
-  declare payment_method: string
+  declare payment_method: string | null  // ✅ Correction: autoriser null
 
   @column()
   declare payment_reference: string | null
