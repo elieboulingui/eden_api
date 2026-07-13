@@ -74,7 +74,7 @@ export default class AdminNotificationController {
    */
   async sendNotificationToAdmins({ request, response }: HttpContext) {
     try {
-      const { title, message, type, data } = request.only([
+      const { title, message, type } = request.only([
         'title',
         'message',
         'type',
@@ -102,7 +102,7 @@ export default class AdminNotificationController {
       }
 
       // Logique d'envoi de notification
-      const notifications = admins.map(admin => ({
+      const recipients = admins.map(admin => ({
         admin_id: admin.id,
         email: admin.email,
         full_name: admin.full_name,
@@ -115,6 +115,7 @@ export default class AdminNotificationController {
 
       console.log(`📧 Notification envoyée à ${admins.length} administrateur(s)`)
       console.log('📧 Détails:', { title, type: type || 'info' })
+      console.log('📧 Destinataires:', recipients)
 
       return response.ok({
         success: true,
